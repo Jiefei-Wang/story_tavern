@@ -1,0 +1,103 @@
+import { create } from "zustand";
+import { AgentBinding, AgentGroup } from "../types";
+import { storageService } from "../db/storage";
+
+interface AgentGroupState {
+  groups: AgentGroup[];
+  activeGroupId: string;
+  isLoading: boolean;
+  loadGroups: () => Promise<void>;
+  setActiveGroup: (id: string) => void;
+  saveGroup: (group: AgentGroup) => Promise<void>;
+  deleteGroup: (id: string) => Promise<void>;
+  duplicateGroup: (id: string) => Promise<AgentGroup | null>;
+  updateBinding: (
+    groupId: string,
+    agentId: string,
+    updates: Partial<AgentBinding>
+  ) => Promise<void>;
+}
+
+export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
+  groups: [],
+  activeGroupId: "group_quality",
+  isLoading: false,
+
+  loadGroups: async () => {
+    set({ isLoading: true });
+    const groups = await storageService.getAgentGroups();
+    const active =
+      localStorage.getItem("story_tavern_active_group") ||
+      (groups.length > 0 ? groups[0].id : "group_quality");
+    set({ groups, activeGroupId: active, isLoading: false });
+  },
+
+  setActiveGroup: (id: string) => {
+    localStorage.setItem("story_tavern_active_group", id);
+    set({ activeGroupId: id });
+  },
+
+  saveGroup: async (group: AgentGroup) => {
+    group.updatedAt = new Date().toISOString().split("T")[0];
+    await storageService.saveAgentGroup(group);
+    const groups = await storageService.getAgentGroups();
+    set({ groups });
+  },
+
+  deleteGroup: async (id: string) => {
+    await storageService.deleteAgentGroup(id);
+    const groups = await storageService.getAgentGroups();
+    let active = get().activeGroupId;
+    if (active === id && groups.length > 0) {
+      active = groups[0].id;
+    }
+    set({ groups, activeGroupId: active });
+  },
+
+  duplicateGroup: async (id: string) => {
+    const existing = get().groups.find((g) => g.id === id);
+    if (!existing) return null;
+
+    const newId = `group_${Date.now().toString().slice(-6)}`;
+    const duplicated: AgentGroup = {
+      ...JSON.parse(JSON.stringify(existing)),
+      id: newId,
+      name: `${existing.name} (副本)`,
+      updatedAt: new Date().toISOString().split("T")[0],
+    };
+
+    await storageService.saveAgentGroup(duplicated);
+    const groups = await storageService.getAgentGroups();
+    set({ groups });
+    return duplicated;
+  },
+
+  updateBinding: async (groupId, agentId, updates) => {
+    const group = get().groups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    const bindings = [...group.bindings];
+    const idx = bindings.findIndex((b) => b.agentId === agentId);
+
+    if (idx >= 0) {
+      bindings[idx] = {
+        ...bindings[idx],
+        ...updates,
+        overrides: {
+          ...(bindings[idx].overrides || {}),
+          ...(updates.overrides || {}),
+        },
+      };
+    } else {
+      bindings.push({
+        agentId,
+        backendId: updates.backendId || "backend_openrouter",
+        model: updates.model || "nvidia/nemotron-3-super-120b-a12b:free",
+        overrides: updates.overrides,
+      });
+    }
+
+    const updatedGroup = { ...group, bindings };
+    await get().saveGroup(updatedGroup);
+  },
+}));

@@ -1,0 +1,26 @@
+[package]
+name = "story_tavern"
+version = "0.1.0"
+description = "AI-Driven Pure Text RPG Engine"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "story_tavern_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+keyring = "3.6"
+log = "0.4"
+uuid = { version = "1.10", features = ["v4", "fast-rng"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
