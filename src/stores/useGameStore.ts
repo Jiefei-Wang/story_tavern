@@ -18,6 +18,7 @@ interface GameState {
   loadSaves: () => Promise<void>;
   selectSave: (saveId: string) => void;
   createNewSave: (name?: string) => Promise<GameSave>;
+  deleteSave: (saveId: string) => Promise<void>;
   manualSaveGame: () => Promise<void>;
   sendPlayerInput: (input: string) => Promise<boolean>;
   retryTurn: (turnIndex?: number) => Promise<boolean>;
@@ -75,6 +76,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     const saves = await storageService.getSaves();
     set({ saves, activeSave: newSave, executionError: null });
     return newSave;
+  },
+
+  deleteSave: async (saveId: string) => {
+    await storageService.deleteGame(saveId);
+    const saves = await storageService.getSaves();
+    const currentActive = get().activeSave;
+    const nextActive = currentActive?.id === saveId ? (saves.length > 0 ? saves[0] : null) : currentActive;
+    set({ saves, activeSave: nextActive });
   },
 
   manualSaveGame: async () => {

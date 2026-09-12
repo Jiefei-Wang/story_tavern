@@ -298,6 +298,19 @@ export class StorageService {
     this.getStorage().setItem("story_tavern_saves", JSON.stringify(list));
   }
 
+  async deleteGame(saveId: string): Promise<void> {
+    if (this.isTauri()) {
+      await invoke("db_kv_delete", {
+        table: "saves",
+        key: saveId,
+      });
+      return;
+    }
+    const list = await this.getSaves();
+    const filtered = list.filter((s) => s.id !== saveId);
+    this.getStorage().setItem("story_tavern_saves", JSON.stringify(filtered));
+  }
+
   // --- Traces Persistence ---
   async saveTrace(trace: TurnTrace): Promise<void> {
     const immutableTrace = { ...trace };

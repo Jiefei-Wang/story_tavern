@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Plus,
 } from "lucide-react";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -31,6 +32,7 @@ export const PlayPage: React.FC = () => {
     currentTraceId,
     retryTurn,
     switchTurnVariation,
+    createNewSave,
   } = useGameStore();
   const { settings } = useSettingsStore();
   const [inputText, setInputText] = useState("");
@@ -38,6 +40,12 @@ export const PlayPage: React.FC = () => {
   const timeMenuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storyEndRef = useRef<HTMLDivElement>(null);
+
+  const handleNewGame = async () => {
+    if (window.confirm("确定要开启一局新游戏吗？当前进度已保存在存档中。")) {
+      await createNewSave("王城的黄昏 · 港口酒馆");
+    }
+  };
 
   const worldState = activeSave?.worldState;
   const turns = activeSave?.turns || [];
@@ -119,6 +127,15 @@ export const PlayPage: React.FC = () => {
                 <ExternalLink className="w-3 h-3" />
               </Link>
             )}
+            <button
+              onClick={handleNewGame}
+              className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-md transition-colors shadow-sm"
+              title="重新开启一局新游戏（新建存档）"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-500" />
+              <span>新建游戏</span>
+            </button>
+
             <Link
               to="/settings"
               className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
