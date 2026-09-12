@@ -1,4 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+import { withConversationContract } from "./ConversationContracts";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { OpenAIStream } from "./OpenAIStream";
 import {
   AgentDefinition,
   AgentGroup,
@@ -13,6 +15,7 @@ import { SchemaValidator } from "../schema/SchemaValidator";
 import { parseOpenAIResponse } from "./OpenAIResponseParser";
 
 export interface RunAgentOptions {
+  instructions?: string;
   agentId: string;
   groupId: string;
   context: Record<string, any>;
@@ -25,6 +28,7 @@ export interface RunAgentOptions {
   groups: AgentGroup[];
   backends: Backend[];
   mockMode?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface RunAgentResult<T = any> {
@@ -119,7 +123,14 @@ export class AgentRuntime {
     const traceId = options.traceId || `tr_${Date.now()}_${uuid}`;
 
     // 1. Resolve Agent Definition (Fail-Fast)
-    const agentDef = agents.find((a) => a.id === agentId);
+    if (options.signal?.aborted) {
+      const err = new Error("Generation aborted by user");
+      err.name = "AbortError";
+      throw err;
+    }
+
+    const savedDefinition = agents.find((a) => a.id === agentId);
+    const agentDef = savedDefinition ? withConversationContract(savedDefinition) : undefined;
     if (!agentDef) {
       const errMsg = `Agent definition not found: ${agentId}`;
       return {
@@ -147,6 +158,11 @@ export class AgentRuntime {
       blockId,
       blockIndex
     );
+    globalTraceManager.updateSpan(traceId, spanId, {
+      generationStatus: "queued",
+      displayLabel: agentId === "npc_reaction" ? `角色反应 · ${context.npc?.name || "NPC"}` :
+        agentId === "character_generator" ? `人物生成 · 第 ${context.ordinal || 1} 位` : undefined,
+    });
 
     // Group Validation (Fail-Fast in both Real and Mock mode: if groupId is provided, it must exist)
     if (groupId) {
@@ -179,6 +195,7 @@ export class AgentRuntime {
         const model = binding?.model || backend?.defaultModel || "mock-model";
 
         const resolvedMessages = renderMessages(agentDef.messages, context);
+        if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
         globalTraceManager.updateSpan(traceId, spanId, {
           backendId: backend?.id || "mock",
           model,
@@ -188,8 +205,28 @@ export class AgentRuntime {
           requestParams: { model, mockMode: true },
         });
 
-        await new Promise((r) => setTimeout(r, 20));
+        if (options.signal) {
+          if (options.signal.aborted) {
+            const err = new Error("Generation aborted by user");
+            err.name = "AbortError";
+            throw err;
+          }
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(resolve, 20);
+            const onAbort = () => {
+              clearTimeout(timer);
+              const err = new Error("Generation aborted by user");
+              err.name = "AbortError";
+              reject(err);
+            };
+            options.signal?.addEventListener("abort", onAbort, { once: true });
+          });
+        } else {
+          await new Promise((r) => setTimeout(r, 20));
+        }
+
         const mockResult = MockSimulator.simulate(agentId, context, agentDef);
+        globalTraceManager.updateSpan(traceId, spanId, { liveContent: typeof mockResult === "string" ? mockResult : JSON.stringify(mockResult, null, 2) });
 
         // Validate output schema if defined
         if (agentDef.outputSchema !== null && agentDef.outputSchema !== undefined) {
@@ -219,11 +256,17 @@ export class AgentRuntime {
           spanId,
         };
       } catch (err: any) {
-        const errMsg = err?.message || String(err);
+        const isAbort = err?.name === "AbortError" || options.signal?.aborted;
+        const errMsg = isAbort ? "Generation aborted by user" : err?.message || String(err);
         globalTraceManager.updateSpan(traceId, spanId, {
-          status: "error",
+          status: isAbort ? "cancelled" : "error",
           error: errMsg,
         });
+        if (isAbort) {
+          const abortErr = new Error("Generation aborted by user");
+          abortErr.name = "AbortError";
+          throw abortErr;
+        }
         return {
           success: false,
           data: null as any,
@@ -312,6 +355,7 @@ export class AgentRuntime {
 
       // Render placeholders into messages
       const resolvedMessages = renderMessages(agentDef.messages, context);
+      if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
 
       // Record immutable snapshot with exact request parameters
       globalTraceManager.updateSpan(traceId, spanId, {
@@ -328,28 +372,83 @@ export class AgentRuntime {
         backend.id,
         backend.maxConcurrency || 1,
         async () => {
+          if (options.signal?.aborted) {
+            const err = new Error("Generation aborted by user");
+            err.name = "AbortError";
+            throw err;
+          }
           const payload = {
             ...requestParams,
             messages: resolvedMessages,
+            stream: true,
+          };
+          globalTraceManager.updateSpan(traceId, spanId, { generationStatus: "generating" });
+          let lastPublish = 0;
+          let latestContent = "";
+          const stream = new OpenAIStream((text) => {
+            latestContent = text;
+            if (Date.now() - lastPublish > 80) {
+              lastPublish = Date.now();
+              globalTraceManager.updateSpan(traceId, spanId, { liveContent: text });
+            }
+          });
+          const finishStream = () => {
+            const result = stream.finish();
+            globalTraceManager.updateSpan(traceId, spanId, { liveContent: latestContent });
+            return result;
           };
 
           const isTauri =
             typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 
           if (isTauri) {
-            return await invoke<any>("backend_chat_completion", {
+            const decoder = new TextDecoder();
+            let streamError: unknown;
+            const onChunk = new Channel<number[]>();
+            onChunk.onmessage = (bytes) => {
+              if (streamError) return;
+              if (options.signal?.aborted) {
+                const err = new Error("Generation aborted by user");
+                err.name = "AbortError";
+                streamError = err;
+                return;
+              }
+              try { stream.push(decoder.decode(new Uint8Array(bytes), { stream: true })); }
+              catch (error) { streamError = error; }
+            };
+            const response = await invoke<any>("backend_chat_completion", {
               baseUrl: backend.baseUrl,
               authType: backend.authType || "bearer",
               secretRef: backend.secretRef || null,
               headers: sanitizedHeaders,
               timeoutMs: backend.timeoutMs || 60000,
               request: payload,
+              onChunk,
             });
+            if (streamError) throw streamError;
+            if (options.signal?.aborted) {
+              const err = new Error("Generation aborted by user");
+              err.name = "AbortError";
+              throw err;
+            }
+            if (response !== null) return response;
+            stream.push(decoder.decode());
+            return finishStream();
           } else {
             // Web / Node fallback with AbortController timeout
             const timeoutMs = backend.timeoutMs || 60000;
             const controller = new AbortController();
             const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+            let removeAbortListener: (() => void) | undefined;
+            if (options.signal) {
+              if (options.signal.aborted) {
+                controller.abort();
+              } else {
+                const onUserAbort = () => controller.abort();
+                options.signal.addEventListener("abort", onUserAbort, { once: true });
+                removeAbortListener = () => options.signal?.removeEventListener("abort", onUserAbort);
+              }
+            }
 
             try {
               let token = "";
@@ -407,12 +506,31 @@ export class AgentRuntime {
                 throw new Error(`HTTP ${res.status}: ${errText}`);
               }
 
-              return await res.json();
+              if (!res.headers.get("content-type")?.includes("text/event-stream")) return await res.json();
+              if (!res.body) throw new Error("后端未返回流式响应体");
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              try {
+                while (true) {
+                  if (options.signal?.aborted) {
+                    const err = new Error("Generation aborted by user");
+                    err.name = "AbortError";
+                    throw err;
+                  }
+                  const { value, done } = await reader.read();
+                  if (done) break;
+                  stream.push(decoder.decode(value, { stream: true }));
+                }
+                stream.push(decoder.decode());
+                return finishStream();
+              } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
             } finally {
               clearTimeout(timeoutTimer);
+              removeAbortListener?.();
             }
           }
-        }
+        },
+        options.signal
       );
 
       // Parse and strictly validate response structure
@@ -439,6 +557,7 @@ export class AgentRuntime {
         status: "success",
         rawResponse,
         parsedOutput: structuredClone(parsedData),
+        liveContent: content,
         tokenUsage,
       });
 
@@ -449,11 +568,18 @@ export class AgentRuntime {
         spanId,
       };
     } catch (err: any) {
-      const errMsg = err?.message || String(err);
+      const isAbort = err?.name === "AbortError" || options.signal?.aborted;
+      const errMsg = isAbort ? "Generation aborted by user" : err?.message || String(err);
       globalTraceManager.updateSpan(traceId, spanId, {
-        status: "error",
+        status: isAbort ? "cancelled" : "error",
         error: errMsg,
       });
+
+      if (isAbort) {
+        const abortErr = new Error("Generation aborted by user");
+        abortErr.name = "AbortError";
+        throw abortErr;
+      }
 
       return {
         success: false,

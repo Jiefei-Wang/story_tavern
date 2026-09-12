@@ -107,7 +107,7 @@ export class TraceManager {
     }
   }
 
-  endTurnTrace(traceId: string, status: "success" | "error" = "success"): TurnTrace | undefined {
+  endTurnTrace(traceId: string, status: "success" | "error" | "cancelled" = "success"): TurnTrace | undefined {
     const trace = this.activeTraces.get(traceId);
     if (!trace) return undefined;
 
@@ -130,6 +130,32 @@ export class TraceManager {
       } catch (err) {
         console.error("Failed in onTraceCompleted callback:", err);
       }
+    }
+
+    this.notify();
+    return trace;
+  }
+
+  cancelTurnTrace(traceId: string): TurnTrace | undefined {
+    const trace = this.activeTraces.get(traceId);
+    if (!trace) return undefined;
+
+    trace.endedAt = Date.now();
+    trace.durationMs = trace.endedAt - trace.startedAt;
+    trace.status = "cancelled";
+    for (const span of trace.spans) {
+      if (span.status === "running" || span.status === "pending") {
+        span.status = "cancelled";
+        span.endedAt = Date.now();
+        span.durationMs = span.endedAt - span.startedAt;
+      }
+    }
+    this.recalculateTotalTokens(trace);
+    this.activeTraces.delete(traceId);
+    this.completedTraces.unshift(trace);
+
+    if (this.completedTraces.length > 500) {
+      this.completedTraces.pop();
     }
 
     this.notify();

@@ -61,12 +61,12 @@ export const AgentsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={async () => {
-              if (confirm("确定要将 7 个内置 Agent 重置为最新的默认提示词模板吗？")) {
+              if (confirm("确定要将所有内置 Agent 重置为最新的默认提示词模板吗？")) {
                 await resetBuiltinAgents();
               }
             }}
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-all"
-            title="重置 7 个内置 Agent 的提示词为初始最新版本"
+            title="重置所有内置 Agent 的提示词为初始最新版本"
           >
             <span>重置内置模板</span>
           </button>

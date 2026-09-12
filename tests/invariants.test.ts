@@ -836,7 +836,7 @@ test("Test 36: switch historical variation removes subsequent turns (Test B)", a
 test("Test 37: Narrator data contract contains NPC public events and excludes private states", async () => {
   const pipeline = new GamePipeline();
   const result = await pipeline.executeTurn(
-    "我对艾琳说：“今晚跟我走。”",
+    `我对艾琳说：“${"今晚跟我走。".repeat(16)}”`,
     INITIAL_HARBOR_TAVERN_WORLD,
     1,
     mockExecContext
@@ -1104,11 +1104,12 @@ test("Test 46: Public event validation enforces actor existence, valid type, and
   assert.doesNotThrow(() => {
     validatePublicEvents(
       [
-        { actor: "erin", type: "speech", content: "小声点……" },
+        { actor: "erin", type: "speech", content: "小声点……", sourceIntentId: "erin_i0" },
         { actor: "guard", type: "action", op: "watch_player" },
         { actor: "environment", type: "environment" },
       ],
-      world
+      world,
+      [{ npcId: "erin", reaction: { thought: null, intents: [{ id: "erin_i0", type: "speech", content: "小声点……" }] } }]
     );
   });
 });

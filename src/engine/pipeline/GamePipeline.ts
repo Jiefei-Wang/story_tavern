@@ -1,3 +1,5 @@
+import { resolveSpeechTargets, updateConversation } from "../world/ConversationRouter";
+import { renderNarratorSegments } from "../narration/NarratorComposition";
 import {
   AgentDefinition,
   AgentGroup,
@@ -14,6 +16,7 @@ import {
 } from "../../types";
 import { PipelineStageError } from "../errors/PipelineStageError";
 import { agentRuntime } from "../runtime/AgentRuntime";
+import { generateNewCharacters } from "../characters/CharacterGenerator";
 import {
   calculateReactionBudget,
   estimateIntentDuration,
@@ -38,18 +41,23 @@ import {
 
 export { getSafeIntentDuration };
 
+const CHARACTER_CREATION_POLICY = "人物创建协议：需要新增人物时只输出最小 add Patch，路径 /entities/<唯一新ID>，value 只含 type:character、临时称呼 name 和合法 location。新增人物的真实姓名、外貌、个人经历、目标、记忆和关系将由独立人物生成器生成，不要在本阶段生成这些内容或为新人物编造对白。不要将世界秘密、剧情或其他人的知识赋给新人。只输出必要的简短 JSON。";
+
 export interface ExecutionContext {
+  onTraceStarted?: (traceId: string) => void;
   agents: AgentDefinition[];
   groups: AgentGroup[];
   backends: Backend[];
   activeGroupId: string;
   mockMode: boolean;
+  signal?: AbortSignal;
 }
 
 export interface PipelineTurnResult {
   turn: GameTurn;
   traceId: string;
   success: boolean;
+  cancelled?: boolean;
   error?: string;
 }
 
@@ -67,6 +75,17 @@ export class GamePipeline {
     const traceId = `trace_${turnIndex}_${uuid}`;
 
     globalTraceManager.startTurnTrace(traceId, turnIndex, playerInput);
+    execContext.onTraceStarted?.(traceId);
+
+    const checkAborted = () => {
+      if (execContext.signal?.aborted) {
+        const err = new Error("Generation aborted by user");
+        err.name = "AbortError";
+        throw err;
+      }
+    };
+
+    checkAborted();
 
     // Snapshot world state: transaction baseline
     const worldBefore = cloneWorldState(initialWorld);
@@ -79,6 +98,7 @@ export class GamePipeline {
     // Cache state from preceding normal block for wait block perspective inheritance
     let lastNormalObservations: Record<string, import("../../types").NPCObservation[]> | null = null;
     let lastAffectedNpcIds: string[] = [];
+    let lastNormalEvents: GameEvent[] = [];
 
     const runtimeOpts = {
       groupId: execContext.activeGroupId,
@@ -87,16 +107,34 @@ export class GamePipeline {
       groups: execContext.groups,
       backends: execContext.backends,
       mockMode: execContext.mockMode,
+      signal: execContext.signal,
     };
 
     try {
-      // Step 1: Input Compiler
-      const compilerResult = await agentRuntime.runAgent<InputCompilerResult>({
+      checkAborted();
+      // Explicit command syntax is deterministic; only free-form input needs an LLM.
+      const adminMatch = /^\s*(?:admin|管理员)\s*[:：]([\s\S]*)$/i.exec(playerInput);
+      if (adminMatch && !adminMatch[1].trim()) {
+        throw new PipelineStageError("input_compiler", "管理员指令不能为空，请在 admin: 后输入具体命令");
+      }
+      const explicitInput: InputCompilerResult | null = adminMatch
+        ? { blocks: [{ id: "explicit_admin", kind: "admin", command: adminMatch[1].trim() }] }
+        : null;
+      if (explicitInput) {
+        const spanId = `span_explicit_input_${uuid}`;
+        globalTraceManager.createSpan(traceId, spanId, "Explicit Admin Command", "input_parser");
+        globalTraceManager.updateSpan(traceId, spanId, {
+          status: "success", inputContext: { playerInput }, parsedOutput: explicitInput,
+        });
+      }
+      const compilerResult = explicitInput ? { success: true, data: explicitInput, error: undefined } : await agentRuntime.runAgent<InputCompilerResult>({
         ...runtimeOpts,
         agentId: "input_compiler",
         context: {
           player: { input: playerInput },
           scene: workingWorld.scene,
+          conversation: workingWorld.conversation ?? {},
+          entities: buildNarratorEntityView(workingWorld),
         },
       });
 
@@ -111,6 +149,7 @@ export class GamePipeline {
 
       // Process each temporal block sequentially within transaction
       for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        checkAborted();
         const block = blocks[blockIndex];
         const blockSpanId = `span_block_${block.id || blockIndex}_${uuid}`;
 
@@ -132,12 +171,17 @@ export class GamePipeline {
           blockIndex,
         };
 
+        const committedStart = allCommittedEvents.length;
+        const previousLocation = workingWorld.scene.location;
+        const previousClock = workingWorld.clock;
+        const previousConversation = { ...workingWorld.conversation };
         try {
           if (block.kind === "admin") {
             // Admin Patch Block
             const adminResult = await agentRuntime.runAgent<WorldResolverResult>({
               ...blockRuntimeOpts,
               agentId: "admin_patch",
+              instructions: CHARACTER_CREATION_POLICY,
               context: {
                 command: block.command || playerInput,
                 world: workingWorld,
@@ -151,7 +195,7 @@ export class GamePipeline {
               );
             }
 
-            const patches = adminResult.data?.patches || [];
+            const patches = await generateNewCharacters(workingWorld, adminResult.data?.patches || [], playerInput, blockRuntimeOpts);
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
               const patchRes = applyPatches(workingWorld, patches);
@@ -167,6 +211,7 @@ export class GamePipeline {
             }
 
             allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
               type: "admin_change",
               blockId: block.id,
               source: block.command || playerInput,
@@ -191,6 +236,7 @@ export class GamePipeline {
             const skipResult = await agentRuntime.runAgent<WorldResolverResult>({
               ...blockRuntimeOpts,
               agentId: "time_skip",
+              instructions: CHARACTER_CREATION_POLICY,
               context: {
                 skipTarget,
                 world: workingWorld,
@@ -204,7 +250,7 @@ export class GamePipeline {
               );
             }
 
-            const patches = skipResult.data?.patches || [];
+            const patches = await generateNewCharacters(workingWorld, skipResult.data?.patches || [], playerInput, blockRuntimeOpts);
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
               const patchRes = applyPatches(workingWorld, patches);
@@ -220,6 +266,7 @@ export class GamePipeline {
             }
 
             allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
               type: "time_skip",
               blockId: block.id,
               source: skipTarget,
@@ -234,10 +281,13 @@ export class GamePipeline {
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
           } else if (block.kind === "normal") {
             // Normal Block: Events -> Perception -> NPC Reaction -> World Resolver
-            const events = block.events || [];
+            const events = resolveSpeechTargets(block.events || [], workingWorld);
+            lastNormalEvents = events;
+            globalTraceManager.updateSpan(traceId, blockSpanId, { inputContext: { conversation: workingWorld.conversation ?? {}, resolvedEvents: events } });
             allEvents.push(...events);
 
             // 2. Perception Agent (Strict Fail-Fast, with isolated perception view)
+            checkAborted();
             const perceptionView = buildPerceptionView(workingWorld);
             const perceptionResult = await agentRuntime.runAgent<PerceptionResult>({
               ...blockRuntimeOpts,
@@ -296,7 +346,7 @@ export class GamePipeline {
               targetNpcIds.map(async (npcId) => {
                 const obsList = observations[npcId] || [];
                 const sanitizedObs = sanitizeNpcObservations(npcId, obsList, events);
-                const npcView = buildNpcView(workingWorld, npcId, sanitizedObs, budget);
+                const npcView = buildNpcView(workingWorld, npcId, sanitizedObs, budget, events);
 
                 const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
                   ...blockRuntimeOpts,
@@ -314,7 +364,9 @@ export class GamePipeline {
                 // Deterministic reaction budget enforcement with getSafeIntentDuration
                 const validatedIntents: NPCIntent[] = [];
                 let currentSpent = 0;
-                for (const intent of reactionRes.data.intents || []) {
+                for (const [index, rawIntent] of (reactionRes.data.intents || []).entries()) {
+                  const intent = { ...rawIntent, id: `b${blockIndex}_${npcId}_intent_${index}` };
+                  if (intent.type === "speech" && !npcView.interaction.maySpeak) continue;
                   const duration = getSafeIntentDuration(intent);
                   if (currentSpent + duration <= budget.available_time) {
                     validatedIntents.push({ ...intent, duration });
@@ -322,6 +374,14 @@ export class GamePipeline {
                   }
                 }
 
+                const filterSpanId = `${blockSpanId}_${npcId}_filter`;
+                globalTraceManager.createSpan(traceId, filterSpanId, `NPC intent permissions: ${npcId}`, "intent_filter", blockSpanId);
+                globalTraceManager.updateSpan(traceId, filterSpanId, {
+                  status: "success", inputContext: npcView,
+                  parsedOutput: { rawIntents: reactionRes.data.intents, acceptedIntents: validatedIntents,
+                    filteredIntents: (reactionRes.data.intents || []).filter(i => i.type === "speech" && !npcView.interaction.maySpeak),
+                    reason: npcView.interaction.maySpeak ? "speech permitted; time budget enforced" : "speech intent filtered because maySpeak=false" },
+                });
                 const boundedThought = sanitizeThoughtBudget(
                   reactionRes.data.thought,
                   budget.available_time
@@ -339,9 +399,11 @@ export class GamePipeline {
             );
 
             // Step 4: World Resolver
+            checkAborted();
             const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
               ...blockRuntimeOpts,
               agentId: "world_resolver",
+              instructions: CHARACTER_CREATION_POLICY,
               context: {
                 events,
                 npcReactions,
@@ -360,9 +422,17 @@ export class GamePipeline {
             }
 
             // Validate publicEvents returned by World Resolver
-            validatePublicEvents(resolverResult.data?.publicEvents, workingWorld);
+            const validationSpan = `${blockSpanId}_public_validation`;
+            globalTraceManager.createSpan(traceId, validationSpan, "Public event provenance validation", "public_event_validation", blockSpanId);
+            try {
+              validatePublicEvents(resolverResult.data?.publicEvents, applyPatches(workingWorld, resolverResult.data?.patches || []).newWorld, npcReactions);
+              globalTraceManager.updateSpan(traceId, validationSpan, { status: "success", parsedOutput: { publicEvents: resolverResult.data?.publicEvents, validation: "passed" } });
+            } catch (error) {
+              globalTraceManager.updateSpan(traceId, validationSpan, { status: "error", error: String(error), parsedOutput: resolverResult.data?.publicEvents });
+              throw error;
+            }
 
-            const patches = resolverResult.data?.patches || [];
+            const patches = await generateNewCharacters(workingWorld, resolverResult.data?.patches || [], playerInput, blockRuntimeOpts);
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
               const patchRes = applyPatches(workingWorld, patches);
@@ -380,6 +450,7 @@ export class GamePipeline {
             // Record committed player events
             for (const ev of events) {
               allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
                 type: ev.type === "speech" ? "player_speech" : "player_action",
                 actor: ev.actor || "player",
                 blockId: block.id,
@@ -396,6 +467,7 @@ export class GamePipeline {
             if (resolverResult.data?.publicEvents && resolverResult.data.publicEvents.length > 0) {
               for (const pubEv of resolverResult.data.publicEvents) {
                 allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
                   type:
                     pubEv.type === "speech"
                       ? "npc_speech"
@@ -473,7 +545,7 @@ export class GamePipeline {
 
             const npcReactions = await Promise.all(
               targetNpcList.map(async ({ id: npcId, entity: npcEntity, obsList }) => {
-                const npcView = buildNpcView(workingWorld, npcId, obsList, waitBudget);
+                const npcView = buildNpcView(workingWorld, npcId, obsList, waitBudget, lastNormalObservations ? lastNormalEvents : []);
                 const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
                   ...blockRuntimeOpts,
                   agentId: "npc_reaction",
@@ -490,7 +562,9 @@ export class GamePipeline {
                 // Deterministic reaction budget enforcement using unified getSafeIntentDuration
                 const validatedIntents: NPCIntent[] = [];
                 let currentSpent = 0;
-                for (const intent of reactionRes.data.intents || []) {
+                for (const [index, rawIntent] of (reactionRes.data.intents || []).entries()) {
+                  const intent = { ...rawIntent, id: `b${blockIndex}_${npcId}_intent_${index}` };
+                  if (intent.type === "speech" && !npcView.interaction.maySpeak) continue;
                   const duration = getSafeIntentDuration(intent);
                   if (currentSpent + duration <= waitBudget.available_time) {
                     validatedIntents.push({ ...intent, duration });
@@ -498,6 +572,14 @@ export class GamePipeline {
                   }
                 }
 
+                const filterSpanId = `${blockSpanId}_${npcId}_filter`;
+                globalTraceManager.createSpan(traceId, filterSpanId, `NPC intent permissions: ${npcId}`, "intent_filter", blockSpanId);
+                globalTraceManager.updateSpan(traceId, filterSpanId, {
+                  status: "success", inputContext: npcView,
+                  parsedOutput: { rawIntents: reactionRes.data.intents, acceptedIntents: validatedIntents,
+                    filteredIntents: (reactionRes.data.intents || []).filter(i => i.type === "speech" && !npcView.interaction.maySpeak),
+                    reason: npcView.interaction.maySpeak ? "speech permitted; time budget enforced" : "speech intent filtered because maySpeak=false" },
+                });
                 const boundedThought = sanitizeThoughtBudget(
                   reactionRes.data.thought,
                   waitBudget.available_time
@@ -518,6 +600,7 @@ export class GamePipeline {
             const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
               ...blockRuntimeOpts,
               agentId: "world_resolver",
+              instructions: CHARACTER_CREATION_POLICY,
               context: {
                 events: [
                   {
@@ -544,9 +627,17 @@ export class GamePipeline {
             }
 
             // Validate publicEvents returned by World Resolver
-            validatePublicEvents(resolverResult.data?.publicEvents, workingWorld);
+            const validationSpan = `${blockSpanId}_public_validation`;
+            globalTraceManager.createSpan(traceId, validationSpan, "Public event provenance validation", "public_event_validation", blockSpanId);
+            try {
+              validatePublicEvents(resolverResult.data?.publicEvents, applyPatches(workingWorld, resolverResult.data?.patches || []).newWorld, npcReactions);
+              globalTraceManager.updateSpan(traceId, validationSpan, { status: "success", parsedOutput: { publicEvents: resolverResult.data?.publicEvents, validation: "passed" } });
+            } catch (error) {
+              globalTraceManager.updateSpan(traceId, validationSpan, { status: "error", error: String(error), parsedOutput: resolverResult.data?.publicEvents });
+              throw error;
+            }
 
-            const patches = resolverResult.data?.patches || [];
+            const patches = await generateNewCharacters(workingWorld, resolverResult.data?.patches || [], playerInput, blockRuntimeOpts);
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
               const patchRes = applyPatches(workingWorld, patches);
@@ -562,6 +653,7 @@ export class GamePipeline {
             }
 
             allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
               type: "wait",
               actor: "player",
               blockId: block.id,
@@ -574,6 +666,7 @@ export class GamePipeline {
             if (resolverResult.data?.publicEvents && resolverResult.data.publicEvents.length > 0) {
               for (const pubEv of resolverResult.data.publicEvents) {
                 allCommittedEvents.push({
+              id: `turn_${turnIndex}_b${blockIndex}_event_${allCommittedEvents.length}`,
                   type:
                     pubEv.type === "speech"
                       ? "npc_speech"
@@ -597,23 +690,29 @@ export class GamePipeline {
 
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
           }
+          workingWorld.conversation = previousConversation;
+          if (block.kind === "time_skip" || workingWorld.scene.location !== previousLocation ||
+              (block.kind === "admin" && workingWorld.clock !== previousClock)) workingWorld.conversation = {};
+          updateConversation(workingWorld, allCommittedEvents.slice(committedStart));
         } catch (blockErr: any) {
+          const isBlockAbort = blockErr?.name === "AbortError" || execContext.signal?.aborted;
           globalTraceManager.updateSpan(traceId, blockSpanId, {
-            status: "error",
-            error: blockErr?.message || String(blockErr),
+            status: isBlockAbort ? "cancelled" : "error",
+            error: isBlockAbort ? "Generation aborted by user" : blockErr?.message || String(blockErr),
           });
           throw blockErr;
         }
       }
 
       // Step 5: Narrator (Isolated public view: committed events & public patches, NO NPC private thoughts or memory)
+      checkAborted();
       let narrationText = "";
       let narrationError: string | undefined = undefined;
 
       const publicPatches = filterPublicPatches(allCommittedPatches);
       const narratorEntities = buildNarratorEntityView(workingWorld);
 
-      const narratorResult = await agentRuntime.runAgent<string>({
+      const narratorResult = await agentRuntime.runAgent<import("../../types").NarratorResult>({
         ...runtimeOpts,
         agentId: "narrator",
         context: {
@@ -627,21 +726,21 @@ export class GamePipeline {
         },
       });
 
-      if (narratorResult.success) {
-        const d: any = narratorResult.data;
-        if (typeof d === "string") {
-          narrationText = d;
-        } else if (d?.narration) {
-          narrationText = d.narration;
-        } else {
-          narrationText = JSON.stringify(d);
-        }
-        narrationText = narrationText.replace(/^(旁白|Narrator|NARRATOR)[:：]\s*/i, "");
-      } else {
-        // Physical world state committed successfully; narrator failure does NOT rollback world
-        narrationError = narratorResult.error || "Narrator generation failed";
-        narrationText = `(旁白生成出现异常: ${narrationError})`;
+      try {
+        if (!narratorResult.success) throw new Error(narratorResult.error || "Narrator generation failed");
+        narrationText = renderNarratorSegments(narratorResult.data, allCommittedEvents);
+      } catch (error) {
+        // Narration failure does not roll back an already committed world.
+        narrationError = error instanceof Error ? error.message : String(error);
+        narrationText = "（旁白生成失败，请查看调试记录。）";
       }
+      const compositionSpan = `composition_${uuid}`;
+      globalTraceManager.createSpan(traceId, compositionSpan, "Narrator composition validation", "narrator_validation");
+      globalTraceManager.updateSpan(traceId, compositionSpan, {
+        status: narrationError ? "error" : "success", error: narrationError,
+        inputContext: { committedEvents: allCommittedEvents, segments: narratorResult.data },
+        parsedOutput: { renderedOutput: narrationText },
+      });
 
       globalTraceManager.endTurnTrace(traceId, "success");
 
@@ -666,6 +765,30 @@ export class GamePipeline {
         success: true,
       };
     } catch (err: any) {
+      const isAbort = err?.name === "AbortError" || execContext.signal?.aborted;
+      if (isAbort) {
+        globalTraceManager.cancelTurnTrace(traceId);
+        return {
+          turn: {
+            id: `turn_${turnIndex}_cancel_${uuid}`,
+            turnIndex,
+            timestamp: new Date().toISOString(),
+            playerInput,
+            narratorOutput: "生成已暂停",
+            traceId,
+            worldStateBefore: worldBefore,
+            worldStateAfter: worldBefore,
+            patches: [],
+            activeAgentGroupId: execContext.activeGroupId,
+            status: "error",
+            error: "Generation aborted by user",
+          },
+          traceId,
+          success: false,
+          cancelled: true,
+        };
+      }
+
       // Transaction Rollback: Any block failure rollbacks working state to worldBefore!
       globalTraceManager.endTurnTrace(traceId, "error");
       const errorMsg = err?.message || String(err);

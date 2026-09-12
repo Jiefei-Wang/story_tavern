@@ -1,3 +1,4 @@
+import { interactionFor } from "./ConversationRouter";
 import {
   GameEvent,
   JsonPatchOperation,
@@ -21,7 +22,7 @@ import { PipelineStageError } from "../errors/PipelineStageError";
  */
 export function isPrivateWorldPath(path: string): boolean {
   if (!path || typeof path !== "string") return false;
-  const privateRegex = /^\/entities\/[^/]+\/(mentalState|memory|relationships|goal)(\/.*)?$/;
+  const privateRegex = /^\/entities\/[^/]+\/(mentalState|memory|relationships|goal|background|personality)(\/.*)?$/;
   return privateRegex.test(path);
 }
 
@@ -31,7 +32,21 @@ export function isPrivateWorldPath(path: string): boolean {
  */
 export function filterPublicPatches(patches: JsonPatchOperation[]): JsonPatchOperation[] {
   if (!Array.isArray(patches)) return [];
-  return patches.filter((p) => !isPrivateWorldPath(p.path));
+  return patches.filter((p) => !isPrivateWorldPath(p.path) && !(p.from && isPrivateWorldPath(p.from))).map(p => {
+    // Whole-entity patches also contain private fields; filtering only the path leaks them.
+    if (/^\/entities\/[^/]+$/.test(p.path) && p.value && typeof p.value === "object") {
+      return { ...p, value: publicEntity(p.value as WorldEntity) };
+    }
+    if (p.path === "/entities" && p.value && typeof p.value === "object") {
+      return { ...p, value: Object.fromEntries(Object.entries(p.value).map(([id, e]) => [id, publicEntity(e as WorldEntity)])) };
+    }
+    return p;
+  });
+}
+
+function publicEntity(ent: WorldEntity) {
+  return Object.fromEntries(["type", "name", "location", "appearance", "occupation", "open", "locked"]
+    .filter(key => ent[key] !== undefined).map(key => [key, ent[key]]));
 }
 
 /**
@@ -61,6 +76,8 @@ export function buildPerceptionView(world: WorldState): {
       name: ent.name,
       type: ent.type,
       location: ent.location,
+      ...(ent.appearance ? { appearance: ent.appearance } : {}),
+      ...(ent.occupation ? { occupation: ent.occupation } : {}),
       ...(ent.open !== undefined ? { open: ent.open } : {}),
       ...(ent.locked !== undefined ? { locked: ent.locked } : {}),
     };
@@ -99,6 +116,8 @@ export function buildNarratorEntityView(world: WorldState): Record<
       name: ent.name,
       type: ent.type,
       location: ent.location,
+      ...(ent.appearance ? { appearance: ent.appearance } : {}),
+      ...(ent.occupation ? { occupation: ent.occupation } : {}),
       ...(ent.open !== undefined ? { open: ent.open } : {}),
       ...(ent.locked !== undefined ? { locked: ent.locked } : {}),
     };
@@ -120,12 +139,14 @@ export function buildNpcView(
   world: WorldState,
   npcId: string,
   sanitizedObservations: NPCObservation[],
-  budget: { available_time: number; response_window: boolean; trigger_event_ids?: string[] }
+  budget: { available_time: number; response_window: boolean; trigger_event_ids?: string[] },
+  events: GameEvent[] = []
 ): {
   npc: WorldEntity & { id: string };
   observations: NPCObservation[];
   scene: { location: string; weather: string; lighting: string; description?: string };
   reaction: typeof budget;
+  interaction: import("../../types").InteractionContext;
 } {
   const rawNpc = world.entities[npcId] || { type: "character" };
   const ownNpc: WorldEntity & { id: string } = {
@@ -140,9 +161,9 @@ export function buildNpcView(
       location: world.scene.location,
       weather: world.scene.weather,
       lighting: world.scene.lighting,
-      description: world.scene.description,
     },
     reaction: budget,
+    interaction: interactionFor(npcId, events),
   };
 }
 
@@ -236,11 +257,14 @@ export function validatePerceptionAgainstEvents(
  */
 export function validatePublicEvents(
   publicEvents: PublicWorldEvent[] | undefined,
-  world: WorldState
+  world: WorldState,
+  reactions: Array<{ npcId: string; reaction: import("../../types").NPCReactionResult }> = []
 ): void {
-  if (!publicEvents || !Array.isArray(publicEvents)) return;
+  if (publicEvents === undefined) return;
+  if (!Array.isArray(publicEvents)) throw new PipelineStageError("world_resolver", "publicEvents must be an array");
 
   const validSystemActors = new Set(["player", "world", "environment", "scene"]);
+  const usedSpeechSources = new Set<string>();
 
   for (const ev of publicEvents) {
     if (!ev || typeof ev !== "object") {
@@ -281,6 +305,19 @@ export function validatePublicEvents(
           `Public speech event by actor '${ev.actor}' must have non-empty content`
         );
       }
+    }
+
+    if (ev.type === "speech") {
+      const sources = reactions.flatMap(r => r.reaction.intents.map(intent => ({ npcId: r.npcId, intent })));
+      const matches = sources.filter(s => s.intent.id === ev.sourceIntentId);
+      const source = matches[0];
+      if (!ev.sourceIntentId || matches.length !== 1 || source.npcId !== ev.actor ||
+          usedSpeechSources.has(ev.sourceIntentId) ||
+          source.intent.type !== "speech" || source.intent.content?.trim() !== ev.content?.trim() ||
+          (source.intent.target || "") !== (ev.target || "")) {
+        throw new PipelineStageError("world_resolver", `Public speech '${ev.actor}' has invalid sourceIntentId, actor, target or changed content`);
+      }
+      usedSpeechSources.add(ev.sourceIntentId);
     }
 
     // Duration check

@@ -5,6 +5,7 @@ export type PipelineStage =
   | "world_resolver"
   | "time_skip"
   | "admin_patch"
+  | "character_generator"
   | "narrator"
   | "patch_application"
   | "temporal_scheduler"

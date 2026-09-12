@@ -20,10 +20,16 @@ import {
   Plus,
   Copy,
   Check,
+  MoreHorizontal,
+  Square,
 } from "lucide-react";
+import { GameTurn } from "../../types";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useTraceStore } from "../../stores/useTraceStore";
 import { SpatialEngine } from "../../engine/world/SpatialEngine";
+import { GenerationPanel } from "./GenerationPanel";
+import { GenerationTaskModal } from "./GenerationTaskModal";
 
 export const PlayPage: React.FC = () => {
   const {
@@ -35,6 +41,7 @@ export const PlayPage: React.FC = () => {
     retryTurn,
     switchTurnVariation,
     createNewSave,
+    cancelGeneration,
   } = useGameStore();
   const { settings } = useSettingsStore();
   const [inputText, setInputText] = useState("");
@@ -43,11 +50,17 @@ export const PlayPage: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storyEndRef = useRef<HTMLDivElement>(null);
   const [copiedTurnIdx, setCopiedTurnIdx] = useState<number | null>(null);
+  const [activeMenuTurnIdx, setActiveMenuTurnIdx] = useState<number | null>(null);
+  const [selectedModalTurn, setSelectedModalTurn] = useState<GameTurn | null>(null);
 
-  const handleCopyText = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedTurnIdx(idx);
-    setTimeout(() => setCopiedTurnIdx(null), 1800);
+  const handleCopyText = async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedTurnIdx(idx);
+      setTimeout(() => setCopiedTurnIdx(null), 1800);
+    } catch {
+      window.alert("复制失败，请检查剪贴板权限或手动选择旁白复制。");
+    }
   };
 
   const handleNewGame = async () => {
@@ -74,6 +87,46 @@ export const PlayPage: React.FC = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Close turn action menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeMenuTurnIdx !== null) {
+        const target = event.target as HTMLElement;
+        if (!target.closest("[data-turn-menu]")) {
+          setActiveMenuTurnIdx(null);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [activeMenuTurnIdx]);
+
+  const handleStopGeneration = () => {
+    const restored = cancelGeneration();
+    if (restored) {
+      setInputText(restored);
+    }
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.selectionStart = textareaRef.current.value.length;
+        textareaRef.current.selectionEnd = textareaRef.current.value.length;
+      }
+    }, 0);
+  };
+
+  // Allow Escape key to stop generation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isExecuting) {
+        e.preventDefault();
+        handleStopGeneration();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isExecuting]);
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -128,6 +181,7 @@ export const PlayPage: React.FC = () => {
             {currentTraceId && (
               <Link
                 to="/debug"
+                onClick={() => useTraceStore.getState().selectTrace(currentTraceId)}
                 className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md transition-colors"
                 title="查看上一步 Agent Graph 与 Trace"
               >
@@ -226,11 +280,15 @@ export const PlayPage: React.FC = () => {
 
               {/* Literary Prose Narration */}
               <div className="relative group/narration select-text">
-                <div className="flex items-center justify-end mb-1 opacity-0 group-hover/narration:opacity-100 transition-opacity">
+                <div
+                  className={`flex items-center justify-end gap-1.5 mb-1 transition-opacity ${
+                    activeMenuTurnIdx === idx ? "opacity-100" : "opacity-0 group-hover/narration:opacity-100"
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => handleCopyText(turn.narratorOutput, idx)}
-                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded transition-all"
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded transition-all cursor-pointer"
                     title="复制本段旁白内容"
                   >
                     {copiedTurnIdx === idx ? (
@@ -245,6 +303,72 @@ export const PlayPage: React.FC = () => {
                       </>
                     )}
                   </button>
+
+                  {/* Three-dots menu button */}
+                  <div className="relative" data-turn-menu>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuTurnIdx(activeMenuTurnIdx === idx ? null : idx);
+                      }}
+                      className={`p-1 rounded border transition-colors cursor-pointer flex items-center justify-center ${
+                        activeMenuTurnIdx === idx
+                          ? "bg-blue-50 text-blue-600 border-blue-200"
+                          : "text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200/80"
+                      }`}
+                      title="更多选项"
+                      aria-label="回合操作菜单"
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" />
+                    </button>
+
+                    {activeMenuTurnIdx === idx && (
+                      <div
+                        className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-xl py-1 z-30 text-xs animate-in fade-in duration-150"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveMenuTurnIdx(null);
+                            setSelectedModalTurn(turn);
+                          }}
+                          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-blue-50 hover:text-blue-600 text-slate-700 transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          <span className="font-medium">查看生成任务</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveMenuTurnIdx(null);
+                            handleCopyText(turn.narratorOutput, idx);
+                          }}
+                          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>复制旁白</span>
+                        </button>
+
+                        {turn.traceId && turn.traceId !== "trace_init" && (
+                          <Link
+                            to="/debug"
+                            onClick={() => {
+                              setActiveMenuTurnIdx(null);
+                              useTraceStore.getState().selectTrace(turn.traceId);
+                            }}
+                            className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 text-slate-700 transition-colors border-t border-slate-100 mt-1 pt-1.5 cursor-pointer"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>在调试台查看 Trace</span>
+                            <ExternalLink className="w-3 h-3 text-slate-400 ml-auto" />
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="prose prose-slate max-w-none text-slate-700 text-sm leading-7 space-y-3 font-normal select-text">
@@ -275,17 +399,7 @@ export const PlayPage: React.FC = () => {
           ))}
 
           {/* Running indicator */}
-          {isExecuting && (
-            <div className="flex items-center gap-3 py-4 text-xs text-blue-600 bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-pulse">
-              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-              <span>
-                {settings.mockLlmMode
-                  ? "Mock 模拟管道推演中..."
-                  : "Agent 多模型分布式推演中..."}{" "}
-                (Input Compiler → Perception → NPC Reaction → World Resolver → Narrator)
-              </span>
-            </div>
-          )}
+          <GenerationPanel traceId={currentTraceId} running={isExecuting} onStop={handleStopGeneration} />
 
           {/* Execution error alert with retry button */}
           {executionError && (
@@ -431,18 +545,26 @@ export const PlayPage: React.FC = () => {
               disabled={isExecuting}
             />
 
-            <button
-              type="submit"
-              disabled={isExecuting || !inputText.trim()}
-              className="absolute right-2.5 bottom-2.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm shadow-blue-500/20 transition-all"
-            >
-              {isExecuting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
+            {isExecuting ? (
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="absolute right-2.5 bottom-2.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm shadow-rose-500/20 transition-all cursor-pointer"
+                title="暂停生成并恢复输入内容（快捷键：Escape）"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span>暂停生成</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!inputText.trim()}
+                className="absolute right-2.5 bottom-2.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm shadow-blue-500/20 transition-all cursor-pointer"
+              >
                 <Send className="w-3.5 h-3.5" />
-              )}
-              <span>发送</span>
-            </button>
+                <span>发送</span>
+              </button>
+            )}
           </form>
         </div>
       </div>
@@ -541,6 +663,14 @@ export const PlayPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Generation Task Details Modal */}
+      {selectedModalTurn && (
+        <GenerationTaskModal
+          turn={selectedModalTurn}
+          onClose={() => setSelectedModalTurn(null)}
+        />
+      )}
     </div>
   );
 };

@@ -33,7 +33,7 @@ export const SettingsPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              开启后，所有 7 个 Agent 不调用远程 LLM API，而是返回确定性的演示数据。可在完全无需 API Key 的情况下体验完整的时序管道与 Trace 调试器。
+              开启后，所有 Agent 不调用远程 LLM API，而是返回确定性的演示数据。可在完全无需 API Key 的情况下体验完整的时序管道与 Trace 调试器。
             </p>
           </div>
 
@@ -98,12 +98,12 @@ export const SettingsPage: React.FC = () => {
             <span className="font-semibold text-sm text-slate-900 block">
               界面语言 (Language)
             </span>
-            <p className="text-xs text-slate-500">选择应用操作界面呈现的语言。</p>
+            <p className="text-xs text-slate-500">当前仅支持简体中文，英文界面尚未实现。</p>
           </div>
 
           <select
-            value={settings.language}
-            onChange={(e) => updateSettings({ language: e.target.value as any })}
+            value="zh-CN"
+            disabled
             className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none font-medium text-slate-700"
           >
             <option value="zh-CN">中文 (简体)</option>
@@ -117,12 +117,12 @@ export const SettingsPage: React.FC = () => {
             <span className="font-semibold text-sm text-slate-900 block">
               主题外观 (Theme)
             </span>
-            <p className="text-xs text-slate-500">桌面原生工具型设计风格。</p>
+            <p className="text-xs text-slate-500">当前仅支持浅色主题，跟随系统尚未实现。</p>
           </div>
 
           <select
-            value={settings.theme}
-            onChange={(e) => updateSettings({ theme: e.target.value as any })}
+            value="light"
+            disabled
             className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none font-medium text-slate-700"
           >
             <option value="light">浅色 (Light)</option>
@@ -136,12 +136,12 @@ export const SettingsPage: React.FC = () => {
             <span className="font-semibold text-sm text-slate-900 block">
               日志级别 (Log Level)
             </span>
-            <p className="text-xs text-slate-500">控制系统输出日志的详细程度。</p>
+            <p className="text-xs text-slate-500">日志级别过滤尚未实现，此设置暂不可用。</p>
           </div>
 
           <select
             value={settings.logLevel}
-            onChange={(e) => updateSettings({ logLevel: e.target.value as any })}
+            disabled
             className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none font-medium text-slate-700"
           >
             <option value="debug">Debug</option>

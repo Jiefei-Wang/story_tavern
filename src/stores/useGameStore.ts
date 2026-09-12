@@ -15,6 +15,7 @@ interface GameState {
   isExecuting: boolean;
   executionError: string | null;
   currentTraceId: string | null;
+  pendingPlayerInput: string | null;
   loadSaves: () => Promise<void>;
   selectSave: (saveId: string) => void;
   createNewSave: (name?: string) => Promise<GameSave>;
@@ -23,7 +24,10 @@ interface GameState {
   sendPlayerInput: (input: string) => Promise<boolean>;
   retryTurn: (turnIndex?: number) => Promise<boolean>;
   switchTurnVariation: (turnIndex: number, variationIndex: number) => Promise<void>;
+  cancelGeneration: () => string | null;
 }
+
+let activeAbortController: AbortController | null = null;
 
 export const useGameStore = create<GameState>((set, get) => ({
   activeSave: null,
@@ -31,24 +35,26 @@ export const useGameStore = create<GameState>((set, get) => ({
   isExecuting: false,
   executionError: null,
   currentTraceId: null,
+  pendingPlayerInput: null,
 
   loadSaves: async () => {
     const saves = await storageService.getSaves();
+    saves.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const active = saves.length > 0 ? saves[0] : null;
-    set({ saves, activeSave: active });
+    set({ saves, activeSave: active, currentTraceId: active?.turns[active.turns.length - 1]?.traceId ?? null });
   },
 
   selectSave: (saveId: string) => {
     const save = get().saves.find((s) => s.id === saveId);
     if (save) {
-      set({ activeSave: save, executionError: null });
+      set({ activeSave: save, executionError: null, currentTraceId: save.turns[save.turns.length - 1]?.traceId ?? null });
     }
   },
 
   createNewSave: async (name: string = "新游戏") => {
     const activeGroupId = useAgentGroupStore.getState().activeGroupId || "group_quality";
     const newSave: GameSave = {
-      id: `save_${Date.now()}`,
+      id: `save_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
       name: `${name} · ${new Date().toLocaleTimeString("zh-CN")}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -73,32 +79,34 @@ export const useGameStore = create<GameState>((set, get) => ({
     };
 
     await storageService.saveGame(newSave);
-    const saves = await storageService.getSaves();
-    set({ saves, activeSave: newSave, executionError: null });
+    const saves = [...get().saves, newSave];
+    set({ saves, activeSave: newSave, executionError: null, currentTraceId: null });
     return newSave;
   },
 
   deleteSave: async (saveId: string) => {
     await storageService.deleteGame(saveId);
-    const saves = await storageService.getSaves();
+    const saves = get().saves.filter((save) => save.id !== saveId);
     const currentActive = get().activeSave;
     const nextActive = currentActive?.id === saveId ? (saves.length > 0 ? saves[0] : null) : currentActive;
-    set({ saves, activeSave: nextActive });
+    set({ saves, activeSave: nextActive, currentTraceId: nextActive?.turns[nextActive.turns.length - 1]?.traceId ?? null });
   },
 
   manualSaveGame: async () => {
     const { activeSave } = get();
     if (!activeSave) return;
     await storageService.saveGame(activeSave);
-    const saves = await storageService.getSaves();
-    set({ saves });
+    // Keep unsaved progress in other saves intact.
   },
 
   sendPlayerInput: async (input: string) => {
     const { activeSave, isExecuting } = get();
     if (!activeSave || isExecuting || !input.trim()) return false;
 
-    set({ isExecuting: true, executionError: null });
+    const abortController = new AbortController();
+    activeAbortController = abortController;
+
+    set({ isExecuting: true, executionError: null, pendingPlayerInput: input });
 
     const agents = useAgentStore.getState().agents;
     const groups = useAgentGroupStore.getState().groups;
@@ -109,6 +117,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const currentWorld = activeSave.worldState;
     const nextTurnIndex = activeSave.turns.length;
+    const previousTraceId = activeSave.turns[activeSave.turns.length - 1]?.traceId ?? null;
 
     try {
       const result = await gamePipeline.executeTurn(
@@ -121,12 +130,31 @@ export const useGameStore = create<GameState>((set, get) => ({
           backends,
           activeGroupId,
           mockMode,
+          signal: abortController.signal,
+          onTraceStarted: (traceId) => {
+            if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
+              set({ currentTraceId: traceId });
+            }
+          },
         }
       );
 
+      if (result.cancelled || abortController.signal.aborted) {
+        if (activeAbortController === abortController) {
+          activeAbortController = null;
+        }
+        set({
+          isExecuting: false,
+          pendingPlayerInput: null,
+          executionError: null,
+          currentTraceId: get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId,
+        });
+        return false;
+      }
+
       // Persist completed trace to SQLite
       const trace = globalTraceManager.getTrace(result.traceId);
-      if (trace) {
+      if (trace && result.success) {
         await storageService.saveTrace(trace).catch((err) =>
           console.warn("Failed to persist trace:", err)
         );
@@ -141,26 +169,44 @@ export const useGameStore = create<GameState>((set, get) => ({
         activeAgentGroupId: activeGroupId,
       };
 
+      // A save may have been deleted while the model was running.
+      if (!get().saves.some((save) => save.id === activeSave.id)) {
+        set({ isExecuting: false, pendingPlayerInput: null });
+        return false;
+      }
+
       if (autosave) {
         await storageService.saveGame(updatedSave);
       }
 
       const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
       set({
-        activeSave: updatedSave,
+        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
         saves,
         isExecuting: false,
-        currentTraceId: result.traceId,
-        executionError: result.success ? null : result.error || "Turn execution failed",
+        pendingPlayerInput: null,
+        currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
+        executionError: get().activeSave?.id === activeSave.id
+          ? (result.success ? null : result.error || "Turn execution failed") : get().executionError,
       });
 
       return result.success;
     } catch (err: any) {
+      const isAbort = err?.name === "AbortError" || abortController.signal.aborted;
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
       set({
         isExecuting: false,
-        executionError: err?.message || String(err),
+        pendingPlayerInput: null,
+        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? err?.message || String(err) : get().executionError),
+        currentTraceId: isAbort ? (get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId) : get().currentTraceId,
       });
       return false;
+    } finally {
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
     }
   },
 
@@ -169,13 +215,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!activeSave || isExecuting || activeSave.turns.length === 0) return false;
 
     const targetIndex = turnIndex !== undefined ? turnIndex : activeSave.turns.length - 1;
-    if (targetIndex < 0 || targetIndex >= activeSave.turns.length) return false;
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= activeSave.turns.length) return false;
 
     const targetTurn = activeSave.turns[targetIndex];
     const playerInput = targetTurn.playerInput;
     if (!playerInput || playerInput === "(游戏开始)" || playerInput === "(新游戏开始)") return false;
 
-    set({ isExecuting: true, executionError: null });
+    const abortController = new AbortController();
+    activeAbortController = abortController;
+
+    set({ isExecuting: true, executionError: null, pendingPlayerInput: playerInput });
 
     const agents = useAgentStore.getState().agents;
     const groups = useAgentGroupStore.getState().groups;
@@ -185,6 +234,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const autosave = useSettingsStore.getState().settings.autosave;
 
     const initialWorld = targetTurn.worldStateBefore;
+    const previousTraceId = activeSave.turns[activeSave.turns.length - 1]?.traceId ?? null;
 
     try {
       const result = await gamePipeline.executeTurn(
@@ -197,11 +247,30 @@ export const useGameStore = create<GameState>((set, get) => ({
           backends,
           activeGroupId,
           mockMode,
+          signal: abortController.signal,
+          onTraceStarted: (traceId) => {
+            if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
+              set({ currentTraceId: traceId });
+            }
+          },
         }
       );
 
+      if (result.cancelled || abortController.signal.aborted) {
+        if (activeAbortController === abortController) {
+          activeAbortController = null;
+        }
+        set({
+          isExecuting: false,
+          pendingPlayerInput: null,
+          executionError: null,
+          currentTraceId: get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId,
+        });
+        return false;
+      }
+
       const trace = globalTraceManager.getTrace(result.traceId);
-      if (trace) {
+      if (trace && result.success) {
         await storageService.saveTrace(trace).catch((err) =>
           console.warn("Failed to persist trace:", err)
         );
@@ -211,8 +280,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!result.success) {
         set({
           isExecuting: false,
-          currentTraceId: result.traceId,
-          executionError: result.error || "Retry failed",
+          pendingPlayerInput: null,
+          currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
+          executionError: get().activeSave?.id === activeSave.id ? result.error || "Retry failed" : get().executionError,
         });
         return false;
       }
@@ -251,36 +321,76 @@ export const useGameStore = create<GameState>((set, get) => ({
         activeAgentGroupId: activeGroupId,
       };
 
+      // A save may have been deleted while the model was running.
+      if (!get().saves.some((save) => save.id === activeSave.id)) {
+        set({ isExecuting: false, pendingPlayerInput: null });
+        return false;
+      }
+
       if (autosave) {
         await storageService.saveGame(updatedSave);
       }
 
       const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
       set({
-        activeSave: updatedSave,
+        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
         saves,
         isExecuting: false,
-        currentTraceId: result.traceId,
+        pendingPlayerInput: null,
+        currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
         executionError: null,
       });
 
       return true;
     } catch (err: any) {
+      const isAbort = err?.name === "AbortError" || abortController.signal.aborted;
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
       set({
         isExecuting: false,
-        executionError: err?.message || String(err),
+        pendingPlayerInput: null,
+        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? err?.message || String(err) : get().executionError),
+        currentTraceId: isAbort ? (get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId) : get().currentTraceId,
       });
       return false;
+    } finally {
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
     }
   },
 
+  cancelGeneration: () => {
+    const { pendingPlayerInput, activeSave } = get();
+    const savedInput = pendingPlayerInput;
+
+    if (activeAbortController) {
+      activeAbortController.abort();
+      activeAbortController = null;
+    }
+
+    const previousTraceId = activeSave?.turns[activeSave.turns.length - 1]?.traceId ?? null;
+
+    set({
+      isExecuting: false,
+      pendingPlayerInput: null,
+      executionError: null,
+      currentTraceId: previousTraceId,
+    });
+
+    return savedInput;
+  },
+
   switchTurnVariation: async (turnIndex: number, variationIndex: number) => {
-    const { activeSave } = get();
-    if (!activeSave || turnIndex < 0 || turnIndex >= activeSave.turns.length) return;
+    const { activeSave, isExecuting } = get();
+    if (isExecuting || !Number.isInteger(turnIndex) || !activeSave || turnIndex < 0 || turnIndex >= activeSave.turns.length) return;
 
     const targetTurn = activeSave.turns[turnIndex];
     if (
+      !Number.isInteger(variationIndex) ||
       !targetTurn.variations ||
+      variationIndex === (targetTurn.activeVariationIndex ?? 0) ||
       variationIndex < 0 ||
       variationIndex >= targetTurn.variations.length
     ) {
@@ -308,16 +418,21 @@ export const useGameStore = create<GameState>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
-    const autosave = useSettingsStore.getState().settings.autosave;
-    if (autosave) {
-      await storageService.saveGame(updatedSave);
-    }
+    set({ isExecuting: true });
+    try {
+      const autosave = useSettingsStore.getState().settings.autosave;
+      if (autosave) {
+        await storageService.saveGame(updatedSave);
+      }
 
-    const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
-    set({
-      activeSave: updatedSave,
-      saves,
-      currentTraceId: selectedVariation.traceId,
-    });
+      const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
+      set({
+        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
+        saves,
+        currentTraceId: get().activeSave?.id === updatedSave.id ? selectedVariation.traceId : get().currentTraceId,
+      });
+    } finally {
+      set({ isExecuting: false });
+    }
   },
 }));

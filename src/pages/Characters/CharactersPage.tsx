@@ -79,6 +79,14 @@ export const CharactersPage: React.FC = () => {
               </div>
 
               {/* Goal */}
+              {(char.appearance || char.occupation || char.background || char.personality) && (
+                <div className="space-y-2 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                  {char.occupation && <p><strong>身份：</strong>{char.occupation}</p>}
+                  {char.appearance && <p><strong>外貌：</strong>{char.appearance}</p>}
+                  {char.background && <p><strong>个人背景：</strong>{char.background}</p>}
+                  {char.personality && <p><strong>性格：</strong>{char.personality}</p>}
+                </div>
+              )}
               {char.goal && (
                 <div className="space-y-1 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="font-bold text-slate-700 flex items-center gap-1">

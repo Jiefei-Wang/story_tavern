@@ -72,6 +72,15 @@ export class StorageService {
     return memoryStorage;
   }
 
+  // Browser collection updates must read and write without yielding: two
+  // concurrent async callers would otherwise overwrite each other's changes.
+  private readBrowserList<T>(key: string): T[] {
+    const raw = this.getStorage().getItem(key);
+    if (!raw) return [];
+    const list = safeJsonParse<T[]>(raw, key);
+    return Array.isArray(list) ? list : [];
+  }
+
   async initDatabase(): Promise<void> {
     const defaultOpenRouterKey =
       (import.meta as any)?.env?.VITE_OPENROUTER_KEY ||
@@ -125,6 +134,23 @@ export class StorageService {
     }
 
     // Seed saves if empty
+    // One-time upgrade: preserve existing prompts and bindings; initialize the new role
+    // on the group's existing admin backend/model, with its own generation parameters.
+    const settings = await this.getSettings();
+    if (!settings.characterGenerationMigrated) {
+      if (!(await this.getAgents()).some(a => a.id === "character_generator")) {
+        await this.saveAgent(BUILTIN_AGENTS.find(a => a.id === "character_generator")!);
+      }
+      for (const group of await this.getAgentGroups()) {
+        const source = group.bindings.find(b => b.agentId === "admin_patch");
+        if (source && !group.bindings.some(b => b.agentId === "character_generator")) {
+          await this.saveAgentGroup({ ...group, bindings: [...group.bindings, {
+            agentId: "character_generator", backendId: source.backendId, model: source.model,
+          }] });
+        }
+      }
+      await this.saveSettings({ ...settings, characterGenerationMigrated: true });
+    }
     const saves = await this.getSaves();
     if (saves.length === 0) {
       await this.saveGame(INITIAL_DEMO_SAVE);
@@ -155,7 +181,7 @@ export class StorageService {
       });
       return;
     }
-    const list = await this.getBackends();
+    const list = this.readBrowserList<Backend>('story_tavern_backends');
     const idx = list.findIndex((b) => b.id === immutableBackend.id);
     if (idx >= 0) list[idx] = immutableBackend;
     else list.push(immutableBackend);
@@ -163,7 +189,7 @@ export class StorageService {
   }
 
   async deleteBackend(id: string): Promise<void> {
-    const allBackends = await this.getBackends();
+    const allBackends = this.isTauri() ? await this.getBackends() : this.readBrowserList<Backend>('story_tavern_backends');
     const target = allBackends.find((b) => b.id === id);
 
     if (this.isTauri()) {
@@ -211,7 +237,7 @@ export class StorageService {
       });
       return;
     }
-    const list = await this.getAgents();
+    const list = this.readBrowserList<AgentDefinition>('story_tavern_agents');
     const idx = list.findIndex((a) => a.id === immutableAgent.id);
     if (idx >= 0) list[idx] = immutableAgent;
     else list.push(immutableAgent);
@@ -223,7 +249,7 @@ export class StorageService {
       await invoke("db_kv_delete", { table: "agents", key: id });
       return;
     }
-    const list = (await this.getAgents()).filter((a) => a.id !== id);
+    const list = (this.readBrowserList<AgentDefinition>('story_tavern_agents')).filter((a) => a.id !== id);
     this.getStorage().setItem("story_tavern_agents", JSON.stringify(list));
   }
 
@@ -251,7 +277,7 @@ export class StorageService {
       });
       return;
     }
-    const list = await this.getAgentGroups();
+    const list = this.readBrowserList<AgentGroup>('story_tavern_agent_groups');
     const idx = list.findIndex((g) => g.id === immutableGroup.id);
     if (idx >= 0) list[idx] = immutableGroup;
     else list.push(immutableGroup);
@@ -263,7 +289,7 @@ export class StorageService {
       await invoke("db_kv_delete", { table: "agent_groups", key: id });
       return;
     }
-    const list = (await this.getAgentGroups()).filter((g) => g.id !== id);
+    const list = (this.readBrowserList<AgentGroup>('story_tavern_agent_groups')).filter((g) => g.id !== id);
     this.getStorage().setItem("story_tavern_agent_groups", JSON.stringify(list));
   }
 
@@ -291,7 +317,7 @@ export class StorageService {
       });
       return;
     }
-    const list = await this.getSaves();
+    const list = this.readBrowserList<GameSave>('story_tavern_saves');
     const idx = list.findIndex((s) => s.id === immutableSave.id);
     if (idx >= 0) list[idx] = immutableSave;
     else list.push(immutableSave);
@@ -306,7 +332,7 @@ export class StorageService {
       });
       return;
     }
-    const list = await this.getSaves();
+    const list = this.readBrowserList<GameSave>('story_tavern_saves');
     const filtered = list.filter((s) => s.id !== saveId);
     this.getStorage().setItem("story_tavern_saves", JSON.stringify(filtered));
   }

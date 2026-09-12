@@ -111,6 +111,7 @@ export interface PerceptionResult {
 }
 
 export interface NPCIntent {
+  id?: string;
   type: "action" | "speech" | "wait";
   op?: string;
   target?: string;
@@ -146,6 +147,7 @@ export interface PublicWorldEvent {
 }
 
 export interface CommittedTurnEvent {
+  id: string;
   type:
     | "player_action"
     | "player_speech"
@@ -168,6 +170,10 @@ export interface CommittedTurnEvent {
 export type EntityType = "character" | "object" | "location" | "item";
 
 export interface WorldEntity {
+  appearance?: string;
+  occupation?: string;
+  background?: string;
+  personality?: string;
   type: EntityType;
   name?: string;
   location?: string;
@@ -183,7 +189,23 @@ export interface WorldEntity {
   [key: string]: unknown;
 }
 
+export interface ConversationState {
+  focusNpcId?: string;
+  lastSpeakerId?: string;
+  lastAddressedNpcId?: string;
+}
+
+export interface InteractionContext {
+  addressed: boolean;
+  maySpeak: boolean;
+  speechPermission: "direct" | "ambient" | "interrupt" | "none";
+}
+
+export type NarratorSegment = { type: "narration"; text: string } | { type: "event_ref"; eventId: string };
+export interface NarratorResult { segments: NarratorSegment[]; }
+
 export interface WorldState {
+  conversation?: ConversationState;
   clock: string;
   scene: {
     location: string;
@@ -203,6 +225,9 @@ export interface WorldResolverResult {
 }
 
 export interface TraceSpan {
+  liveContent?: string;
+  generationStatus?: "queued" | "generating";
+  displayLabel?: string;
   id: string;
   traceId: string;
   parentId?: string;
@@ -213,7 +238,7 @@ export interface TraceSpan {
   agentId?: string;
   backendId?: string;
   model?: string;
-  status: "pending" | "running" | "success" | "error";
+  status: "pending" | "running" | "success" | "error" | "cancelled";
   startedAt: number;
   endedAt?: number;
   durationMs?: number;
@@ -239,7 +264,7 @@ export interface TurnTrace {
   startedAt: number;
   endedAt?: number;
   durationMs?: number;
-  status: "success" | "error" | "running";
+  status: "success" | "error" | "running" | "cancelled";
   spans: TraceSpan[];
   totalTokens: number;
 }
@@ -273,6 +298,7 @@ export interface GameSave {
 }
 
 export interface AppSettings {
+  characterGenerationMigrated?: boolean;
   language: "zh-CN" | "en-US";
   theme: "light" | "system";
   developerMode: boolean;

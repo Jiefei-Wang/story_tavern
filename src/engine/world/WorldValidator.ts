@@ -13,6 +13,13 @@ export function validateWorldState(world: unknown): asserts world is WorldState 
 
   const w = world as Partial<WorldState>;
 
+  if (w.conversation !== undefined) {
+    if (!w.conversation || typeof w.conversation !== "object" || Array.isArray(w.conversation)) throw new Error("Invalid conversation state");
+    for (const key of ["focusNpcId", "lastSpeakerId", "lastAddressedNpcId"] as const) {
+      if (w.conversation[key] !== undefined && typeof w.conversation[key] !== "string") throw new Error(`Invalid conversation.${key}`);
+    }
+  }
+
   // Clock invariant
   if (typeof w.clock !== "string" || w.clock.trim() === "") {
     throw new Error("WorldState invariant failed: clock must be a non-empty string");

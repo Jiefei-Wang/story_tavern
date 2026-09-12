@@ -9,6 +9,12 @@ pub struct Database {
 }
 
 pub fn get_db_path() -> PathBuf {
+    #[cfg(feature = "test-control")]
+    if let Ok(dir) = std::env::var("STORY_TAVERN_TEST_DIR") {
+        let dir = PathBuf::from(dir);
+        fs::create_dir_all(&dir).expect("failed to create isolated test directory");
+        return dir.join("story_tavern.db");
+    }
     let mut dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     dir.push("story_tavern");
     fs::create_dir_all(&dir).ok();

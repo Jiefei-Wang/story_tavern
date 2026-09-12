@@ -16,8 +16,10 @@ export class MockSimulator {
     agentDef?: AgentDefinition
   ): any {
     switch (agentId) {
+      case "character_generator":
+        return { name: `莉娅·海风${context.ordinal || 1}`, appearance: "栗色卷发，穿着朴素的蓝色旅行斗篷。", occupation: "港口花商", background: "在沿海小镇长大，靠出售鲜花维持生活。", personality: "开朗而谨慎", goal: "在午前售完篮中的鲜花", mood: "curious" };
       case "input_compiler":
-        return this.mockInputCompiler(context.player?.input || context.input || "");
+        return this.mockInputCompiler(context.player?.input || context.input || "", context);
       case "perception":
         return this.mockPerception(
           context.events || context.blocks || [],
@@ -25,7 +27,11 @@ export class MockSimulator {
           context.entities
         );
       case "npc_reaction":
-        return this.mockNpcReaction(context.npc, context.observations, context.reaction);
+        {
+        const reaction = this.mockNpcReaction(context.npc, context.observations, context.reaction);
+        if (!context.interaction?.maySpeak) reaction.intents = reaction.intents.filter(i => i.type !== "speech");
+        return reaction;
+        }
       case "world_resolver":
         return this.mockWorldResolver(context.events, context.npcReactions, context.scene, context.entities);
       case "time_skip":
@@ -39,7 +45,7 @@ export class MockSimulator {
     }
   }
 
-  private static mockInputCompiler(input: string): InputCompilerResult {
+  private static mockInputCompiler(input: string, context: any = {}): InputCompilerResult {
     const text = input.trim();
     const blocks: any[] = [];
     const lower = text.toLowerCase();
@@ -126,7 +132,7 @@ export class MockSimulator {
         ? quoteMatch[1]
         : remainingText.includes("说")
         ? remainingText.slice(remainingText.indexOf("说") + 1).replace(/[“"']/g, "")
-        : "";
+        : /[？?]/.test(remainingText) ? remainingText : "";
 
       if (speechContent) {
         normalEvents.push({
@@ -134,7 +140,7 @@ export class MockSimulator {
           type: "speech",
           actor: "player",
           content: speechContent.trim(),
-          target: "erin",
+          target: /你们|大家/.test(remainingText) ? "all" : Object.entries(context.entities || {}).find(([id, ent]: [string, any]) => ent.type === "character" && id !== "player" && (remainingText.includes(id) || (ent.name && remainingText.includes(ent.name)) || (id === "guard" && remainingText.includes("卫兵")) || (id === "erin" && remainingText.includes("艾琳"))))?.[0] || context.conversation?.focusNpcId || "",
           duration: 2.0,
           parallelWith: normalEvents.length > 0 ? ["e1"] : [],
         });
@@ -223,7 +229,7 @@ export class MockSimulator {
       for (const ev of events) {
         if (ev.type === "speech") {
           // If addressed to this NPC, they hear it clearly
-          if (ev.target === npcId || (npcId === "erin" && (!ev.target || ev.target === "erin"))) {
+          if (!ev.details?.isPrivate || ev.target === npcId) {
             npcObs.push({
               eventId: ev.id,
               saw: true,
@@ -385,7 +391,7 @@ export class MockSimulator {
       for (const reactionItem of npcReactions) {
         const npcId = reactionItem.npcId;
         const rx = reactionItem.reaction;
-        if (!rx || !rx.intents || rx.intents.length === 0) continue;
+        if (!rx) continue;
 
         if (rx.mentalUpdates && rx.mentalUpdates.length > 0) {
           for (const m of rx.mentalUpdates) {
@@ -398,11 +404,12 @@ export class MockSimulator {
         }
 
         // Convert successful NPC intents into authoritative publicEvents
-        for (const intent of rx.intents) {
+        for (const intent of rx.intents || []) {
           if (intent.type === "speech") {
             publicEvents.push({
               actor: npcId,
               type: "speech",
+              sourceIntentId: intent.id,
               content: intent.content || "",
               target: intent.target,
               duration: intent.duration,
@@ -536,67 +543,7 @@ export class MockSimulator {
     };
   }
 
-  private static mockNarrator(context: any): string {
-    const input = (context.playerInput || context.player?.input || "").toLowerCase();
-    const patches: JsonPatchOperation[] = context.patches || [];
-
-    const isSnow =
-      input.includes("雪") ||
-      input.includes("snow") ||
-      patches.some((p) => p.path === "/scene/weather" && p.value === "snowy");
-    const isStorm =
-      input.includes("雨") ||
-      input.includes("暴风雨") ||
-      patches.some((p) => p.path === "/scene/weather" && p.value === "stormy");
-    const isResurrection =
-      input.includes("复活") ||
-      patches.some((p) => p.path === "/rules/magic/resurrection");
-    const isSkip = input.includes("第二天") || input.includes("快进");
-
-    const parts: string[] = [];
-
-    // Admin effect prose
-    if (isSnow) {
-      parts.push(
-        `虚空中无形的法则之弦悄然律动。原本清朗的天空瞬间凝滞，凛冽的寒风呼啸而至，苍穹中压下一片厚重的铅灰色云层。转瞬间，鹅毛般的雪花纷纷扬扬洒落下来，在港口酒馆古旧的屋檐与斑驳石板路上积起一层白霜。`
-      );
-    } else if (isStorm) {
-      parts.push(
-        `天色骤然变暗，狂暴的疾风裹挟着豆大的雨点倾盆而下，激荡在港口码头的海面上，溅起层层灰白的水雾。`
-      );
-    } else if (isResurrection) {
-      parts.push(
-        `虚空中无形的法则之弦猛烈地震颤了一瞬。酒馆外的空气骤然变得冰冷刺骨，某种冥冥之中的永恒禁制悄然落下——在这个世界上，死去的灵魂已无法再被任何魔法唤回人间。`
-      );
-    } else if (isSkip) {
-      parts.push(
-        `夜色悄然隐退，港口的晨雾如同白色的纱帐覆盖了整片石板街。次日清晨七点，湿漉漉的冷风吹散了酒气，远方的钟塔敲响了沉闷的晨钟。`
-      );
-    }
-
-    // Normal action prose if player or NPC performed actions
-    const committedEvents = context.committedEvents || [];
-    const hasPlayerOrNpcEvents =
-      (context.events &&
-        context.events.some((e: any) => e.type === "action" || e.type === "speech")) ||
-      committedEvents.some(
-        (e: any) =>
-          e.type === "player_action" ||
-          e.type === "player_speech" ||
-          e.type === "npc_action" ||
-          e.type === "npc_speech"
-      );
-
-    if (hasPlayerOrNpcEvents) {
-      parts.push(
-        `清晨微凉的海风掠过酒馆粗糙的外墙。你快步走向窗边，借着半开的窗板遮掩，在艾琳身侧压低了声音。\n\n艾琳听到你的话，单薄的肩膀猛地绷紧。她的手指下意识攥紧了衣角，警惕地环视四周，用只有你们两人能听清的细弱气音说道：“小声点……你疯了吗？卫兵就在十步之外。你到底知道了什么？”\n\n十步开外，把守港口要道的卫兵似有所觉，握紧长矛的手微微一动，冰冷而探究的目光如同刀子般朝你们所在的方向扫视过来。`
-      );
-    } else if (parts.length === 0) {
-      parts.push(
-        `海风拂过港口酒馆外的空地，一切如常运转。周围的人们各自忙碌着手中的活计。`
-      );
-    }
-
-    return parts.join("\n\n");
+  private static mockNarrator(context: any): import("../../types").NarratorResult {
+    return { segments: (context.committedEvents || []).map((event: any) => ({ type: "event_ref", eventId: event.id })) };
   }
 }

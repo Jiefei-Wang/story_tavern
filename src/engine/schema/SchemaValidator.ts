@@ -1,11 +1,12 @@
-import Ajv from "ajv";
+import { validateNarratorStructure } from "../narration/NarratorComposition";
+import { Validator, Schema } from "jsonschema";
+import draft7 from "ajv/dist/refs/json-schema-draft-07.json";
 import { AgentRuntimeError } from "../errors/PipelineStageError";
 
-const ajv = new Ajv({
-  allErrors: true,
-  strict: false,
-  coerceTypes: false,
-});
+// Interpret schemas rather than compiling JavaScript (blocked by Tauri's CSP).
+// Validate the schema itself too, including definitions not reached by the data.
+const metaValidator = new Validator();
+metaValidator.addSchema(draft7 as unknown as Schema);
 
 export interface SchemaValidationResult {
   valid: boolean;
@@ -19,16 +20,19 @@ export class SchemaValidator {
    */
   static validate(schema: object, data: unknown): SchemaValidationResult {
     try {
-      const validate = ajv.compile(schema);
-      const valid = validate(data) as boolean;
-      if (valid) {
+      const definition = metaValidator.validate(schema, draft7 as unknown as Schema);
+      if (!definition.valid) {
+        return { valid: false, errors: `Invalid JSON Schema definition: ${definition.errors.map(e => e.stack).join("; ")}` };
+      }
+      const result = new Validator().validate(data, schema as Schema, { required: true });
+      if (result.valid) {
         return { valid: true };
       }
-      const errorText = ajv.errorsText(validate.errors, { dataVar: "output" });
+      const errorText = result.errors.map(e => e.stack).join("; ");
       return {
         valid: false,
         errors: errorText,
-        details: validate.errors || undefined,
+        details: result.errors,
       };
     } catch (err: any) {
       return {
@@ -46,7 +50,9 @@ export class SchemaValidator {
       throw new Error(`Agent '${agentId}' output must be a non-null object`);
     }
 
-    if (agentId === "input_compiler") {
+    if (agentId === "narrator") {
+      validateNarratorStructure(data);
+    } else if (agentId === "input_compiler") {
       if (!Array.isArray(data.blocks)) {
         throw new Error("Input Compiler output must contain a 'blocks' array");
       }
@@ -172,6 +178,9 @@ export class SchemaValidator {
           }
           if (!["action", "speech", "environment"].includes(ev.type)) {
             throw new Error(`Public event at index ${i} has invalid type '${ev.type}'`);
+          }
+          if (ev.type === "speech" && (typeof ev.sourceIntentId !== "string" || !ev.sourceIntentId.trim())) {
+            throw new Error("Public speech must reference sourceIntentId");
           }
           if (ev.type === "speech" && (typeof ev.content !== "string" || ev.content.trim() === "")) {
             throw new Error(`Public speech event at index ${i} must have non-empty 'content'`);

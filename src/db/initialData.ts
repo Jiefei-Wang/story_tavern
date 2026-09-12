@@ -1,5 +1,7 @@
+import { withConversationContract } from "../engine/runtime/ConversationContracts";
 import { AgentDefinition, AgentGroup, Backend, GameSave } from "../types";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../engine/world/WorldState";
+import { CHARACTER_GENERATOR } from "../engine/characters/CharacterGenerator";
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
@@ -226,6 +228,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
           items: {
             type: "object",
             properties: {
+              id: { type: "string" },
               type: { type: "string", enum: ["action", "speech", "wait"] },
               op: { type: "string" },
               target: { type: "string" },
@@ -271,7 +274,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     { "op": "replace", "path": "/entities/player/location", "value": "tavern_outside_window" }
   ],
   "publicEvents": [
-    { "actor": "erin", "type": "speech", "content": "小声点……卫兵就在旁边。" },
+    { "actor": "erin", "type": "speech", "sourceIntentId": "b0_erin_intent_0", "target": "player", "content": "小声点……卫兵就在旁边。" },
     { "actor": "guard", "type": "action", "op": "watch_player" }
   ],
   "narrationHints": [
@@ -315,6 +318,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
             properties: {
               id: { type: "string" },
               actor: { type: "string" },
+              sourceIntentId: { type: "string", minLength: 1 },
               type: { type: "string", enum: ["action", "speech", "environment"] },
               op: { type: "string" },
               target: { type: "string" },
@@ -700,3 +704,11 @@ export const INITIAL_DEMO_SAVE: GameSave = {
     },
   ],
 };
+
+BUILTIN_AGENTS.push(CHARACTER_GENERATOR);
+for (const group of DEFAULT_AGENT_GROUPS) {
+  const source = group.bindings.find(binding => binding.agentId === 'admin_patch');
+  if (source) group.bindings.push({ agentId: 'character_generator', backendId: source.backendId, model: source.model });
+}
+
+for (let i = 0; i < BUILTIN_AGENTS.length; i++) BUILTIN_AGENTS[i] = withConversationContract(BUILTIN_AGENTS[i]);

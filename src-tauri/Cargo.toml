@@ -12,6 +12,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+test-control = ["dep:tiny_http"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1.0", features = ["derive"] }
@@ -24,3 +27,4 @@ log = "0.4"
 uuid = { version = "1.10", features = ["v4", "fast-rng"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
+tiny_http = { version = "0.12", optional = true }

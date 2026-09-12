@@ -218,6 +218,7 @@ pub async fn backend_chat_completion(
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
     request: Value,
+    on_chunk: tauri::ipc::Channel<Vec<u8>>,
 ) -> Result<Value, String> {
     let client = build_client(timeout_ms);
     let url = normalize_url(&base_url, "chat/completions");
@@ -230,8 +231,14 @@ pub async fn backend_chat_completion(
         headers.as_ref(),
     )?;
 
-    let resp = req.send().await.map_err(|e| format!("Network request failed: {}", e))?;
+    let mut resp = req.send().await.map_err(|e| format!("Network request failed: {}", e))?;
     let status = resp.status();
+    if status.is_success() && resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").contains("text/event-stream") {
+        while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Stream interrupted: {}", e))? {
+            on_chunk.send(chunk.to_vec()).map_err(|e| format!("Stream receiver unavailable: {}", e))?;
+        }
+        return Ok(Value::Null);
+    }
     let text = resp.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
 
     if !status.is_success() {

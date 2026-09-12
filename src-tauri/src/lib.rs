@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+mod test_control;
 
 use commands::backend::{backend_chat_completion, backend_list_models, backend_test_connection};
 use commands::db::{db_get_path, db_kv_delete, db_kv_get, db_kv_list, db_kv_set};
@@ -17,6 +18,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(database)
+        .manage(test_control::ControlState::default())
         .invoke_handler(tauri::generate_handler![
             secret_set,
             secret_delete,
@@ -28,6 +30,8 @@ pub fn run() {
             db_kv_get,
             db_kv_list,
             db_kv_delete,
+            test_control::test_control_start,
+            test_control::test_control_reply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

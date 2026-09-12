@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -24,10 +24,12 @@ import {
   FileCode,
   Activity,
   Code,
+  MessageSquare,
 } from "lucide-react";
 import { TraceSpan, TurnTrace } from "../../types";
 import { useTraceStore } from "../../stores/useTraceStore";
 import { JsonViewer } from "../../components/Common/JsonViewer";
+import { RawMessagesModal } from "./RawMessagesModal";
 
 // Custom React Flow Node Component
 const AgentFlowNode: React.FC<any> = ({ data }) => {
@@ -99,9 +101,14 @@ export const DebugPage: React.FC = () => {
   const [inspectorTab, setInspectorTab] = useState<
     "overview" | "input" | "prompt" | "response" | "output" | "diff" | "error"
   >("overview");
+  const [showRawMessages, setShowRawMessages] = useState(false);
 
   const currentTrace = getSelectedTrace();
   const selectedSpan = getSelectedSpan();
+
+  useEffect(() => {
+    if (selectedTraceId === null && traces.length > 0) selectTrace(traces[0].id);
+  }, [selectedTraceId, traces, selectTrace]);
 
   // Construct React Flow Nodes & Edges from currentTrace
   const { nodes, edges } = useMemo(() => {
@@ -335,7 +342,7 @@ export const DebugPage: React.FC = () => {
     }
 
     return { nodes: nList, edges: eList };
-  }, [currentTrace, selectedSpanId]);
+  }, [currentTrace, selectedSpanId, traces]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -418,6 +425,15 @@ export const DebugPage: React.FC = () => {
                 并发时序 (Timeline)
               </button>
             </div>
+
+            {/* Raw Messages Button */}
+            <button
+              onClick={() => setShowRawMessages(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              查看 Raw Messages
+            </button>
           </div>
         )}
       </div>
@@ -603,6 +619,13 @@ export const DebugPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {["intent_filter", "narrator_validation", "public_event_validation"].includes(selectedSpan.type) && (
+                    <div className="space-y-2">
+                      <span className="font-semibold">权限与事实校验</span>
+                      <JsonViewer data={selectedSpan.inputContext} />
+                      <JsonViewer data={selectedSpan.parsedOutput} />
+                    </div>
+                  )}
                   {selectedSpan.error && (
                     <div className="p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200">
                       <span className="font-bold block mb-1">执行错误:</span>
@@ -646,6 +669,14 @@ export const DebugPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Raw Messages Modal */}
+      {showRawMessages && currentTrace && (
+        <RawMessagesModal
+          trace={currentTrace}
+          onClose={() => setShowRawMessages(false)}
+        />
+      )}
     </div>
   );
 };

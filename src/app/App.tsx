@@ -34,6 +34,10 @@ export const App: React.FC = () => {
         loadSaves(),
       ]);
       await loadTraces();
+      if (storageService.isTauri()) {
+        const { initializeTestControl } = await import("./testControl");
+        await initializeTestControl();
+      }
     } catch (err: any) {
       console.error("Failed to initialize Story Tavern application:", err);
       setInitError(err?.message || String(err));

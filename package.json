@@ -13,15 +13,17 @@
     "check:ts": "tsc --noEmit",
     "check:test": "tsx --test tests/**/*.test.ts",
     "check:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "check": "npm run check:ts && npm run check:test && npm run check:rust",
+    "check": "npm run check:ts && npm run check:csp && npm run check:rust",
     "build:exe": "tauri build --no-bundle",
-    "build:installer": "tauri build"
+    "build:installer": "tauri build",
+    "check:csp": "node --disallow-code-generation-from-strings --import tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@xyflow/react": "^12.11.6",
     "ajv": "^8.20.0",
     "fast-json-patch": "^3.1.1",
+    "jsonschema": "^1.5.0",
     "lucide-react": "^1.45.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
