@@ -235,6 +235,19 @@ pub async fn backend_chat_completion(
     let text = resp.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
 
     if !status.is_success() {
+        if status.as_u16() == 401 {
+            if text.contains("No cookie auth credentials found") {
+                return Err(format!(
+                    "OpenRouter API Key 认证失败 (HTTP 401: 未检测到有效 API Key)。\n请在【AI 配置】中为 OpenRouter 填写有效的 API Key，或在主页切换为【Mock 模拟模式】免配置体验。\n原始返回: {}",
+                    text
+                ));
+            } else {
+                return Err(format!(
+                    "后端 API Key 认证失败 (HTTP 401): {}\n请在【AI 配置】中检查对应后端的 API Key 是否正确填写或有效。",
+                    text
+                ));
+            }
+        }
         return Err(format!("HTTP {} error from backend: {}", status, text));
     }
 

@@ -31,16 +31,30 @@ pub fn find_env_secret() -> Option<String> {
         std::path::PathBuf::from(".env"),
         std::path::PathBuf::from("../.env"),
         std::path::PathBuf::from("../../.env"),
+        std::path::PathBuf::from("../../../.env"),
+        std::path::PathBuf::from("../../../../.env"),
     ];
 
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut curr = Some(cwd.as_path());
+        for _ in 0..6 {
+            if let Some(p) = curr {
+                candidates.push(p.join(".env"));
+                curr = p.parent();
+            } else {
+                break;
+            }
+        }
+    }
+
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(p) = exe.parent() {
-            candidates.push(p.join(".env"));
-            if let Some(p2) = p.parent() {
-                candidates.push(p2.join(".env"));
-                if let Some(p3) = p2.parent() {
-                    candidates.push(p3.join(".env"));
-                }
+        let mut curr = exe.parent();
+        for _ in 0..6 {
+            if let Some(p) = curr {
+                candidates.push(p.join(".env"));
+                curr = p.parent();
+            } else {
+                break;
             }
         }
     }
@@ -125,5 +139,14 @@ mod tests {
     fn test_secret_get_nonexistent() {
         let res = get_secret_internal("non_existent_secret_key_12345");
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_secret_set_and_get() {
+        let res = set_secret_internal("test_key_1", "test_val_1");
+        assert!(res.is_ok());
+        let get_res = get_secret_internal("test_key_1");
+        assert_eq!(get_res, Ok("test_val_1".to_string()));
+        let _ = delete_secret_internal("test_key_1");
     }
 }

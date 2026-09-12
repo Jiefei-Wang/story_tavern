@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -40,6 +42,13 @@ export const PlayPage: React.FC = () => {
   const timeMenuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storyEndRef = useRef<HTMLDivElement>(null);
+  const [copiedTurnIdx, setCopiedTurnIdx] = useState<number | null>(null);
+
+  const handleCopyText = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedTurnIdx(idx);
+    setTimeout(() => setCopiedTurnIdx(null), 1800);
+  };
 
   const handleNewGame = async () => {
     if (window.confirm("确定要开启一局新游戏吗？当前进度已保存在存档中。")) {
@@ -146,7 +155,7 @@ export const PlayPage: React.FC = () => {
         </div>
 
         {/* Story Narration Stream */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 select-text">
           {turns.map((turn, idx) => (
             <div key={turn.id || idx} className="space-y-4 max-w-3xl mx-auto">
               {/* Turn divider or Player action */}
@@ -216,26 +225,49 @@ export const PlayPage: React.FC = () => {
                 )}
 
               {/* Literary Prose Narration */}
-              <div className="prose prose-slate max-w-none text-slate-700 text-sm leading-7 space-y-3 font-normal">
-                {turn.narratorOutput
-                  .split("\n\n")
-                  .filter(Boolean)
-                  .map((paragraph, pIdx) => {
-                    // Highlight dialogue in quotation blocks
-                    const isDialog = paragraph.includes("“") && paragraph.includes("”");
-                    return (
-                      <p
-                        key={pIdx}
-                        className={
-                          isDialog
-                            ? "bg-slate-50/80 border-l-2 border-slate-300 pl-3 py-1 text-slate-800 italic"
-                            : ""
-                        }
-                      >
-                        {paragraph}
-                      </p>
-                    );
-                  })}
+              <div className="relative group/narration select-text">
+                <div className="flex items-center justify-end mb-1 opacity-0 group-hover/narration:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(turn.narratorOutput, idx)}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded transition-all"
+                    title="复制本段旁白内容"
+                  >
+                    {copiedTurnIdx === idx ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span className="text-emerald-600 font-medium">已复制</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>复制旁白</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="prose prose-slate max-w-none text-slate-700 text-sm leading-7 space-y-3 font-normal select-text">
+                  {turn.narratorOutput
+                    .split("\n\n")
+                    .filter(Boolean)
+                    .map((paragraph, pIdx) => {
+                      // Highlight dialogue in quotation blocks
+                      const isDialog = paragraph.includes("“") && paragraph.includes("”");
+                      return (
+                        <p
+                          key={pIdx}
+                          className={
+                            isDialog
+                              ? "bg-slate-50/80 border-l-2 border-slate-300 pl-3 py-1 text-slate-800 italic select-text"
+                              : "select-text"
+                          }
+                        >
+                          {paragraph}
+                        </p>
+                      );
+                    })}
+                </div>
               </div>
 
               {idx < turns.length - 1 && <div className="h-px bg-slate-100 my-6" />}
