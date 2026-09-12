@@ -13,7 +13,9 @@
     "check:ts": "tsc --noEmit",
     "check:test": "tsx --test tests/**/*.test.ts",
     "check:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "check": "npm run check:ts && npm run check:test && npm run check:rust"
+    "check": "npm run check:ts && npm run check:test && npm run check:rust",
+    "build:exe": "tauri build --no-bundle",
+    "build:installer": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
