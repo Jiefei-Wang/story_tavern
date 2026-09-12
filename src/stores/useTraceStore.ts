@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { TraceSpan, TurnTrace } from "../types";
 import { globalTraceManager } from "../engine/tracing/TraceManager";
+import { storageService } from "../db/storage";
 
 interface TraceState {
   traces: TurnTrace[];
   selectedTraceId: string | null;
   selectedSpanId: string | null;
   activeTab: "graph" | "timeline";
-  loadTraces: () => void;
+  loadTraces: () => Promise<void>;
   selectTrace: (traceId: string | null) => void;
   selectSpan: (spanId: string | null) => void;
   setActiveTab: (tab: "graph" | "timeline") => void;
@@ -21,13 +22,16 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   selectedSpanId: null,
   activeTab: "graph",
 
-  loadTraces: () => {
-    const traces = globalTraceManager.getAllTraces();
-    let selectedTraceId = get().selectedTraceId;
-    if (!selectedTraceId && traces.length > 0) {
-      selectedTraceId = traces[0].id;
+  loadTraces: async () => {
+    try {
+      const persisted = await storageService.getTraces(200);
+      globalTraceManager.loadCompletedTraces(persisted);
+    } catch (err) {
+      console.warn("Failed to load persisted traces:", err);
     }
-    set({ traces, selectedTraceId });
+
+    const traces = globalTraceManager.getAllTraces();
+    set({ traces });
   },
 
   selectTrace: (traceId: string | null) => {
@@ -44,26 +48,23 @@ export const useTraceStore = create<TraceState>((set, get) => ({
 
   getSelectedTrace: () => {
     const { traces, selectedTraceId } = get();
-    if (!selectedTraceId) return traces[0];
-    return traces.find((t) => t.id === selectedTraceId) || traces[0];
+    if (!selectedTraceId) {
+      return undefined;
+    }
+    // Strict lookup: NEVER fallback to traces[0]!
+    return traces.find((t) => t.id === selectedTraceId);
   },
 
   getSelectedSpan: () => {
     const trace = get().getSelectedTrace();
     if (!trace) return undefined;
     const { selectedSpanId } = get();
-    if (!selectedSpanId) return trace.spans[0];
-    return trace.spans.find((s) => s.id === selectedSpanId) || trace.spans[0];
+    if (!selectedSpanId) return undefined;
+    return trace.spans.find((s) => s.id === selectedSpanId);
   },
 }));
 
-// Subscribe AFTER store initialization
+// Subscribe to globalTraceManager updates
 globalTraceManager.subscribe((traces) => {
-  useTraceStore.setState((state) => {
-    let selectedTraceId = state?.selectedTraceId;
-    if (!selectedTraceId && traces.length > 0) {
-      selectedTraceId = traces[0].id;
-    }
-    return { traces, selectedTraceId };
-  });
+  useTraceStore.setState({ traces });
 });

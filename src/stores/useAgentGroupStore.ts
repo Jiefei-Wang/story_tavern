@@ -18,6 +18,25 @@ interface AgentGroupState {
   ) => Promise<void>;
 }
 
+function normalizeOverrides(
+  existing?: AgentBinding["overrides"],
+  updates?: AgentBinding["overrides"]
+): AgentBinding["overrides"] {
+  const merged: Record<string, any> = {
+    ...(existing || {}),
+    ...(updates || {}),
+  };
+
+  const cleaned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(merged)) {
+    if (v !== undefined && v !== null && v !== "") {
+      cleaned[k] = v;
+    }
+  }
+
+  return Object.keys(cleaned).length > 0 ? (cleaned as any) : undefined;
+}
+
 export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
   groups: [],
   activeGroupId: "group_quality",
@@ -26,20 +45,31 @@ export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
   loadGroups: async () => {
     set({ isLoading: true });
     const groups = await storageService.getAgentGroups();
-    const active =
-      localStorage.getItem("story_tavern_active_group") ||
-      (groups.length > 0 ? groups[0].id : "group_quality");
-    set({ groups, activeGroupId: active, isLoading: false });
+
+    let storedId = localStorage.getItem("story_tavern_active_group");
+    // Verify storedId actually exists in loaded groups
+    if (!storedId || !groups.some((g) => g.id === storedId)) {
+      storedId = groups.length > 0 ? groups[0].id : "group_quality";
+      localStorage.setItem("story_tavern_active_group", storedId);
+    }
+
+    set({ groups, activeGroupId: storedId, isLoading: false });
   },
 
   setActiveGroup: (id: string) => {
-    localStorage.setItem("story_tavern_active_group", id);
-    set({ activeGroupId: id });
+    const { groups } = get();
+    if (groups.some((g) => g.id === id)) {
+      localStorage.setItem("story_tavern_active_group", id);
+      set({ activeGroupId: id });
+    }
   },
 
   saveGroup: async (group: AgentGroup) => {
-    group.updatedAt = new Date().toISOString().split("T")[0];
-    await storageService.saveAgentGroup(group);
+    const updatedGroup: AgentGroup = {
+      ...group,
+      updatedAt: new Date().toISOString().split("T")[0],
+    };
+    await storageService.saveAgentGroup(updatedGroup);
     const groups = await storageService.getAgentGroups();
     set({ groups });
   },
@@ -48,9 +78,12 @@ export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
     await storageService.deleteAgentGroup(id);
     const groups = await storageService.getAgentGroups();
     let active = get().activeGroupId;
-    if (active === id && groups.length > 0) {
-      active = groups[0].id;
+
+    if (active === id) {
+      active = groups.length > 0 ? groups[0].id : "group_quality";
+      localStorage.setItem("story_tavern_active_group", active);
     }
+
     set({ groups, activeGroupId: active });
   },
 
@@ -80,24 +113,31 @@ export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
     const idx = bindings.findIndex((b) => b.agentId === agentId);
 
     if (idx >= 0) {
+      const existing = bindings[idx];
+      const newOverrides = normalizeOverrides(existing.overrides, updates.overrides);
       bindings[idx] = {
-        ...bindings[idx],
+        ...existing,
         ...updates,
-        overrides: {
-          ...(bindings[idx].overrides || {}),
-          ...(updates.overrides || {}),
-        },
+        overrides: newOverrides,
       };
     } else {
+      const newOverrides = normalizeOverrides(undefined, updates.overrides);
       bindings.push({
         agentId,
         backendId: updates.backendId || "backend_openrouter",
         model: updates.model || "nvidia/nemotron-3-super-120b-a12b:free",
-        overrides: updates.overrides,
+        overrides: newOverrides,
       });
     }
 
-    const updatedGroup = { ...group, bindings };
-    await get().saveGroup(updatedGroup);
+    const updatedGroup: AgentGroup = {
+      ...group,
+      bindings,
+      updatedAt: new Date().toISOString().split("T")[0],
+    };
+
+    await storageService.saveAgentGroup(updatedGroup);
+    const groups = await storageService.getAgentGroups();
+    set({ groups });
   },
 }));

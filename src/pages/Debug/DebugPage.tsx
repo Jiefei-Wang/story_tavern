@@ -127,22 +127,16 @@ export const DebugPage: React.FC = () => {
 
     const spans = currentTrace.spans;
 
-    // Helper to find span by agentId
-    const inputCompiler = spans.find((s) => s.agentId === "input_compiler");
-    const perception = spans.find((s) => s.agentId === "perception");
-    const npcSpans = spans.filter((s) => s.agentId === "npc_reaction");
-    const worldResolver = spans.find((s) => s.agentId === "world_resolver");
-    const narrator = spans.find((s) => s.agentId === "narrator");
-    const adminPatch = spans.find((s) => s.agentId === "admin_patch");
-    const timeSkip = spans.find((s) => s.agentId === "time_skip");
-
     let prevNodeId = "node_input";
+    let currentY = 110;
 
+    // 1. Input Compiler
+    const inputCompiler = spans.find((s) => s.agentId === "input_compiler");
     if (inputCompiler) {
       nList.push({
         id: inputCompiler.id,
         type: "agentNode",
-        position: { x: 300, y: 110 },
+        position: { x: 350, y: currentY },
         data: {
           label: "Input Compiler",
           span: inputCompiler,
@@ -157,128 +151,175 @@ export const DebugPage: React.FC = () => {
         animated: inputCompiler.status === "running",
       });
       prevNodeId = inputCompiler.id;
+      currentY += 100;
     }
 
-    if (adminPatch) {
-      nList.push({
-        id: adminPatch.id,
-        type: "agentNode",
-        position: { x: 100, y: 200 },
-        data: {
-          label: "Admin Patch",
-          span: adminPatch,
-          isSelected: selectedSpanId === adminPatch.id,
-          onClick: () => selectSpan(adminPatch.id),
-        },
-      });
-      eList.push({
-        id: `e_${prevNodeId}_${adminPatch.id}`,
-        source: prevNodeId,
-        target: adminPatch.id,
-      });
+    // 2. Discover distinct TemporalBlocks from spans
+    const blockSpans = spans.filter(
+      (s) => s.agentId !== "input_compiler" && s.agentId !== "narrator"
+    );
+
+    // Group spans by blockId or sequential execution
+    const blockMap = new Map<string, TraceSpan[]>();
+    for (const s of blockSpans) {
+      const bKey = s.blockId || s.parentId || "default_block";
+      if (!blockMap.has(bKey)) {
+        blockMap.set(bKey, []);
+      }
+      blockMap.get(bKey)!.push(s);
     }
 
-    if (timeSkip) {
-      nList.push({
-        id: timeSkip.id,
-        type: "agentNode",
-        position: { x: 500, y: 200 },
-        data: {
-          label: "Time Skip",
-          span: timeSkip,
-          isSelected: selectedSpanId === timeSkip.id,
-          onClick: () => selectSpan(timeSkip.id),
-        },
-      });
-      eList.push({
-        id: `e_${prevNodeId}_${timeSkip.id}`,
-        source: prevNodeId,
-        target: timeSkip.id,
-      });
-    }
+    // Render each block group
+    for (const [blockKey, bSpans] of blockMap.entries()) {
+      bSpans.sort((a, b) => a.startedAt - b.startedAt);
 
-    if (perception) {
-      nList.push({
-        id: perception.id,
-        type: "agentNode",
-        position: { x: 300, y: 210 },
-        data: {
-          label: "Perception",
-          span: perception,
-          isSelected: selectedSpanId === perception.id,
-          onClick: () => selectSpan(perception.id),
-        },
-      });
-      eList.push({
-        id: `e_${prevNodeId}_${perception.id}`,
-        source: prevNodeId,
-        target: perception.id,
-      });
+      const adminSpan = bSpans.find((s) => s.agentId === "admin_patch");
+      const timeSkipSpan = bSpans.find((s) => s.agentId === "time_skip");
+      const perceptionSpan = bSpans.find((s) => s.agentId === "perception");
+      const npcSpans = bSpans.filter((s) => s.agentId === "npc_reaction");
+      const resolverSpan = bSpans.find((s) => s.agentId === "world_resolver");
 
-      // Parallel NPC branches
-      const npcCount = npcSpans.length;
-      const spacing = 190;
-      const startX = 300 - ((npcCount - 1) * spacing) / 2;
-
-      npcSpans.forEach((npcSpan, i) => {
-        const npcId = (npcSpan.inputContext as any)?.npc?.id || `NPC ${i + 1}`;
-        const posX = startX + i * spacing;
+      if (adminSpan) {
         nList.push({
-          id: npcSpan.id,
+          id: adminSpan.id,
           type: "agentNode",
-          position: { x: posX, y: 320 },
+          position: { x: 350, y: currentY },
           data: {
-            label: `NPC: ${npcId}`,
-            span: npcSpan,
-            isSelected: selectedSpanId === npcSpan.id,
-            onClick: () => selectSpan(npcSpan.id),
+            label: "Admin Patch",
+            span: adminSpan,
+            isSelected: selectedSpanId === adminSpan.id,
+            onClick: () => selectSpan(adminSpan.id),
           },
         });
         eList.push({
-          id: `e_${perception.id}_${npcSpan.id}`,
-          source: perception.id,
-          target: npcSpan.id,
-          animated: npcSpan.status === "running",
+          id: `e_${prevNodeId}_${adminSpan.id}`,
+          source: prevNodeId,
+          target: adminSpan.id,
         });
-      });
-    }
-
-    if (worldResolver) {
-      nList.push({
-        id: worldResolver.id,
-        type: "agentNode",
-        position: { x: 300, y: 440 },
-        data: {
-          label: "World Resolver",
-          span: worldResolver,
-          isSelected: selectedSpanId === worldResolver.id,
-          onClick: () => selectSpan(worldResolver.id),
-        },
-      });
-
-      if (npcSpans.length > 0) {
-        npcSpans.forEach((npcSpan) => {
-          eList.push({
-            id: `e_${npcSpan.id}_${worldResolver.id}`,
-            source: npcSpan.id,
-            target: worldResolver.id,
-          });
+        prevNodeId = adminSpan.id;
+        currentY += 100;
+      } else if (timeSkipSpan) {
+        nList.push({
+          id: timeSkipSpan.id,
+          type: "agentNode",
+          position: { x: 350, y: currentY },
+          data: {
+            label: "Time Skip",
+            span: timeSkipSpan,
+            isSelected: selectedSpanId === timeSkipSpan.id,
+            onClick: () => selectSpan(timeSkipSpan.id),
+          },
         });
-      } else if (perception) {
         eList.push({
-          id: `e_${perception.id}_${worldResolver.id}`,
-          source: perception.id,
-          target: worldResolver.id,
+          id: `e_${prevNodeId}_${timeSkipSpan.id}`,
+          source: prevNodeId,
+          target: timeSkipSpan.id,
         });
+        prevNodeId = timeSkipSpan.id;
+        currentY += 100;
+      } else {
+        // Normal or Wait block
+        let blockEntryNodeId = prevNodeId;
+
+        if (perceptionSpan) {
+          nList.push({
+            id: perceptionSpan.id,
+            type: "agentNode",
+            position: { x: 350, y: currentY },
+            data: {
+              label: "Perception",
+              span: perceptionSpan,
+              isSelected: selectedSpanId === perceptionSpan.id,
+              onClick: () => selectSpan(perceptionSpan.id),
+            },
+          });
+          eList.push({
+            id: `e_${prevNodeId}_${perceptionSpan.id}`,
+            source: prevNodeId,
+            target: perceptionSpan.id,
+          });
+          blockEntryNodeId = perceptionSpan.id;
+          currentY += 100;
+        }
+
+        // Parallel NPC branches
+        if (npcSpans.length > 0) {
+          const npcCount = npcSpans.length;
+          const spacing = 190;
+          const startX = 350 - ((npcCount - 1) * spacing) / 2;
+
+          npcSpans.forEach((npcSpan, i) => {
+            const npcId =
+              (npcSpan.inputContext as any)?.npc?.id ||
+              (npcSpan.inputContext as any)?.npc?.name ||
+              `NPC ${i + 1}`;
+            const posX = startX + i * spacing;
+
+            nList.push({
+              id: npcSpan.id,
+              type: "agentNode",
+              position: { x: posX, y: currentY },
+              data: {
+                label: `NPC: ${npcId}`,
+                span: npcSpan,
+                isSelected: selectedSpanId === npcSpan.id,
+                onClick: () => selectSpan(npcSpan.id),
+              },
+            });
+
+            eList.push({
+              id: `e_${blockEntryNodeId}_${npcSpan.id}`,
+              source: blockEntryNodeId,
+              target: npcSpan.id,
+              animated: npcSpan.status === "running",
+            });
+          });
+
+          currentY += 100;
+        }
+
+        if (resolverSpan) {
+          nList.push({
+            id: resolverSpan.id,
+            type: "agentNode",
+            position: { x: 350, y: currentY },
+            data: {
+              label: "World Resolver",
+              span: resolverSpan,
+              isSelected: selectedSpanId === resolverSpan.id,
+              onClick: () => selectSpan(resolverSpan.id),
+            },
+          });
+
+          if (npcSpans.length > 0) {
+            npcSpans.forEach((npcSpan) => {
+              eList.push({
+                id: `e_${npcSpan.id}_${resolverSpan.id}`,
+                source: npcSpan.id,
+                target: resolverSpan.id,
+              });
+            });
+          } else {
+            eList.push({
+              id: `e_${blockEntryNodeId}_${resolverSpan.id}`,
+              source: blockEntryNodeId,
+              target: resolverSpan.id,
+            });
+          }
+
+          prevNodeId = resolverSpan.id;
+          currentY += 100;
+        }
       }
-      prevNodeId = worldResolver.id;
     }
 
+    // 3. Narrator
+    const narrator = spans.find((s) => s.agentId === "narrator");
     if (narrator) {
       nList.push({
         id: narrator.id,
         type: "agentNode",
-        position: { x: 300, y: 550 },
+        position: { x: 350, y: currentY },
         data: {
           label: "Narrator",
           span: narrator,

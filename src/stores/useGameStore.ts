@@ -7,6 +7,7 @@ import { useAgentStore } from "./useAgentStore";
 import { useAgentGroupStore } from "./useAgentGroupStore";
 import { useBackendStore } from "./useBackendStore";
 import { useSettingsStore } from "./useSettingsStore";
+import { globalTraceManager } from "../engine/tracing/TraceManager";
 
 interface GameState {
   activeSave: GameSave | null;
@@ -17,6 +18,7 @@ interface GameState {
   loadSaves: () => Promise<void>;
   selectSave: (saveId: string) => void;
   createNewSave: (name?: string) => Promise<GameSave>;
+  manualSaveGame: () => Promise<void>;
   sendPlayerInput: (input: string) => Promise<boolean>;
   retryTurn: (turnIndex?: number) => Promise<boolean>;
   switchTurnVariation: (turnIndex: number, variationIndex: number) => Promise<void>;
@@ -43,13 +45,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   createNewSave: async (name: string = "新游戏") => {
+    const activeGroupId = useAgentGroupStore.getState().activeGroupId || "group_quality";
     const newSave: GameSave = {
       id: `save_${Date.now()}`,
       name: `${name} · ${new Date().toLocaleTimeString("zh-CN")}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       worldState: JSON.parse(JSON.stringify(INITIAL_HARBOR_TAVERN_WORLD)),
-      activeAgentGroupId: useAgentGroupStore.getState().activeGroupId || "group_quality",
+      activeAgentGroupId: activeGroupId,
       turns: [
         {
           id: `turn_init_${Date.now()}`,
@@ -62,7 +65,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           worldStateBefore: INITIAL_HARBOR_TAVERN_WORLD,
           worldStateAfter: INITIAL_HARBOR_TAVERN_WORLD,
           patches: [],
-          activeAgentGroupId: "group_quality",
+          activeAgentGroupId: activeGroupId,
+          status: "success",
         },
       ],
     };
@@ -71,6 +75,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     const saves = await storageService.getSaves();
     set({ saves, activeSave: newSave, executionError: null });
     return newSave;
+  },
+
+  manualSaveGame: async () => {
+    const { activeSave } = get();
+    if (!activeSave) return;
+    await storageService.saveGame(activeSave);
+    const saves = await storageService.getSaves();
+    set({ saves });
   },
 
   sendPlayerInput: async (input: string) => {
@@ -84,6 +96,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const backends = useBackendStore.getState().backends;
     const activeGroupId = useAgentGroupStore.getState().activeGroupId;
     const mockMode = useSettingsStore.getState().settings.mockLlmMode;
+    const autosave = useSettingsStore.getState().settings.autosave;
 
     const currentWorld = activeSave.worldState;
     const nextTurnIndex = activeSave.turns.length;
@@ -102,14 +115,26 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
       );
 
+      // Persist completed trace to SQLite
+      const trace = globalTraceManager.getTrace(result.traceId);
+      if (trace) {
+        await storageService.saveTrace(trace).catch((err) =>
+          console.warn("Failed to persist trace:", err)
+        );
+      }
+
+      // Rollback invariant: Only commit worldStateAfter if turn was completely successful!
       const updatedSave: GameSave = {
         ...activeSave,
-        worldState: result.turn.worldStateAfter,
+        worldState: result.success ? result.turn.worldStateAfter : activeSave.worldState,
         turns: [...activeSave.turns, result.turn],
         updatedAt: new Date().toISOString(),
+        activeAgentGroupId: activeGroupId,
       };
 
-      await storageService.saveGame(updatedSave);
+      if (autosave) {
+        await storageService.saveGame(updatedSave);
+      }
 
       const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
       set({
@@ -117,7 +142,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         saves,
         isExecuting: false,
         currentTraceId: result.traceId,
-        executionError: result.success ? null : result.error || "Turn failed",
+        executionError: result.success ? null : result.error || "Turn execution failed",
       });
 
       return result.success;
@@ -148,6 +173,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const backends = useBackendStore.getState().backends;
     const activeGroupId = useAgentGroupStore.getState().activeGroupId;
     const mockMode = useSettingsStore.getState().settings.mockLlmMode;
+    const autosave = useSettingsStore.getState().settings.autosave;
 
     const initialWorld = targetTurn.worldStateBefore;
 
@@ -164,6 +190,13 @@ export const useGameStore = create<GameState>((set, get) => ({
           mockMode,
         }
       );
+
+      const trace = globalTraceManager.getTrace(result.traceId);
+      if (trace) {
+        await storageService.saveTrace(trace).catch((err) =>
+          console.warn("Failed to persist trace:", err)
+        );
+      }
 
       // Branching: Initialize or update variations
       const existingVariations: GameTurn[] =
@@ -190,7 +223,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       const newWorldState =
         targetIndex === activeSave.turns.length - 1
-          ? result.turn.worldStateAfter
+          ? (result.success ? result.turn.worldStateAfter : activeSave.worldState)
           : activeSave.worldState;
 
       const updatedSave: GameSave = {
@@ -198,9 +231,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         worldState: newWorldState,
         turns: newTurns,
         updatedAt: new Date().toISOString(),
+        activeAgentGroupId: activeGroupId,
       };
 
-      await storageService.saveGame(updatedSave);
+      if (autosave) {
+        await storageService.saveGame(updatedSave);
+      }
 
       const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
       set({
@@ -257,7 +293,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
-    await storageService.saveGame(updatedSave);
+    const autosave = useSettingsStore.getState().settings.autosave;
+    if (autosave) {
+      await storageService.saveGame(updatedSave);
+    }
 
     const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
     set({

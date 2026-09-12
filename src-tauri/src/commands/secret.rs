@@ -1,27 +1,18 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
 use keyring::Entry;
 
 static SERVICE_NAME: &str = "story_tavern";
-static FALLBACK: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 pub fn set_secret_internal(secret_ref: &str, secret_val: &str) -> Result<(), String> {
-    // Attempt Windows Credential Manager via keyring crate
-    if let Ok(entry) = Entry::new(SERVICE_NAME, secret_ref) {
-        if entry.set_password(secret_val).is_ok() {
-            return Ok(());
-        }
+    if secret_ref.trim().is_empty() {
+        return Err("secret_ref cannot be empty".to_string());
     }
 
-    // Fallback store
-    let mut fallback = FALLBACK.lock().map_err(|e| e.to_string())?;
-    if fallback.is_none() {
-        *fallback = Some(HashMap::new());
-    }
-    if let Some(map) = fallback.as_mut() {
-        map.insert(secret_ref.to_string(), secret_val.to_string());
-    }
-    Ok(())
+    let entry = Entry::new(SERVICE_NAME, secret_ref)
+        .map_err(|e| format!("Keyring initialization error for '{}': {}", secret_ref, e))?;
+
+    entry
+        .set_password(secret_val)
+        .map_err(|e| format!("Windows Credential Manager set_password failed for '{}': {}", secret_ref, e))
 }
 
 pub fn find_env_secret() -> Option<String> {
@@ -91,15 +82,6 @@ pub fn get_secret_internal(secret_ref: &str) -> Result<String, String> {
         }
     }
 
-    let fallback = FALLBACK.lock().map_err(|e| e.to_string())?;
-    if let Some(map) = fallback.as_ref() {
-        if let Some(val) = map.get(secret_ref) {
-            if !val.trim().is_empty() {
-                return Ok(val.clone());
-            }
-        }
-    }
-
     // Auto-fallback from .env / env variables
     if let Some(key) = find_env_secret() {
         if secret_ref.contains("openrouter") || secret_ref.contains("backend") {
@@ -114,11 +96,6 @@ pub fn get_secret_internal(secret_ref: &str) -> Result<String, String> {
 pub fn delete_secret_internal(secret_ref: &str) -> Result<(), String> {
     if let Ok(entry) = Entry::new(SERVICE_NAME, secret_ref) {
         let _ = entry.delete_credential();
-    }
-
-    let mut fallback = FALLBACK.lock().map_err(|e| e.to_string())?;
-    if let Some(map) = fallback.as_mut() {
-        map.remove(secret_ref);
     }
     Ok(())
 }
@@ -136,4 +113,22 @@ pub fn secret_get(secret_ref: String) -> Result<String, String> {
 #[tauri::command]
 pub fn secret_delete(secret_ref: String) -> Result<(), String> {
     delete_secret_internal(&secret_ref)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_secret_ref_empty_fails() {
+        let res = set_secret_internal("", "test_value");
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_secret_get_nonexistent() {
+        let res = get_secret_internal("non_existent_secret_key_12345");
+        assert!(res.is_err());
+    }
 }

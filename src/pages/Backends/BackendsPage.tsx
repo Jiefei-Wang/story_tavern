@@ -18,8 +18,10 @@ import {
 } from "lucide-react";
 import { Backend } from "../../types";
 import { useBackendStore } from "../../stores/useBackendStore";
+import { useAgentGroupStore } from "../../stores/useAgentGroupStore";
 
 export const BackendsPage: React.FC = () => {
+  const { groups } = useAgentGroupStore();
   const {
     backends,
     saveBackend,
@@ -71,6 +73,26 @@ export const BackendsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    const referencingGroups: Array<{ groupName: string; agentId: string }> = [];
+    for (const group of groups) {
+      for (const b of group.bindings) {
+        if (b.backendId === id) {
+          referencingGroups.push({ groupName: group.name, agentId: b.agentId });
+        }
+      }
+    }
+
+    if (referencingGroups.length > 0) {
+      const details = referencingGroups
+        .slice(0, 5)
+        .map((r) => `· 分组 [${r.groupName}] 中的 Agent [${r.agentId}]`)
+        .join("\n");
+      alert(
+        `无法删除该 Backend：当前仍有 ${referencingGroups.length} 处智能体绑定引用了此后端！\n\n${details}\n\n请先修改相关分组的 Backend 绑定后再尝试删除。`
+      );
+      return;
+    }
+
     if (confirm("确定要删除此 Backend 吗？")) {
       await deleteBackend(id);
       if (editingBackend?.id === id) setEditingBackend(null);

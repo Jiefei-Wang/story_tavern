@@ -108,3 +108,10 @@ export function renderMessages(
     content: renderTemplate(m.content, context),
   }));
 }
+
+export const PlaceholderEngine = {
+  getNestedValue,
+  inspectPlaceholders,
+  renderTemplate,
+  renderMessages,
+};

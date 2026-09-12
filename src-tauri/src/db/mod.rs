@@ -50,7 +50,7 @@ pub fn init_db() -> Result<Database, String> {
         CREATE TABLE IF NOT EXISTS traces (
             id TEXT PRIMARY KEY,
             data TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            updated_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS settings (
@@ -61,8 +61,59 @@ pub fn init_db() -> Result<Database, String> {
     )
     .map_err(|e| format!("Failed to initialize SQLite tables: {}", e))?;
 
+    // Migration: If traces was previously created with created_at instead of updated_at
+    let _ = conn.execute("ALTER TABLE traces ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''", []);
+
     Ok(Database {
         conn: Mutex::new(conn),
         db_path: path,
+    })
+}
+
+pub fn init_in_memory_db() -> Result<Database, String> {
+    let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS backends (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS agents (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_groups (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS saves (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS traces (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        ",
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(Database {
+        conn: Mutex::new(conn),
+        db_path: PathBuf::from(":memory:"),
     })
 }

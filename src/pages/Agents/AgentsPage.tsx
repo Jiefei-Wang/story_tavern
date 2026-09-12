@@ -2,10 +2,12 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Bot, Plus, Copy, Edit2, Trash2, Tag, Calendar } from "lucide-react";
 import { useAgentStore } from "../../stores/useAgentStore";
+import { useAgentGroupStore } from "../../stores/useAgentGroupStore";
 
 export const AgentsPage: React.FC = () => {
   const navigate = useNavigate();
   const { agents, duplicateAgent, deleteAgent, resetBuiltinAgents } = useAgentStore();
+  const { groups } = useAgentGroupStore();
 
   const handleEdit = (id: string) => {
     navigate(`/agents/${id}`);
@@ -19,6 +21,20 @@ export const AgentsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    const referencingGroups = groups.filter((g) =>
+      g.bindings.some((b) => b.agentId === id)
+    );
+
+    if (referencingGroups.length > 0) {
+      const details = referencingGroups
+        .map((g) => `· 分组 [${g.name}]`)
+        .join("\n");
+      alert(
+        `无法删除该 Agent：当前仍有 ${referencingGroups.length} 个智能体分组绑定引用了此 Agent！\n\n${details}\n\n请先从相关分组中移除此 Agent 绑定后再尝试删除。`
+      );
+      return;
+    }
+
     if (confirm("确定要删除此 Agent 吗？")) {
       await deleteAgent(id);
     }

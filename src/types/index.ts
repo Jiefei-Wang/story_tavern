@@ -12,6 +12,7 @@ export interface Backend {
   timeoutMs: number;
   maxConcurrency: number;
   enabled: boolean;
+  defaultModel?: string;
   models?: string[];
   status?: "online" | "offline" | "unknown";
   lastTestedAt?: string;
@@ -89,6 +90,7 @@ export interface TemporalBlock {
   kind: "normal" | "wait" | "time_skip" | "admin";
   events?: GameEvent[];
   responseWindow?: boolean;
+  duration?: number;
   to?: string;
   command?: string;
 }
@@ -170,6 +172,8 @@ export interface TraceSpan {
   id: string;
   traceId: string;
   parentId?: string;
+  blockId?: string;
+  blockIndex?: number;
   name: string;
   type: string;
   agentId?: string;
@@ -217,6 +221,9 @@ export interface GameTurn {
   worldStateAfter: WorldState;
   patches: JsonPatchOperation[];
   activeAgentGroupId: string;
+  status?: "success" | "error";
+  error?: string;
+  narrationError?: string;
   variations?: GameTurn[];
   activeVariationIndex?: number;
 }

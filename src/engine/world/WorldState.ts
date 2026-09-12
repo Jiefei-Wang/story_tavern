@@ -3,7 +3,7 @@ import { WorldState } from "../../types";
 export const INITIAL_HARBOR_TAVERN_WORLD: WorldState = {
   clock: "1342-06-12T08:16:00",
   scene: {
-    location: "harbor_tavern",
+    location: "tavern_outside",
     weather: "clear",
     lighting: "morning",
     description:

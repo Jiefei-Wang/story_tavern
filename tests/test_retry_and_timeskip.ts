@@ -91,14 +91,14 @@ async function runTests() {
     activeVariationIndex: 1,
   };
 
-  if (branchedTurn.variations.length !== 2) {
+  if (!branchedTurn.variations || branchedTurn.variations.length !== 2) {
     throw new Error("分支数不正确！");
   }
   if (branchedTurn.activeVariationIndex !== 1) {
     throw new Error("当前激活分支序号不正确！");
   }
   console.log("--> 分支数量:", branchedTurn.variations.length);
-  console.log("--> 当前激活分支:", branchedTurn.activeVariationIndex + 1);
+  console.log("--> 当前激活分支:", (branchedTurn.activeVariationIndex ?? 0) + 1);
   console.log("--> 分支 1 叙事:", branchedTurn.variations[0].narratorOutput);
   console.log("--> 分支 2 叙事:", branchedTurn.variations[1].narratorOutput);
   console.log(">>> [PASS] 重试与分支数据模型验证成功！\n");

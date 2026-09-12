@@ -3,12 +3,14 @@ import {
   AgentDefinition,
   AgentGroup,
   Backend,
-  TraceSpan,
 } from "../../types";
 import { renderMessages } from "../template/PlaceholderEngine";
 import { globalConcurrencyLimiter } from "../scheduling/ConcurrencyLimiter";
 import { globalTraceManager } from "../tracing/TraceManager";
 import { MockSimulator } from "./MockSimulator";
+import { AgentRuntimeError } from "../errors/PipelineStageError";
+import { SchemaValidator } from "../schema/SchemaValidator";
+import { parseOpenAIResponse } from "./OpenAIResponseParser";
 
 export interface RunAgentOptions {
   agentId: string;
@@ -16,6 +18,8 @@ export interface RunAgentOptions {
   context: Record<string, any>;
   traceId?: string;
   parentSpanId?: string;
+  blockId?: string;
+  blockIndex?: number;
   // Injected dependencies from stores:
   agents: AgentDefinition[];
   groups: AgentGroup[];
@@ -30,7 +34,7 @@ export interface RunAgentResult<T = any> {
   error?: string;
 }
 
-function extractJsonPayload(text: string): any {
+export function extractJsonPayload(text: string): any {
   const trimmed = text.trim();
   // Check for markdown code blocks
   const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
@@ -59,66 +63,133 @@ export class AgentRuntime {
       context,
       traceId = `tr_${Date.now()}`,
       parentSpanId,
+      blockId,
+      blockIndex,
       agents,
       groups,
       backends,
       mockMode = false,
     } = options;
 
-    const spanId = `span_${agentId}_${Math.random().toString(36).substring(2, 9)}`;
+    const uuid =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const spanId = `span_${agentId}_${uuid}`;
 
-    // 1. Resolve Agent Definition
+    // 1. Resolve Agent Definition (Fail-Fast)
     const agentDef = agents.find((a) => a.id === agentId);
     if (!agentDef) {
+      const errMsg = `Agent definition not found: ${agentId}`;
       return {
         success: false,
         data: null as any,
         spanId,
-        error: `Agent definition not found: ${agentId}`,
+        error: errMsg,
       };
     }
 
-    // 2. Resolve Agent Group & Binding
-    const group = groups.find((g) => g.id === groupId) || groups[0];
-    const binding = group?.bindings.find((b) => b.agentId === agentId);
+    // 2. Resolve Agent Group (Fail-Fast: NO silent fallback to groups[0])
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) {
+      const errMsg = `Agent Group '${groupId}' not found`;
+      return {
+        success: false,
+        data: null as any,
+        spanId,
+        error: errMsg,
+      };
+    }
 
-    const backend = binding ? backends.find((b) => b.id === binding.backendId) : backends[0];
-    const model = binding?.model || "default-model";
+    // 3. Resolve Binding (Fail-Fast: NO silent fallback to backends[0])
+    const binding = group.bindings.find((b) => b.agentId === agentId);
+    if (!binding) {
+      const errMsg = `Agent '${agentId}' has no binding in group '${groupId}'`;
+      return {
+        success: false,
+        data: null as any,
+        spanId,
+        error: errMsg,
+      };
+    }
 
-    // 3. Create Trace Span
-    const span = globalTraceManager.createSpan(
+    // 4. Resolve Backend (Fail-Fast)
+    const backend = backends.find((b) => b.id === binding.backendId);
+    if (!backend) {
+      const errMsg = `Backend '${binding.backendId}' not found for agent '${agentId}'`;
+      return {
+        success: false,
+        data: null as any,
+        spanId,
+        error: errMsg,
+      };
+    }
+
+    // 5. Backend Enabled Check (Fail-Fast)
+    if (!backend.enabled) {
+      const errMsg = `Backend '${backend.name}' is disabled`;
+      return {
+        success: false,
+        data: null as any,
+        spanId,
+        error: errMsg,
+      };
+    }
+
+    // 6. Model Specification Check (Fail-Fast: NO silent fallback to "default-model")
+    const model = binding.model || backend.defaultModel;
+    if (!model || model.trim() === "") {
+      const errMsg = `No model specified for agent '${agentId}' in group '${groupId}'`;
+      return {
+        success: false,
+        data: null as any,
+        spanId,
+        error: errMsg,
+      };
+    }
+
+    // 7. Ensure Trace exists for standalone runs
+    const isStandaloneTrace = !globalTraceManager.getTrace(traceId);
+    if (isStandaloneTrace) {
+      globalTraceManager.startTurnTrace(traceId, 0, `Standalone run: ${agentDef.name || agentId}`);
+    }
+
+    // Create Trace Span
+    globalTraceManager.createSpan(
       traceId,
       spanId,
       agentDef.name || agentId,
       "agent_call",
       parentSpanId,
-      agentId
+      agentId,
+      blockId,
+      blockIndex
     );
 
-    // Record initial snapshot
+    // Record initial immutable snapshot
     globalTraceManager.updateSpan(traceId, spanId, {
-      backendId: backend?.id,
+      backendId: backend.id,
       model,
-      inputContext: context,
-      templateMessages: agentDef.messages,
+      inputContext: structuredClone(context),
+      templateMessages: structuredClone(agentDef.messages),
     });
 
-    // 4. Merge parameters
+    // 8. Merge parameters
     const temperature =
-      binding?.overrides?.temperature ??
+      binding.overrides?.temperature ??
       agentDef.defaults.temperature ??
       0.7;
     const maxTokens =
-      binding?.overrides?.maxTokens ??
+      binding.overrides?.maxTokens ??
       agentDef.defaults.maxTokens ??
       1500;
     const topP =
-      binding?.overrides?.topP ??
+      binding.overrides?.topP ??
       agentDef.defaults.topP ??
       1.0;
     const extraBody = {
       ...(agentDef.defaults.extraBody || {}),
-      ...(binding?.overrides?.extraBody || {}),
+      ...(binding.overrides?.extraBody || {}),
     };
 
     const requestParams = {
@@ -129,28 +200,37 @@ export class AgentRuntime {
       ...extraBody,
     };
 
-    // 5. Render placeholders into messages
+    // 9. Render placeholders into messages
     const resolvedMessages = renderMessages(agentDef.messages, context);
     globalTraceManager.updateSpan(traceId, spanId, {
-      resolvedMessages,
-      requestParams,
+      resolvedMessages: structuredClone(resolvedMessages),
+      requestParams: structuredClone(requestParams),
     });
 
-    // 6. Execute Mock or Real
+    // 10. Execute Mock Mode
     if (mockMode) {
-      // Mock mode strictly for offline unit tests and isolated evaluation
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 20));
       try {
         const mockResult = MockSimulator.simulate(agentId, context, agentDef);
+
+        // Validate output schema if defined
+        if (agentDef.outputSchema !== null && agentDef.outputSchema !== undefined) {
+          SchemaValidator.validateOrThrow(
+            agentDef.outputSchema,
+            mockResult,
+            agentDef.id,
+            JSON.stringify(mockResult)
+          );
+        }
 
         globalTraceManager.updateSpan(traceId, spanId, {
           status: "success",
           rawResponse: JSON.stringify(mockResult, null, 2),
-          parsedOutput: mockResult,
+          parsedOutput: structuredClone(mockResult),
           tokenUsage: {
-            prompt: 150,
-            completion: 200,
-            total: 350,
+            prompt: 100,
+            completion: 100,
+            total: 200,
           },
         });
 
@@ -160,36 +240,23 @@ export class AgentRuntime {
           spanId,
         };
       } catch (err: any) {
+        const errMsg = err?.message || String(err);
         globalTraceManager.updateSpan(traceId, spanId, {
           status: "error",
-          error: err?.message || String(err),
+          error: errMsg,
         });
         return {
           success: false,
           data: null as any,
           spanId,
-          error: err?.message || String(err),
+          error: errMsg,
         };
       }
     }
 
-    if (!backend) {
-      const errorMsg = `智能体 [${agentDef.name || agentId}] 未绑定有效的 Backend 服务的模型端点。请在“智能体分组”或“后端服务”中检查绑定配置。`;
-      globalTraceManager.updateSpan(traceId, spanId, {
-        status: "error",
-        error: errorMsg,
-      });
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errorMsg,
-      };
-    }
-
-    // 7. Real LLM execution through Concurrency Limiter & Rust HTTP layer / fetch
+    // 11. Real LLM execution through Concurrency Limiter & Tauri/Browser HTTP
     try {
-      const response = await globalConcurrencyLimiter.run(
+      const rawResponse = await globalConcurrencyLimiter.run(
         backend.id,
         backend.maxConcurrency || 1,
         async () => {
@@ -204,78 +271,93 @@ export class AgentRuntime {
           if (isTauri) {
             return await invoke<any>("backend_chat_completion", {
               baseUrl: backend.baseUrl,
+              authType: backend.authType || "bearer",
               secretRef: backend.secretRef || null,
               headers: backend.customHeaders || {},
               timeoutMs: backend.timeoutMs || 60000,
               request: payload,
             });
           } else {
-            // Web / Node / Non-Tauri fallback for direct LLM execution
-            let token = "";
-            const globalProc = (globalThis as any)?.process;
-            if (typeof globalProc !== "undefined" && globalProc?.env) {
-              token = globalProc.env.OPENROUTER_KEY || globalProc.env.openrouter_key || "";
-            }
-            if (!token && typeof localStorage !== "undefined") {
-              token =
-                localStorage.getItem(`secret_${backend.secretRef}`) ||
-                localStorage.getItem("openrouter_key") ||
-                "";
-            }
-            if (!token && (import.meta as any)?.env?.VITE_OPENROUTER_KEY) {
-              token = (import.meta as any).env.VITE_OPENROUTER_KEY;
-            }
+            // Web / Node fallback with AbortController timeout
+            const timeoutMs = backend.timeoutMs || 60000;
+            const controller = new AbortController();
+            const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
 
-            const headers: Record<string, string> = {
-              "Content-Type": "application/json",
-              ...(backend.customHeaders || {}),
-            };
-            if (token) {
-              headers["Authorization"] = `Bearer ${token.trim()}`;
+            try {
+              let token = "";
+              const globalProc = (globalThis as any)?.process;
+              if (typeof globalProc !== "undefined" && globalProc?.env) {
+                token = globalProc.env.OPENROUTER_KEY || globalProc.env.openrouter_key || "";
+              }
+              if (!token && typeof localStorage !== "undefined" && backend.secretRef) {
+                token =
+                  localStorage.getItem(`secret_${backend.secretRef}`) ||
+                  localStorage.getItem("openrouter_key") ||
+                  "";
+              }
+              if (!token && (import.meta as any)?.env?.VITE_OPENROUTER_KEY) {
+                token = (import.meta as any).env.VITE_OPENROUTER_KEY;
+              }
+
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+                ...(backend.customHeaders || {}),
+              };
+
+              const authType = backend.authType || "bearer";
+              if (authType === "bearer") {
+                if (!token) {
+                  throw new Error(`Missing Bearer credential for backend '${backend.name}'`);
+                }
+                headers["Authorization"] = `Bearer ${token.trim()}`;
+              }
+
+              const url = `${backend.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+              const res = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+              });
+
+              if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`HTTP ${res.status}: ${errText}`);
+              }
+
+              return await res.json();
+            } finally {
+              clearTimeout(timeoutTimer);
             }
-
-            const url = `${backend.baseUrl.replace(/\/+$/, "")}/chat/completions`;
-            const res = await fetch(url, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(payload),
-            });
-
-            if (!res.ok) {
-              const errText = await res.text();
-              throw new Error(`HTTP ${res.status}: ${errText}`);
-            }
-
-            return await res.json();
           }
         }
       );
 
-      const content = response?.choices?.[0]?.message?.content || "";
-      const usage = response?.usage || {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-      };
+      // Parse and strictly validate response structure
+      const { content, tokenUsage } = parseOpenAIResponse(rawResponse);
 
       let parsedData: any = content;
-      if (agentDef.outputSchema !== null) {
+      if (agentDef.outputSchema !== null && agentDef.outputSchema !== undefined) {
         try {
           parsedData = extractJsonPayload(content);
         } catch (jsonErr: any) {
           throw new Error(`Output schema expects JSON, but parsing failed: ${jsonErr.message}`);
         }
+
+        // Validate parsed object against schema
+        SchemaValidator.validateOrThrow(
+          agentDef.outputSchema,
+          parsedData,
+          agentDef.id,
+          content
+        );
       }
 
       globalTraceManager.updateSpan(traceId, spanId, {
         status: "success",
-        rawResponse: response,
-        parsedOutput: parsedData,
-        tokenUsage: {
-          prompt: usage.prompt_tokens,
-          completion: usage.completion_tokens,
-          total: usage.total_tokens,
-        },
+        rawResponse,
+        parsedOutput: structuredClone(parsedData),
+        tokenUsage,
       });
 
       return {

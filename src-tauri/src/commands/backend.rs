@@ -21,33 +21,53 @@ fn build_client(timeout_ms: Option<u64>) -> reqwest::Client {
         .unwrap_or_else(|_| reqwest::Client::new())
 }
 
-fn normalize_url(base_url: &str, endpoint: &str) -> String {
+pub fn normalize_url(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim().trim_end_matches('/');
     let ep = endpoint.trim_start_matches('/');
     format!("{}/{}", base, ep)
 }
 
-fn apply_auth_and_headers(
+pub fn apply_auth_and_headers(
     mut req: reqwest::RequestBuilder,
+    auth_type: Option<&str>,
     secret_ref: Option<&str>,
     headers: Option<&HashMap<String, String>>,
-) -> reqwest::RequestBuilder {
-    let mut auth_added = false;
-    if let Some(s_ref) = secret_ref {
-        if !s_ref.trim().is_empty() {
-            if let Ok(token) = get_secret_internal(s_ref) {
-                if !token.trim().is_empty() {
-                    req = req.header("Authorization", format!("Bearer {}", token.trim()));
-                    auth_added = true;
+) -> Result<reqwest::RequestBuilder, String> {
+    let auth = auth_type.unwrap_or("bearer");
+
+    if auth == "none" {
+        // Explicitly forbid adding Authorization header
+    } else if auth == "bearer" {
+        let mut token_opt: Option<String> = None;
+
+        if let Some(s_ref) = secret_ref {
+            if !s_ref.trim().is_empty() {
+                if let Ok(token) = get_secret_internal(s_ref) {
+                    if !token.trim().is_empty() {
+                        token_opt = Some(token.trim().to_string());
+                    }
                 }
             }
         }
-    }
 
-    if !auth_added {
-        if let Ok(token) = get_secret_internal("backend_openrouter") {
-            if !token.trim().is_empty() {
-                req = req.header("Authorization", format!("Bearer {}", token.trim()));
+        // Check default openrouter secret if not found
+        if token_opt.is_none() {
+            if let Ok(token) = get_secret_internal("backend_openrouter") {
+                if !token.trim().is_empty() {
+                    token_opt = Some(token.trim().to_string());
+                }
+            }
+        }
+
+        match token_opt {
+            Some(token) => {
+                req = req.header("Authorization", format!("Bearer {}", token));
+            }
+            None => {
+                return Err(format!(
+                    "Missing Bearer credential for backend (secret_ref: '{}')",
+                    secret_ref.unwrap_or("none")
+                ));
             }
         }
     }
@@ -58,12 +78,13 @@ fn apply_auth_and_headers(
         }
     }
 
-    req
+    Ok(req)
 }
 
 #[tauri::command]
 pub async fn backend_test_connection(
     base_url: String,
+    auth_type: Option<String>,
     secret_ref: Option<String>,
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
@@ -73,7 +94,22 @@ pub async fn backend_test_connection(
     let url = normalize_url(&base_url, "models");
 
     let req = client.get(&url);
-    let req = apply_auth_and_headers(req, secret_ref.as_deref(), headers.as_ref());
+    let req = match apply_auth_and_headers(
+        req,
+        auth_type.as_deref(),
+        secret_ref.as_deref(),
+        headers.as_ref(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(ConnectionTestResult {
+                success: false,
+                model_count: 0,
+                error: Some(e),
+                latency_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
 
     match req.send().await {
         Ok(resp) => {
@@ -106,7 +142,7 @@ pub async fn backend_test_connection(
                     })
                 }
                 Err(e) => Ok(ConnectionTestResult {
-                    success: true,
+                    success: false, // Strict correctness: JSON parse failure is NOT success!
                     model_count: 0,
                     error: Some(format!("Connected but failed to parse models JSON: {}", e)),
                     latency_ms,
@@ -128,6 +164,7 @@ pub async fn backend_test_connection(
 #[tauri::command]
 pub async fn backend_list_models(
     base_url: String,
+    auth_type: Option<String>,
     secret_ref: Option<String>,
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
@@ -136,7 +173,12 @@ pub async fn backend_list_models(
     let url = normalize_url(&base_url, "models");
 
     let req = client.get(&url);
-    let req = apply_auth_and_headers(req, secret_ref.as_deref(), headers.as_ref());
+    let req = apply_auth_and_headers(
+        req,
+        auth_type.as_deref(),
+        secret_ref.as_deref(),
+        headers.as_ref(),
+    )?;
 
     let resp = req.send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
@@ -169,6 +211,7 @@ pub async fn backend_list_models(
 #[tauri::command]
 pub async fn backend_chat_completion(
     base_url: String,
+    auth_type: Option<String>,
     secret_ref: Option<String>,
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
@@ -178,7 +221,12 @@ pub async fn backend_chat_completion(
     let url = normalize_url(&base_url, "chat/completions");
 
     let req = client.post(&url).json(&request);
-    let req = apply_auth_and_headers(req, secret_ref.as_deref(), headers.as_ref());
+    let req = apply_auth_and_headers(
+        req,
+        auth_type.as_deref(),
+        secret_ref.as_deref(),
+        headers.as_ref(),
+    )?;
 
     let resp = req.send().await.map_err(|e| format!("Network request failed: {}", e))?;
     let status = resp.status();
@@ -190,4 +238,40 @@ pub async fn backend_chat_completion(
 
     serde_json::from_str::<Value>(&text)
         .map_err(|e| format!("Failed to parse response JSON: {} (raw: {})", e, text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_url() {
+        assert_eq!(
+            normalize_url("https://api.openai.com/v1/", "/chat/completions"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+        assert_eq!(
+            normalize_url("http://localhost:11434", "models"),
+            "http://localhost:11434/models"
+        );
+    }
+
+    #[test]
+    fn test_apply_auth_none_does_not_require_secret() {
+        let client = reqwest::Client::new();
+        let req = client.get("http://localhost:11434/models");
+        let result = apply_auth_and_headers(req, Some("none"), None, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_apply_auth_bearer_missing_secret_fails() {
+        let client = reqwest::Client::new();
+        let req = client.get("https://api.openai.com/v1/models");
+        let result = apply_auth_and_headers(req, Some("bearer"), Some("non_existent_ref_99999"), None);
+        // Unless env secret is present, this will fail with missing bearer credential
+        if super::super::secret::find_env_secret().is_none() {
+            assert!(result.is_err());
+        }
+    }
 }

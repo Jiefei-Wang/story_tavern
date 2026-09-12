@@ -230,15 +230,68 @@ export const AgentEditorPage: React.FC = () => {
   const handleTestAgent = async () => {
     setIsTesting(true);
     setTestResult(null);
+    setSchemaError(null);
 
     try {
-      const parsedContext = JSON.parse(sampleContextJson);
+      // 1. Validate Schema text if present
+      let draftSchema = null;
+      if (schemaJsonText.trim()) {
+        try {
+          draftSchema = JSON.parse(schemaJsonText);
+        } catch (jsonErr: any) {
+          const errMsg = `Schema JSON invalid: ${jsonErr.message}`;
+          setSchemaError(errMsg);
+          setTestResult({ success: false, error: errMsg });
+          setIsTesting(false);
+          return;
+        }
+      }
+
+      // 2. Validate sample context JSON
+      let parsedContext: any;
+      try {
+        parsedContext = JSON.parse(sampleContextJson);
+      } catch (ctxErr: any) {
+        const errMsg = `Sample Context JSON invalid: ${ctxErr.message}`;
+        setTestResult({ success: false, error: errMsg });
+        setIsTesting(false);
+        return;
+      }
+
+      // 3. Construct test agent draft with current editor state and draft schema
+      const draftAgent: AgentDefinition = {
+        ...agent,
+        outputSchema: draftSchema,
+      };
+
+      const testAgents: AgentDefinition[] = [
+        ...agents.filter((a) => a.id !== agent.id),
+        draftAgent,
+      ];
+
+      // Ensure active group has a binding for this agent (especially if new or unassigned)
+      const currentGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
+      let testGroups = groups;
+      if (currentGroup && !currentGroup.bindings.some((b) => b.agentId === agent.id)) {
+        const fallbackBackend = backends[0];
+        const tempBinding = {
+          agentId: agent.id,
+          backendId: fallbackBackend?.id || "backend_openrouter",
+          model: fallbackBackend?.defaultModel || "nvidia/nemotron-3-super-120b-a12b:free",
+        };
+        const updatedGroup = {
+          ...currentGroup,
+          bindings: [...currentGroup.bindings, tempBinding],
+        };
+        testGroups = groups.map((g) => (g.id === currentGroup.id ? updatedGroup : g));
+      }
+
       const res = await agentRuntime.runAgent({
         agentId: agent.id,
-        groupId: activeGroupId,
+        groupId: currentGroup?.id || activeGroupId,
         context: parsedContext,
-        agents,
-        groups,
+        agents: testAgents,
+        groups: testGroups,
         backends,
         mockMode: settings.mockLlmMode,
       });

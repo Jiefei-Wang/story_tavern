@@ -4,6 +4,16 @@ export class TraceManager {
   private activeTraces: Map<string, TurnTrace> = new Map();
   private completedTraces: TurnTrace[] = [];
   private listeners: Set<(traces: TurnTrace[]) => void> = new Set();
+  private onTraceCompleted?: (trace: TurnTrace) => void;
+
+  setOnTraceCompleted(handler: (trace: TurnTrace) => void) {
+    this.onTraceCompleted = handler;
+  }
+
+  loadCompletedTraces(traces: TurnTrace[]): void {
+    this.completedTraces = [...traces];
+    this.notify();
+  }
 
   startTurnTrace(traceId: string, turnNumber: number, playerInput: string): TurnTrace {
     const trace: TurnTrace = {
@@ -26,12 +36,21 @@ export class TraceManager {
     name: string,
     type: string,
     parentId?: string,
-    agentId?: string
+    agentId?: string,
+    blockId?: string,
+    blockIndex?: number
   ): TraceSpan {
+    const trace = this.activeTraces.get(traceId);
+    if (!trace) {
+      throw new Error(`Cannot create span '${spanId}': active parent trace '${traceId}' does not exist`);
+    }
+
     const span: TraceSpan = {
       id: spanId,
       traceId,
       parentId,
+      blockId,
+      blockIndex,
       name,
       type,
       agentId,
@@ -39,11 +58,8 @@ export class TraceManager {
       startedAt: Date.now(),
     };
 
-    const trace = this.activeTraces.get(traceId);
-    if (trace) {
-      trace.spans.push(span);
-      this.notify();
-    }
+    trace.spans.push(span);
+    this.notify();
     return span;
   }
 
@@ -53,12 +69,34 @@ export class TraceManager {
 
     const span = trace.spans.find((s) => s.id === spanId);
     if (span) {
-      Object.assign(span, updates);
-      if (updates.status === "success" || updates.status === "error") {
-        span.endedAt = updates.endedAt || Date.now();
+      // Snapshot mutations to guarantee debug trace fidelity
+      const clonedUpdates = { ...updates };
+      if (clonedUpdates.inputContext !== undefined) {
+        clonedUpdates.inputContext = structuredClone(clonedUpdates.inputContext);
+      }
+      if (clonedUpdates.templateMessages !== undefined) {
+        clonedUpdates.templateMessages = structuredClone(clonedUpdates.templateMessages);
+      }
+      if (clonedUpdates.resolvedMessages !== undefined) {
+        clonedUpdates.resolvedMessages = structuredClone(clonedUpdates.resolvedMessages);
+      }
+      if (clonedUpdates.requestParams !== undefined) {
+        clonedUpdates.requestParams = structuredClone(clonedUpdates.requestParams);
+      }
+      if (clonedUpdates.parsedOutput !== undefined) {
+        clonedUpdates.parsedOutput = structuredClone(clonedUpdates.parsedOutput);
+      }
+      if (clonedUpdates.statePatch !== undefined) {
+        clonedUpdates.statePatch = structuredClone(clonedUpdates.statePatch);
+      }
+
+      Object.assign(span, clonedUpdates);
+
+      if (clonedUpdates.status === "success" || clonedUpdates.status === "error") {
+        span.endedAt = clonedUpdates.endedAt || Date.now();
         span.durationMs = span.endedAt - span.startedAt;
       }
-      if (updates.tokenUsage?.total) {
+      if (clonedUpdates.tokenUsage?.total) {
         this.recalculateTotalTokens(trace);
       }
       this.notify();
@@ -77,9 +115,17 @@ export class TraceManager {
     this.activeTraces.delete(traceId);
     this.completedTraces.unshift(trace);
 
-    // Keep last 100 traces
-    if (this.completedTraces.length > 100) {
+    // Keep up to 500 completed traces in memory
+    if (this.completedTraces.length > 500) {
       this.completedTraces.pop();
+    }
+
+    if (this.onTraceCompleted) {
+      try {
+        this.onTraceCompleted(trace);
+      } catch (err) {
+        console.error("Failed in onTraceCompleted callback:", err);
+      }
     }
 
     this.notify();
@@ -109,14 +155,22 @@ export class TraceManager {
 
   subscribe(listener: (traces: TurnTrace[]) => void): () => void {
     this.listeners.add(listener);
-    listener(this.getAllTraces());
+    try {
+      listener(this.getAllTraces());
+    } catch (err) {
+      console.error("TraceManager listener initial call error:", err);
+    }
     return () => this.listeners.delete(listener);
   }
 
   private notify() {
     const all = this.getAllTraces();
     for (const listener of this.listeners) {
-      listener(all);
+      try {
+        listener(all);
+      } catch (e) {
+        console.error("Error in TraceManager listener:", e);
+      }
     }
   }
 }

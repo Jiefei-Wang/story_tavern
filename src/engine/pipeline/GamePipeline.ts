@@ -6,15 +6,21 @@ import {
   GameTurn,
   InputCompilerResult,
   JsonPatchOperation,
+  NPCIntent,
   NPCReactionResult,
   PerceptionResult,
   WorldResolverResult,
   WorldState,
 } from "../../types";
+import { PipelineStageError } from "../errors/PipelineStageError";
 import { agentRuntime } from "../runtime/AgentRuntime";
-import { calculateReactionBudget } from "../scheduling/TemporalScheduler";
+import {
+  calculateReactionBudget,
+  estimateIntentDuration,
+} from "../scheduling/TemporalScheduler";
 import { globalTraceManager } from "../tracing/TraceManager";
 import { applyPatches, cloneWorldState } from "../world/PatchEngine";
+import { SpatialEngine } from "../world/SpatialEngine";
 
 export interface ExecutionContext {
   agents: AgentDefinition[];
@@ -38,12 +44,20 @@ export class GamePipeline {
     turnIndex: number,
     execContext: ExecutionContext
   ): Promise<PipelineTurnResult> {
-    const traceId = `trace_${Date.now()}_turn_${turnIndex}`;
+    const uuid =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const traceId = `trace_${turnIndex}_${uuid}`;
+
     globalTraceManager.startTurnTrace(traceId, turnIndex, playerInput);
 
-    let currentWorld = cloneWorldState(initialWorld);
+    // Snapshot world state: transaction baseline
+    const worldBefore = cloneWorldState(initialWorld);
+    let workingWorld = cloneWorldState(initialWorld);
+
     const allEvents: GameEvent[] = [];
-    const allPatches: JsonPatchOperation[] = [];
+    const allCommittedPatches: JsonPatchOperation[] = [];
 
     const runtimeOpts = {
       groupId: execContext.activeGroupId,
@@ -61,40 +75,78 @@ export class GamePipeline {
         agentId: "input_compiler",
         context: {
           player: { input: playerInput },
-          scene: currentWorld.scene,
+          scene: workingWorld.scene,
         },
       });
 
       if (!compilerResult.success || !compilerResult.data?.blocks) {
-        throw new Error(compilerResult.error || "Input Compiler failed to process input");
+        throw new PipelineStageError(
+          "input_compiler",
+          compilerResult.error || "Input Compiler failed to produce valid temporal blocks"
+        );
       }
 
       const blocks = compilerResult.data.blocks;
 
-      // Process each temporal block
-      for (const block of blocks) {
+      // Process each temporal block sequentially within transaction
+      for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        const block = blocks[blockIndex];
+        const blockSpanId = `span_block_${block.id || blockIndex}_${uuid}`;
+
+        globalTraceManager.createSpan(
+          traceId,
+          blockSpanId,
+          `TemporalBlock [${block.kind}]`,
+          "temporal_block",
+          undefined,
+          undefined,
+          block.id,
+          blockIndex
+        );
+
+        const blockRuntimeOpts = {
+          ...runtimeOpts,
+          parentSpanId: blockSpanId,
+          blockId: block.id,
+          blockIndex,
+        };
+
         if (block.kind === "admin") {
-          // Admin Patch
+          // Admin Patch Block
           const adminResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...runtimeOpts,
+            ...blockRuntimeOpts,
             agentId: "admin_patch",
             context: {
               command: block.command || playerInput,
-              world: currentWorld,
+              world: workingWorld,
             },
           });
 
-          if (adminResult.success && adminResult.data?.patches) {
-            const patchRes = applyPatches(currentWorld, adminResult.data.patches);
-            if (patchRes.success) {
-              currentWorld = patchRes.newWorld;
-              allPatches.push(...adminResult.data.patches);
-            }
+          if (!adminResult.success) {
+            throw new PipelineStageError(
+              "admin_patch",
+              adminResult.error || "Admin Patch Agent execution failed"
+            );
           }
+
+          const patches = adminResult.data?.patches || [];
+          if (patches.length > 0) {
+            const patchRes = applyPatches(workingWorld, patches);
+            if (!patchRes.success) {
+              throw new PipelineStageError(
+                "patch_application",
+                patchRes.error || "Failed to apply admin patches to working world"
+              );
+            }
+            workingWorld = patchRes.newWorld;
+            allCommittedPatches.push(...patchRes.appliedPatches);
+          }
+
+          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
         } else if (block.kind === "time_skip") {
-          // Time Skip
+          // Time Skip Block
           const skipResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...runtimeOpts,
+            ...blockRuntimeOpts,
             agentId: "time_skip",
             context: {
               skipTarget:
@@ -103,108 +155,288 @@ export class GamePipeline {
                 (block as any).duration ||
                 (block as any).command ||
                 playerInput,
-              world: currentWorld,
+              world: workingWorld,
             },
           });
 
-          if (skipResult.success && skipResult.data?.patches) {
-            const patchRes = applyPatches(currentWorld, skipResult.data.patches);
-            if (patchRes.success) {
-              currentWorld = patchRes.newWorld;
-              allPatches.push(...skipResult.data.patches);
-            }
+          if (!skipResult.success) {
+            throw new PipelineStageError(
+              "time_skip",
+              skipResult.error || "Time Skip Agent execution failed"
+            );
           }
+
+          const patches = skipResult.data?.patches || [];
+          if (patches.length > 0) {
+            const patchRes = applyPatches(workingWorld, patches);
+            if (!patchRes.success) {
+              throw new PipelineStageError(
+                "patch_application",
+                patchRes.error || "Failed to apply time skip patches to working world"
+              );
+            }
+            workingWorld = patchRes.newWorld;
+            allCommittedPatches.push(...patchRes.appliedPatches);
+          }
+
+          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
         } else if (block.kind === "normal") {
+          // Normal Block: Events -> Perception -> NPC Reaction -> World Resolver
           const events = block.events || [];
           allEvents.push(...events);
 
-          // Step 2: Perception Agent
+          // 2. Perception Agent (Strict Fail-Fast)
           const perceptionResult = await agentRuntime.runAgent<PerceptionResult>({
-            ...runtimeOpts,
+            ...blockRuntimeOpts,
             agentId: "perception",
             context: {
               events,
-              scene: currentWorld.scene,
-              entities: currentWorld.entities,
+              scene: workingWorld.scene,
+              entities: workingWorld.entities,
             },
           });
 
-          const observations = perceptionResult.data?.npcObservations || {};
+          if (!perceptionResult.success) {
+            throw new PipelineStageError(
+              "perception",
+              perceptionResult.error || "Perception Agent failed to execute"
+            );
+          }
+
+          if (
+            !perceptionResult.data ||
+            typeof perceptionResult.data.npcObservations !== "object" ||
+            perceptionResult.data.npcObservations === null
+          ) {
+            throw new PipelineStageError(
+              "perception",
+              "Perception Agent returned invalid or missing npcObservations structure"
+            );
+          }
+
+          const observations = perceptionResult.data.npcObservations;
           const budget = calculateReactionBudget(block);
 
-          // Step 3: NPC Reaction (Parallel execution via Promise.all)
-          // Find NPCs with observations or characters in scene
-          const sceneNpcs = Object.entries(currentWorld.entities)
-            .filter(([id, ent]) => ent.type === "character" && id !== "player")
-            .map(([id]) => id);
+          // Finite perspective: determine eligible scene characters
+          const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
 
-          const affectedNpcIds = sceneNpcs.filter(
-            (id) => observations[id] && observations[id].length > 0
-          );
+          // Only NPCs who are in scene AND perceived the event (saw === true || heard === true) can react
+          const targetNpcIds = sceneCharacters
+            .map((c) => c.id)
+            .filter((npcId) => {
+              const obsList = observations[npcId];
+              return (
+                Array.isArray(obsList) &&
+                obsList.some((obs) => obs.saw === true || obs.heard === true)
+              );
+            });
 
-          // Fallback to all scene characters if perception returned empty
-          const targetNpcIds = affectedNpcIds.length > 0 ? affectedNpcIds : sceneNpcs.slice(0, 2);
-
+          // Step 3: Parallel NPC Reactions
           const npcReactions = await Promise.all(
             targetNpcIds.map(async (npcId) => {
-              const npcEntity = currentWorld.entities[npcId];
+              const npcEntity = workingWorld.entities[npcId];
               const obsList = observations[npcId] || [];
 
               const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
-                ...runtimeOpts,
+                ...blockRuntimeOpts,
                 agentId: "npc_reaction",
                 context: {
                   npc: { id: npcId, ...npcEntity },
                   observations: obsList,
-                  scene: currentWorld.scene,
+                  scene: workingWorld.scene,
                   reaction: budget,
                 },
               });
 
+              if (!reactionRes.success || !reactionRes.data) {
+                throw new PipelineStageError(
+                  "npc_reaction",
+                  reactionRes.error || `NPC reaction failed for character '${npcId}'`
+                );
+              }
+
+              // Deterministic reaction budget enforcement
+              const validatedIntents: NPCIntent[] = [];
+              let currentSpent = 0;
+              for (const intent of reactionRes.data.intents || []) {
+                const duration = intent.duration ?? estimateIntentDuration(intent);
+                if (currentSpent + duration <= budget.available_time) {
+                  validatedIntents.push(intent);
+                  currentSpent += duration;
+                } else {
+                  // Intent exceeds budget: reject deterministically
+                }
+              }
+
               return {
                 npcId,
-                reaction: reactionRes.data,
+                reaction: {
+                  ...reactionRes.data,
+                  intents: validatedIntents,
+                },
               };
             })
           );
 
           // Step 4: World Resolver
           const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...runtimeOpts,
+            ...blockRuntimeOpts,
             agentId: "world_resolver",
             context: {
               events,
               npcReactions,
-              scene: currentWorld.scene,
-              entities: currentWorld.entities,
-              rules: currentWorld.rules,
+              scene: workingWorld.scene,
+              entities: workingWorld.entities,
+              rules: workingWorld.rules,
+              reactionBudget: budget,
             },
           });
 
-          if (resolverResult.success && resolverResult.data?.patches) {
-            const patchRes = applyPatches(currentWorld, resolverResult.data.patches);
-            if (patchRes.success) {
-              currentWorld = patchRes.newWorld;
-              allPatches.push(...resolverResult.data.patches);
-            }
+          if (!resolverResult.success) {
+            throw new PipelineStageError(
+              "world_resolver",
+              resolverResult.error || "World Resolver failed to resolve state changes"
+            );
           }
+
+          const patches = resolverResult.data?.patches || [];
+          if (patches.length > 0) {
+            const patchRes = applyPatches(workingWorld, patches);
+            if (!patchRes.success) {
+              throw new PipelineStageError(
+                "patch_application",
+                patchRes.error || "Failed to apply resolver patches atomically"
+              );
+            }
+            workingWorld = patchRes.newWorld;
+            allCommittedPatches.push(...patchRes.appliedPatches);
+          }
+
+          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+        } else if (block.kind === "wait") {
+          // Wait Block: NPC Reaction window -> World Resolver
+          const waitDuration = block.duration || 5.0;
+          const waitBudget = {
+            available_time: waitDuration,
+            response_window: true,
+            trigger_event_ids: [block.id],
+          };
+
+          // Re-evaluate present scene characters in current workingWorld
+          const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
+
+          const npcReactions = await Promise.all(
+            sceneCharacters.map(async ({ id: npcId, entity: npcEntity }) => {
+              const waitObs = [
+                {
+                  eventId: block.id,
+                  saw: true,
+                  heard: true,
+                  content: "玩家停下动作，静候现场角色的回应。",
+                },
+              ];
+
+              const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
+                ...blockRuntimeOpts,
+                agentId: "npc_reaction",
+                context: {
+                  npc: { id: npcId, ...npcEntity },
+                  observations: waitObs,
+                  scene: workingWorld.scene,
+                  reaction: waitBudget,
+                },
+              });
+
+              if (!reactionRes.success || !reactionRes.data) {
+                throw new PipelineStageError(
+                  "npc_reaction",
+                  reactionRes.error || `NPC wait reaction failed for '${npcId}'`
+                );
+              }
+
+              // Deterministic reaction budget enforcement
+              const validatedIntents: NPCIntent[] = [];
+              let currentSpent = 0;
+              for (const intent of reactionRes.data.intents || []) {
+                const duration = intent.duration ?? estimateIntentDuration(intent);
+                if (currentSpent + duration <= waitBudget.available_time) {
+                  validatedIntents.push(intent);
+                  currentSpent += duration;
+                }
+              }
+
+              return {
+                npcId,
+                reaction: {
+                  ...reactionRes.data,
+                  intents: validatedIntents,
+                },
+              };
+            })
+          );
+
+          // Resolve reactions from wait window
+          const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
+            ...blockRuntimeOpts,
+            agentId: "world_resolver",
+            context: {
+              events: [
+                {
+                  id: block.id,
+                  type: "action",
+                  actor: "player",
+                  op: "wait",
+                  duration: waitDuration,
+                },
+              ],
+              npcReactions,
+              scene: workingWorld.scene,
+              entities: workingWorld.entities,
+              rules: workingWorld.rules,
+              reactionBudget: waitBudget,
+            },
+          });
+
+          if (!resolverResult.success) {
+            throw new PipelineStageError(
+              "world_resolver",
+              resolverResult.error || "World Resolver failed during wait block"
+            );
+          }
+
+          const patches = resolverResult.data?.patches || [];
+          if (patches.length > 0) {
+            const patchRes = applyPatches(workingWorld, patches);
+            if (!patchRes.success) {
+              throw new PipelineStageError(
+                "patch_application",
+                patchRes.error || "Failed to apply wait block patches atomically"
+              );
+            }
+            workingWorld = patchRes.newWorld;
+            allCommittedPatches.push(...patchRes.appliedPatches);
+          }
+
+          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
         }
       }
 
-      // Step 5: Narrator
+      // Step 5: Narrator (Only committed patches and final working state; NO NPC private thoughts)
+      let narrationText = "";
+      let narrationError: string | undefined = undefined;
+
       const narratorResult = await agentRuntime.runAgent<string>({
         ...runtimeOpts,
         agentId: "narrator",
         context: {
           playerInput,
           events: allEvents,
-          patches: allPatches,
-          scene: currentWorld.scene,
-          entities: currentWorld.entities,
+          patches: allCommittedPatches,
+          scene: workingWorld.scene,
+          entities: workingWorld.entities,
         },
       });
 
-      let narrationText = "";
       if (narratorResult.success) {
         const d: any = narratorResult.data;
         if (typeof d === "string") {
@@ -214,26 +446,28 @@ export class GamePipeline {
         } else {
           narrationText = JSON.stringify(d);
         }
+        narrationText = narrationText.replace(/^(旁白|Narrator|NARRATOR)[:：]\s*/i, "");
       } else {
-        narrationText = `(旁白生成出现异常: ${narratorResult.error})`;
+        // Physical world state committed successfully; narrator failure does NOT rollback world
+        narrationError = narratorResult.error || "Narrator generation failed";
+        narrationText = `(旁白生成出现异常: ${narrationError})`;
       }
-
-      // Clean up any stray "Narrator:" prefixes
-      narrationText = narrationText.replace(/^(旁白|Narrator|NARRATOR)[:：]\s*/i, "");
 
       globalTraceManager.endTurnTrace(traceId, "success");
 
       const gameTurn: GameTurn = {
-        id: `turn_${turnIndex}_${Date.now()}`,
+        id: `turn_${turnIndex}_${uuid}`,
         turnIndex,
         timestamp: new Date().toISOString(),
         playerInput,
         narratorOutput: narrationText,
         traceId,
-        worldStateBefore: initialWorld,
-        worldStateAfter: currentWorld,
-        patches: allPatches,
+        worldStateBefore: worldBefore,
+        worldStateAfter: workingWorld, // All blocks succeeded -> commit
+        patches: allCommittedPatches,
         activeAgentGroupId: execContext.activeGroupId,
+        status: "success",
+        narrationError,
       };
 
       return {
@@ -242,23 +476,28 @@ export class GamePipeline {
         success: true,
       };
     } catch (err: any) {
+      // Transaction Rollback: Any block failure rollbacks working state to worldBefore!
       globalTraceManager.endTurnTrace(traceId, "error");
+      const errorMsg = err?.message || String(err);
+
       return {
         turn: {
-          id: `turn_${turnIndex}_err`,
+          id: `turn_${turnIndex}_err_${uuid}`,
           turnIndex,
           timestamp: new Date().toISOString(),
           playerInput,
-          narratorOutput: `执行过程中出现错误: ${err?.message || String(err)}`,
+          narratorOutput: `执行中断: ${errorMsg}`,
           traceId,
-          worldStateBefore: initialWorld,
-          worldStateAfter: currentWorld,
-          patches: allPatches,
+          worldStateBefore: worldBefore,
+          worldStateAfter: worldBefore, // Pure rollback to initial state
+          patches: [], // No partial state commits in committed turn
           activeAgentGroupId: execContext.activeGroupId,
+          status: "error",
+          error: errorMsg,
         },
         traceId,
         success: false,
-        error: err?.message || String(err),
+        error: errorMsg,
       };
     }
   }

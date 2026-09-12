@@ -73,7 +73,7 @@ async function runTests() {
     "Mood correctly updated to alert"
   );
   assert(
-    patchRes.newWorld.rules.magic.resurrection === false,
+    (patchRes.newWorld.rules.magic as any)?.resurrection === false,
     "Magic resurrection correctly disabled"
   );
   assert(
@@ -144,7 +144,7 @@ async function runTests() {
 
   assert(adminTurn.success === true, "Admin command turn succeeded");
   assert(
-    adminTurn.turn.worldStateAfter.rules.magic.resurrection === false,
+    (adminTurn.turn.worldStateAfter.rules.magic as any)?.resurrection === false,
     "Magic resurrection rule was patched to false by Admin Patch agent"
   );
 

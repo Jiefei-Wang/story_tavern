@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { SpatialEngine } from "../../engine/world/SpatialEngine";
 
 export const PlayPage: React.FC = () => {
   const {
@@ -451,7 +452,7 @@ export const PlayPage: React.FC = () => {
           <div className="space-y-2.5">
             {worldState?.entities &&
               Object.entries(worldState.entities)
-                .filter(([_, ent]) => ent.type === "character")
+                .filter(([id, ent]) => ent.type === "character" && SpatialEngine.isEntityInScene(id, ent, worldState))
                 .map(([id, char]) => {
                   const isPlayer = id === "player";
                   const mood = char.mentalState?.mood || "normal";
