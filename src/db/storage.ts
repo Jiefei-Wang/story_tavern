@@ -390,6 +390,14 @@ export class StorageService {
     }
   }
 
+  async deleteSecret(secretRef: string): Promise<void> {
+    if (this.isTauri()) {
+      await invoke("secret_delete", { secretRef });
+    } else {
+      this.getStorage().removeItem(`secret_${secretRef}`);
+    }
+  }
+
   async getDbPath(): Promise<string> {
     if (this.isTauri()) {
       try {

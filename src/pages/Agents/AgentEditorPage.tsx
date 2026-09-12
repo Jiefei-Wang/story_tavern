@@ -403,14 +403,39 @@ export const AgentEditorPage: React.FC = () => {
         {activeTab === "basic" && (
           <div className="max-w-xl space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Agent ID (代码唯一引用)
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span>Agent ID (代码唯一引用)</span>
+                {[
+                  "input_compiler",
+                  "perception",
+                  "npc_reaction",
+                  "world_resolver",
+                  "time_skip",
+                  "admin_patch",
+                  "narrator",
+                ].includes(agent.id) ? (
+                  <span className="text-[11px] text-blue-600 font-normal">
+                    (引擎内置核心契约，只读)
+                  </span>
+                ) : id !== "new" ? (
+                  <span className="text-[11px] text-slate-400 font-normal">
+                    (已保存 Agent 唯一标识，只读)
+                  </span>
+                ) : null}
               </label>
               <input
                 type="text"
                 value={agent.id}
-                onChange={(e) => setAgent({ ...agent, id: e.target.value })}
-                className="w-full text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
+                readOnly={id !== "new"}
+                disabled={id !== "new"}
+                onChange={(e) => {
+                  if (id === "new") setAgent({ ...agent, id: e.target.value });
+                }}
+                className={`w-full text-xs font-mono border rounded-lg px-3 py-2 outline-none ${
+                  id !== "new"
+                    ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
+                    : "bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-800"
+                }`}
               />
             </div>
 

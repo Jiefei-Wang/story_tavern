@@ -14,8 +14,9 @@ export const HomePage: React.FC = () => {
   };
 
   const handleStartDemo = async () => {
+    await setMockMode(true);
     if (!activeSave) {
-      await createNewSave("王城的黄昏 · 港口酒馆");
+      await createNewSave("王城的黄昏 · 港口酒馆 (Demo)");
     }
     navigate("/play");
   };
@@ -57,10 +58,10 @@ export const HomePage: React.FC = () => {
           <button
             onClick={handleStartDemo}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/80 font-medium text-sm transition-all"
-            title="载入港口酒馆世界并开启真实 AI 推演"
+            title="无需配置 API Key，直接开启 Mock 模式体验完整游戏引擎推演"
           >
             <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>开始新游戏 (港口酒馆)</span>
+            <span>开始 Demo (免配置)</span>
           </button>
 
           <button
@@ -74,9 +75,10 @@ export const HomePage: React.FC = () => {
           <button
             onClick={handleNewGame}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-all"
+            title="使用配置的模型后端开启新游戏"
           >
             <Plus className="w-4 h-4 text-slate-500" />
-            <span>新建游戏</span>
+            <span>新建游戏 (真实 AI)</span>
           </button>
         </div>
       </div>

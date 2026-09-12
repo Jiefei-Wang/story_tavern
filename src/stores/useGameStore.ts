@@ -198,7 +198,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         );
       }
 
-      // Branching: Initialize or update variations
+      // Retry Failure Protection: If turn execution failed, DO NOT mutate history or world state!
+      if (!result.success) {
+        set({
+          isExecuting: false,
+          currentTraceId: result.traceId,
+          executionError: result.error || "Retry failed",
+        });
+        return false;
+      }
+
+      // ONLY ON SUCCESS: Branching, variations, truncation and world state update
       const existingVariations: GameTurn[] =
         targetTurn.variations && targetTurn.variations.length > 0
           ? [...targetTurn.variations]
@@ -222,9 +232,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const newTurns = activeSave.turns.slice(0, targetIndex + 1);
       newTurns[targetIndex] = updatedTurn;
 
-      const newWorldState = result.success
-        ? result.turn.worldStateAfter
-        : targetTurn.worldStateAfter;
+      const newWorldState = result.turn.worldStateAfter;
 
       const updatedSave: GameSave = {
         ...activeSave,
@@ -244,10 +252,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         saves,
         isExecuting: false,
         currentTraceId: result.traceId,
-        executionError: result.success ? null : result.error || "Retry failed",
+        executionError: null,
       });
 
-      return result.success;
+      return true;
     } catch (err: any) {
       set({
         isExecuting: false,

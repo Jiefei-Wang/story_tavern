@@ -157,6 +157,27 @@ export class SchemaValidator {
           throw new Error(`Patch at index ${i} ('${patch.op}') must specify a 'from' string starting with '/'`);
         }
       }
+
+      if (agentId === "world_resolver" && data.publicEvents !== undefined) {
+        if (!Array.isArray(data.publicEvents)) {
+          throw new Error("World Resolver 'publicEvents' must be an array if provided");
+        }
+        for (let i = 0; i < data.publicEvents.length; i++) {
+          const ev = data.publicEvents[i];
+          if (!ev || typeof ev !== "object") {
+            throw new Error(`Public event at index ${i} must be an object`);
+          }
+          if (typeof ev.actor !== "string" || ev.actor.trim() === "") {
+            throw new Error(`Public event at index ${i} must have a non-empty string 'actor'`);
+          }
+          if (!["action", "speech", "environment"].includes(ev.type)) {
+            throw new Error(`Public event at index ${i} has invalid type '${ev.type}'`);
+          }
+          if (ev.type === "speech" && (typeof ev.content !== "string" || ev.content.trim() === "")) {
+            throw new Error(`Public speech event at index ${i} must have non-empty 'content'`);
+          }
+        }
+      }
     }
   }
 

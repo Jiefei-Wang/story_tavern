@@ -148,6 +148,27 @@ export class AgentRuntime {
       blockIndex
     );
 
+    // Group Validation (Fail-Fast in both Real and Mock mode: if groupId is provided, it must exist)
+    if (groupId) {
+      const groupExists = groups.some((g) => g.id === groupId);
+      if (!groupExists) {
+        const errMsg = `Agent Group '${groupId}' not found`;
+        globalTraceManager.updateSpan(traceId, spanId, {
+          status: "error",
+          error: errMsg,
+        });
+        if (isStandaloneTrace) {
+          globalTraceManager.endTurnTrace(traceId, "error");
+        }
+        return {
+          success: false,
+          data: null as any,
+          spanId,
+          error: errMsg,
+        };
+      }
+    }
+
     // 3. Mock Mode Branch: Truly does NOT require Backend, Binding, or Model!
     if (mockMode) {
       let mockSuccess = false;

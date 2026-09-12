@@ -106,11 +106,6 @@ pub fn secret_set(secret_ref: String, secret_val: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn secret_get(secret_ref: String) -> Result<String, String> {
-    get_secret_internal(&secret_ref)
-}
-
-#[tauri::command]
 pub fn secret_delete(secret_ref: String) -> Result<(), String> {
     delete_secret_internal(&secret_ref)
 }

@@ -259,11 +259,20 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
 唯一修改世界状态的手段是生成 RFC 6902 JSON Patch。
 禁止直接重写整个世界。只输出差异 patches。
 
+如果 NPC 的意图在物理与规则上成功发生，必须同时在 publicEvents 中输出对应公开事件（供 Narrator 描述）：
+- speech: 对白事件，包含 actor、type: "speech"、content
+- action: 动作事件，包含 actor、type: "action"、op、target（可选）
+- environment: 环境事件
+
 输出格式：
 {
   "patches": [
     { "op": "replace", "path": "/entities/erin/mentalState/mood", "value": "alert" },
     { "op": "replace", "path": "/entities/player/location", "value": "tavern_outside_window" }
+  ],
+  "publicEvents": [
+    { "actor": "erin", "type": "speech", "content": "小声点……卫兵就在旁边。" },
+    { "actor": "guard", "type": "action", "op": "watch_player" }
   ],
   "narrationHints": [
     "艾琳变得警惕",
@@ -274,7 +283,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       {
         id: "m2",
         role: "user",
-        content: `发生的玩家事件:\n{{json events}}\n\nNPC 反应与意图:\n{{json npcReactions}}\n\n当前世界实体与规则:\n{{json entities}}\n{{json rules}}\n\n请输出结算后的 RFC 6902 JSON Patch:`,
+        content: `发生的玩家事件:\n{{json events}}\n\nNPC 反应与意图:\n{{json npcReactions}}\n\n当前世界实体与规则:\n{{json entities}}\n{{json rules}}\n\n请输出结算后的 RFC 6902 JSON Patch 与 publicEvents:`,
       },
     ],
     inputs: [
@@ -298,6 +307,26 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
             },
             required: ["op", "path"],
           },
+        },
+        publicEvents: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              actor: { type: "string" },
+              type: { type: "string", enum: ["action", "speech", "environment"] },
+              op: { type: "string" },
+              target: { type: "string" },
+              content: { type: "string" },
+              duration: { type: "number" },
+            },
+            required: ["actor", "type"],
+          },
+        },
+        narrationHints: {
+          type: "array",
+          items: { type: "string" },
         },
       },
       required: ["patches"],
@@ -443,21 +472,25 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
         role: "system",
         content: `你是一个高水准的西幻纯文字RPG小说家与旁白。
 你只能描述玩家能感知到的物理事实、对白、神态与环境变化。
-绝对严禁泄露 NPC 的隐藏内心独白！
+根据真实提交的公开事实生成旁白。
+不得描述未提交的意图。
+绝对严禁泄露 NPC 的隐藏内心独白、私有记忆或心智状态！
 不要以 "Narrator:" 或 "旁白:" 开头，直接输出纯小说正文。
 文字质感应当精炼、生动、富有画面感。`,
       },
       {
         id: "m2",
         role: "user",
-        content: `玩家输入:\n{{playerInput}}\n\n公开发生的事件:\n{{json events}}\n\n生效的世界变化:\n{{json patches}}\n\n当前场景:\n{{json scene}}\n\n请生成小说正文旁白:`,
+        content: `玩家本轮输入:\n{{playerInput}}\n\n本轮已经真实发生且玩家可以观察到的事件:\n{{json committedEvents}}\n\n公开世界变化:\n{{json publicPatches}}\n\n当前场景:\n{{json scene}}\n\n根据以上已提交事实生成旁白，不得描述未提交的意图，不得泄露 NPC 私有状态或内心活动，请直接输出小说正文:`,
       },
     ],
     inputs: [
       { name: "playerInput", type: "string", description: "玩家本轮输入", required: true },
-      { name: "events", type: "GameEvent[]", description: "发生的公开事件", required: true },
-      { name: "patches", type: "Patch[]", description: "已生效的世界变化", required: true },
+      { name: "committedEvents", type: "CommittedTurnEvent[]", description: "本轮真实发生的公开事件", required: true },
+      { name: "publicPatches", type: "Patch[]", description: "公开世界增量", required: true },
       { name: "scene", type: "SceneContext", description: "场景信息", required: true },
+      { name: "events", type: "GameEvent[]", description: "兼容输入", required: false },
+      { name: "patches", type: "Patch[]", description: "兼容输入", required: false },
     ],
     outputSchema: null, // Outputs pure prose text
     defaults: {

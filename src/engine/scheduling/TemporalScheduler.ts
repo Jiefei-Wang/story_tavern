@@ -1,4 +1,5 @@
 import { GameEvent, NPCIntent, TemporalBlock } from "../../types";
+import { getSafeEventDuration } from "../world/TimingEngine";
 
 export interface ReactionBudget {
   available_time: number; // in seconds
@@ -8,14 +9,22 @@ export interface ReactionBudget {
 
 /**
  * Computes the reaction time budget available to NPCs in a temporal block.
+ * Uses getSafeEventDuration to forbid LLM duration tampering (e.g. 1000s duration).
  */
 export function calculateReactionBudget(
   block: TemporalBlock,
   defaultBaseTime: number = 2.0
 ): ReactionBudget {
   if (block.kind === "wait" || block.responseWindow) {
+    const dur =
+      typeof block.duration === "number" &&
+      !isNaN(block.duration) &&
+      isFinite(block.duration) &&
+      block.duration > 0
+        ? Math.min(block.duration, 30.0)
+        : 10.0;
     return {
-      available_time: 10.0,
+      available_time: dur,
       response_window: true,
       trigger_event_ids: [],
     };
@@ -27,7 +36,7 @@ export function calculateReactionBudget(
   if (block.events && block.events.length > 0) {
     for (const ev of block.events) {
       eventIds.push(ev.id);
-      const dur = ev.duration || estimateEventDuration(ev);
+      const dur = getSafeEventDuration(ev);
       if (dur > maxDuration) {
         maxDuration = dur;
       }

@@ -366,6 +366,7 @@ export class MockSimulator {
   ): WorldResolverResult {
     const patches: JsonPatchOperation[] = [];
     const narrationHints: string[] = [];
+    const publicEvents: import("../../types").PublicWorldEvent[] = [];
 
     // Process player movement
     if (Array.isArray(events)) {
@@ -396,6 +397,27 @@ export class MockSimulator {
           }
         }
 
+        // Convert successful NPC intents into authoritative publicEvents
+        for (const intent of rx.intents) {
+          if (intent.type === "speech") {
+            publicEvents.push({
+              actor: npcId,
+              type: "speech",
+              content: intent.content || "",
+              target: intent.target,
+              duration: intent.duration,
+            });
+          } else if (intent.type === "action") {
+            publicEvents.push({
+              actor: npcId,
+              type: "action",
+              op: intent.op,
+              target: intent.target,
+              duration: intent.duration,
+            });
+          }
+        }
+
         if (npcId === "erin") {
           narrationHints.push("艾琳神色紧绷并压低了声线");
         } else if (npcId === "guard") {
@@ -406,6 +428,7 @@ export class MockSimulator {
 
     return {
       patches,
+      publicEvents,
       narrationHints,
     };
   }
@@ -551,11 +574,20 @@ export class MockSimulator {
       );
     }
 
-    // Normal action prose if player also performed actions
-    if (
-      context.events &&
-      context.events.some((e: any) => e.type === "action" || e.type === "speech")
-    ) {
+    // Normal action prose if player or NPC performed actions
+    const committedEvents = context.committedEvents || [];
+    const hasPlayerOrNpcEvents =
+      (context.events &&
+        context.events.some((e: any) => e.type === "action" || e.type === "speech")) ||
+      committedEvents.some(
+        (e: any) =>
+          e.type === "player_action" ||
+          e.type === "player_speech" ||
+          e.type === "npc_action" ||
+          e.type === "npc_speech"
+      );
+
+    if (hasPlayerOrNpcEvents) {
       parts.push(
         `清晨微凉的海风掠过酒馆粗糙的外墙。你快步走向窗边，借着半开的窗板遮掩，在艾琳身侧压低了声音。\n\n艾琳听到你的话，单薄的肩膀猛地绷紧。她的手指下意识攥紧了衣角，警惕地环视四周，用只有你们两人能听清的细弱气音说道：“小声点……你疯了吗？卫兵就在十步之外。你到底知道了什么？”\n\n十步开外，把守港口要道的卫兵似有所觉，握紧长矛的手微微一动，冰冷而探究的目光如同刀子般朝你们所在的方向扫视过来。`
       );

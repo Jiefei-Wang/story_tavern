@@ -100,13 +100,13 @@ export const BackendsPage: React.FC = () => {
   };
 
   const handleTestConnection = async (b: Backend) => {
-    await testConnection(b, apiKeyInput || undefined);
+    await testConnection(b, apiKeyInput || undefined, false);
   };
 
   const handleRefreshModels = async () => {
     if (!editingBackend) return;
     setIsRefreshingModels(true);
-    const updated = await refreshModels(editingBackend);
+    const updated = await refreshModels(editingBackend, apiKeyInput || undefined, false);
     setEditingBackend({ ...editingBackend, models: updated });
     setIsRefreshingModels(false);
   };
@@ -218,7 +218,7 @@ export const BackendsPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right space-x-2">
                     <button
-                      onClick={() => handleTestConnection(backend)}
+                      onClick={() => testConnection(backend, undefined, true)}
                       disabled={isTesting}
                       className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-medium transition-colors"
                       title="测试连接"

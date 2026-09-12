@@ -134,14 +134,38 @@ export interface JsonPatchOperation {
   from?: string;
 }
 
-export type EntityType = "character" | "object" | "location" | "item";
+export interface PublicWorldEvent {
+  id?: string;
+  actor: string;
+  type: "action" | "speech" | "environment";
+  op?: string;
+  target?: string;
+  content?: string;
+  duration?: number;
+  sourceIntentId?: string;
+}
 
 export interface CommittedTurnEvent {
-  type: "player_action" | "player_speech" | "wait" | "time_skip" | "admin_change";
+  type:
+    | "player_action"
+    | "player_speech"
+    | "npc_action"
+    | "npc_speech"
+    | "environment"
+    | "wait"
+    | "time_skip"
+    | "admin_change";
+  actor?: string;
   blockId: string;
   source?: unknown;
+  public?: boolean;
+  content?: string;
+  op?: string;
+  target?: string;
   patches?: JsonPatchOperation[];
 }
+
+export type EntityType = "character" | "object" | "location" | "item";
 
 export interface WorldEntity {
   type: EntityType;
@@ -173,6 +197,7 @@ export interface WorldState {
 
 export interface WorldResolverResult {
   patches: JsonPatchOperation[];
+  publicEvents?: PublicWorldEvent[];
   rejectedIntents?: Array<{ intent: NPCIntent; reason: string }>;
   narrationHints?: string[];
 }

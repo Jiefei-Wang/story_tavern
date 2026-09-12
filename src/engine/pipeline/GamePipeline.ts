@@ -21,6 +21,22 @@ import {
 import { globalTraceManager } from "../tracing/TraceManager";
 import { applyPatches, cloneWorldState } from "../world/PatchEngine";
 import { SpatialEngine } from "../world/SpatialEngine";
+import {
+  buildNarratorEntityView,
+  buildNpcView,
+  buildPerceptionView,
+  filterPublicPatches,
+  sanitizeNpcObservations,
+  validatePerceptionAgainstEvents,
+  validatePublicEvents,
+} from "../world/WorldViews";
+import {
+  getSafeEventDuration,
+  getSafeIntentDuration,
+  sanitizeThoughtBudget,
+} from "../world/TimingEngine";
+
+export { getSafeIntentDuration };
 
 export interface ExecutionContext {
   agents: AgentDefinition[];
@@ -35,14 +51,6 @@ export interface PipelineTurnResult {
   traceId: string;
   success: boolean;
   error?: string;
-}
-
-export function getSafeIntentDuration(intent: NPCIntent): number {
-  const d = intent.duration;
-  if (typeof d === "number" && Number.isFinite(d) && d > 0) {
-    return d;
-  }
-  return estimateIntentDuration({ ...intent, duration: undefined });
 }
 
 export class GamePipeline {
@@ -162,8 +170,13 @@ export class GamePipeline {
               type: "admin_change",
               blockId: block.id,
               source: block.command || playerInput,
-              patches: applied,
+              public: true,
+              patches: filterPublicPatches(applied),
             });
+
+            // Cache invalidation: admin breaks immediate normal -> wait sequence
+            lastNormalObservations = null;
+            lastAffectedNpcIds = [];
 
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
           } else if (block.kind === "time_skip") {
@@ -210,8 +223,13 @@ export class GamePipeline {
               type: "time_skip",
               blockId: block.id,
               source: skipTarget,
-              patches: applied,
+              public: true,
+              patches: filterPublicPatches(applied),
             });
+
+            // Cache invalidation: time skip breaks immediate normal -> wait sequence
+            lastNormalObservations = null;
+            lastAffectedNpcIds = [];
 
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
           } else if (block.kind === "normal") {
@@ -219,14 +237,15 @@ export class GamePipeline {
             const events = block.events || [];
             allEvents.push(...events);
 
-            // 2. Perception Agent (Strict Fail-Fast)
+            // 2. Perception Agent (Strict Fail-Fast, with isolated perception view)
+            const perceptionView = buildPerceptionView(workingWorld);
             const perceptionResult = await agentRuntime.runAgent<PerceptionResult>({
               ...blockRuntimeOpts,
               agentId: "perception",
               context: {
                 events,
-                scene: workingWorld.scene,
-                entities: workingWorld.entities,
+                scene: perceptionView.scene,
+                entities: perceptionView.entities,
               },
             });
 
@@ -248,6 +267,9 @@ export class GamePipeline {
               );
             }
 
+            // Semantic validation: eventIds in observations must exist in current block events!
+            validatePerceptionAgainstEvents(perceptionResult.data, events);
+
             const observations = perceptionResult.data.npcObservations;
             const budget = calculateReactionBudget(block);
 
@@ -265,25 +287,21 @@ export class GamePipeline {
                 );
               });
 
-            // Cache for subsequent wait block inheritance
+            // Cache for immediately subsequent wait block inheritance
             lastNormalObservations = observations;
             lastAffectedNpcIds = [...targetNpcIds];
 
             // Step 3: Parallel NPC Reactions
             const npcReactions = await Promise.all(
               targetNpcIds.map(async (npcId) => {
-                const npcEntity = workingWorld.entities[npcId];
                 const obsList = observations[npcId] || [];
+                const sanitizedObs = sanitizeNpcObservations(npcId, obsList, events);
+                const npcView = buildNpcView(workingWorld, npcId, sanitizedObs, budget);
 
                 const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
                   ...blockRuntimeOpts,
                   agentId: "npc_reaction",
-                  context: {
-                    npc: { id: npcId, ...npcEntity },
-                    observations: obsList,
-                    scene: workingWorld.scene,
-                    reaction: budget,
-                  },
+                  context: npcView,
                 });
 
                 if (!reactionRes.success || !reactionRes.data) {
@@ -304,10 +322,16 @@ export class GamePipeline {
                   }
                 }
 
+                const boundedThought = sanitizeThoughtBudget(
+                  reactionRes.data.thought,
+                  budget.available_time
+                );
+
                 return {
                   npcId,
                   reaction: {
                     ...reactionRes.data,
+                    thought: boundedThought,
                     intents: validatedIntents,
                   },
                 };
@@ -335,6 +359,9 @@ export class GamePipeline {
               );
             }
 
+            // Validate publicEvents returned by World Resolver
+            validatePublicEvents(resolverResult.data?.publicEvents, workingWorld);
+
             const patches = resolverResult.data?.patches || [];
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
@@ -350,13 +377,40 @@ export class GamePipeline {
               allCommittedPatches.push(...applied);
             }
 
+            // Record committed player events
             for (const ev of events) {
               allCommittedEvents.push({
                 type: ev.type === "speech" ? "player_speech" : "player_action",
+                actor: ev.actor || "player",
                 blockId: block.id,
                 source: ev,
-                patches: applied,
+                content: ev.content,
+                op: ev.op,
+                target: ev.target,
+                public: true,
+                patches: filterPublicPatches(applied),
               });
+            }
+
+            // Record committed NPC public events from World Resolver
+            if (resolverResult.data?.publicEvents && resolverResult.data.publicEvents.length > 0) {
+              for (const pubEv of resolverResult.data.publicEvents) {
+                allCommittedEvents.push({
+                  type:
+                    pubEv.type === "speech"
+                      ? "npc_speech"
+                      : pubEv.type === "action"
+                      ? "npc_action"
+                      : "environment",
+                  actor: pubEv.actor,
+                  blockId: block.id,
+                  source: pubEv,
+                  content: pubEv.content,
+                  op: pubEv.op,
+                  target: pubEv.target,
+                  public: true,
+                });
+              }
             }
 
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
@@ -419,15 +473,11 @@ export class GamePipeline {
 
             const npcReactions = await Promise.all(
               targetNpcList.map(async ({ id: npcId, entity: npcEntity, obsList }) => {
+                const npcView = buildNpcView(workingWorld, npcId, obsList, waitBudget);
                 const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
                   ...blockRuntimeOpts,
                   agentId: "npc_reaction",
-                  context: {
-                    npc: { id: npcId, ...npcEntity },
-                    observations: obsList,
-                    scene: workingWorld.scene,
-                    reaction: waitBudget,
-                  },
+                  context: npcView,
                 });
 
                 if (!reactionRes.success || !reactionRes.data) {
@@ -448,10 +498,16 @@ export class GamePipeline {
                   }
                 }
 
+                const boundedThought = sanitizeThoughtBudget(
+                  reactionRes.data.thought,
+                  waitBudget.available_time
+                );
+
                 return {
                   npcId,
                   reaction: {
                     ...reactionRes.data,
+                    thought: boundedThought,
                     intents: validatedIntents,
                   },
                 };
@@ -487,6 +543,9 @@ export class GamePipeline {
               );
             }
 
+            // Validate publicEvents returned by World Resolver
+            validatePublicEvents(resolverResult.data?.publicEvents, workingWorld);
+
             const patches = resolverResult.data?.patches || [];
             let applied: JsonPatchOperation[] = [];
             if (patches.length > 0) {
@@ -504,10 +563,37 @@ export class GamePipeline {
 
             allCommittedEvents.push({
               type: "wait",
+              actor: "player",
               blockId: block.id,
               source: { duration: waitDuration },
-              patches: applied,
+              public: true,
+              patches: filterPublicPatches(applied),
             });
+
+            // Record committed NPC public events from wait block
+            if (resolverResult.data?.publicEvents && resolverResult.data.publicEvents.length > 0) {
+              for (const pubEv of resolverResult.data.publicEvents) {
+                allCommittedEvents.push({
+                  type:
+                    pubEv.type === "speech"
+                      ? "npc_speech"
+                      : pubEv.type === "action"
+                      ? "npc_action"
+                      : "environment",
+                  actor: pubEv.actor,
+                  blockId: block.id,
+                  source: pubEv,
+                  content: pubEv.content,
+                  op: pubEv.op,
+                  target: pubEv.target,
+                  public: true,
+                });
+              }
+            }
+
+            // Cache invalidation: wait execution finishes the sequence, cannot be reused by next wait
+            lastNormalObservations = null;
+            lastAffectedNpcIds = [];
 
             globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
           }
@@ -520,9 +606,12 @@ export class GamePipeline {
         }
       }
 
-      // Step 5: Narrator (Committed events & patches, final working state; NO NPC private thoughts)
+      // Step 5: Narrator (Isolated public view: committed events & public patches, NO NPC private thoughts or memory)
       let narrationText = "";
       let narrationError: string | undefined = undefined;
+
+      const publicPatches = filterPublicPatches(allCommittedPatches);
+      const narratorEntities = buildNarratorEntityView(workingWorld);
 
       const narratorResult = await agentRuntime.runAgent<string>({
         ...runtimeOpts,
@@ -530,10 +619,11 @@ export class GamePipeline {
         context: {
           playerInput,
           committedEvents: allCommittedEvents,
-          events: allEvents,
-          patches: allCommittedPatches,
+          publicPatches,
+          patches: publicPatches, // For backwards compatibility
+          events: allEvents,      // For backwards compatibility
           scene: workingWorld.scene,
-          entities: workingWorld.entities,
+          entities: narratorEntities,
         },
       });
 

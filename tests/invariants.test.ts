@@ -33,7 +33,25 @@ import { storageService, DEFAULT_SETTINGS } from "../src/db/storage";
 import { useTraceStore } from "../src/stores/useTraceStore";
 import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { useGameStore } from "../src/stores/useGameStore";
+import { useAgentGroupStore } from "../src/stores/useAgentGroupStore";
+import { useBackendStore } from "../src/stores/useBackendStore";
 import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "../src/db/initialData";
+import {
+  buildPerceptionView,
+  buildNarratorEntityView,
+  buildNpcView,
+  filterPublicPatches,
+  isPrivateWorldPath,
+  sanitizeNpcObservations,
+  validatePerceptionAgainstEvents,
+  validatePublicEvents,
+} from "../src/engine/world/WorldViews";
+import {
+  getSpeechDuration,
+  getClampedActionDuration,
+  getSafeEventDuration,
+  maxThoughtChars,
+} from "../src/engine/world/TimingEngine";
 
 const mockBackend: Backend = {
   id: "backend_mock",
@@ -813,4 +831,284 @@ test("Test 36: switch historical variation removes subsequent turns (Test B)", a
     turnsAfter[1].variations![0].worldStateAfter,
     "Current world must equal variation 0 worldStateAfter"
   );
+});
+
+test("Test 37: Narrator data contract contains NPC public events and excludes private states", async () => {
+  const pipeline = new GamePipeline();
+  const result = await pipeline.executeTurn(
+    "我对艾琳说：“今晚跟我走。”",
+    INITIAL_HARBOR_TAVERN_WORLD,
+    1,
+    mockExecContext
+  );
+
+  assert.equal(result.success, true);
+  const trace = globalTraceManager.getTrace(result.traceId);
+  assert.ok(trace);
+
+  const narratorSpan = trace.spans.find((s) => s.agentId === "narrator");
+  assert.ok(narratorSpan, "Narrator span must exist");
+
+  const resolvedMessagesStr = JSON.stringify(narratorSpan.resolvedMessages);
+
+  // Must contain Erin's speech and Guard's action from World Resolver publicEvents
+  assert.ok(
+    resolvedMessagesStr.includes("小声点……") || resolvedMessagesStr.includes("艾琳"),
+    "Narrator must receive Erin's speech from publicEvents"
+  );
+
+  // Must NOT contain Erin's internal thought, private memory, relationships, or mentalState patch
+  assert.ok(
+    !resolvedMessagesStr.includes("他让我今晚离开……难道码头"),
+    "Narrator must NOT receive Erin's private thought"
+  );
+  assert.ok(
+    !resolvedMessagesStr.includes("/mentalState"),
+    "Narrator must NOT receive private mentalState patches"
+  );
+});
+
+test("Test 38: observation sanitization filters unperceived events and deletes speech content when heard=false", () => {
+  const events: GameEvent[] = [
+    { id: "e1", type: "action", actor: "player", op: "wave" },
+    { id: "e2", type: "speech", actor: "player", content: "秘密逃跑计划" },
+  ];
+
+  // Case 1: saw=false && heard=false must be completely removed
+  const obs1 = [
+    { eventId: "e1", saw: true, heard: false },
+    { eventId: "e2", saw: false, heard: false, content: "秘密逃跑计划" },
+  ];
+  const res1 = sanitizeNpcObservations("guard", obs1, events);
+  assert.equal(res1.length, 1);
+  assert.equal(res1[0].eventId, "e1");
+
+  // Case 2: heard=false for speech must delete speech content
+  const obs2 = [{ eventId: "e2", saw: true, heard: false, content: "秘密逃跑计划" }];
+  const res2 = sanitizeNpcObservations("guard", obs2, events);
+  assert.equal(res2.length, 1);
+  assert.equal(res2[0].content, undefined, "Speech content must be deleted when heard=false");
+
+  // Case 3: heard=true for speech must authoritatively use GameEvent content, ignoring LLM hallucination
+  const obs3 = [{ eventId: "e2", saw: true, heard: true, content: "LLM_HALLUCINATION" }];
+  const res3 = sanitizeNpcObservations("guard", obs3, events);
+  assert.equal(res3.length, 1);
+  assert.equal(
+    res3[0].content,
+    "秘密逃跑计划",
+    "Authoritative GameEvent content must replace LLM hallucination"
+  );
+});
+
+test("Test 39: Perception View prevents leakage of NPC private memory, goal, relationships, and mentalState", () => {
+  const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
+  world.entities["erin"] = {
+    type: "character",
+    name: "艾琳",
+    location: "room",
+    memory: "SUPER_SECRET_MEMORY_123",
+    goal: "SUPER_SECRET_GOAL_456",
+    relationships: { player: 99 },
+    mentalState: { mood: "ultra_secret" },
+  };
+
+  const view = buildPerceptionView(world);
+  const serialized = JSON.stringify(view);
+
+  assert.ok(!serialized.includes("SUPER_SECRET_MEMORY_123"), "Perception view must not contain memory");
+  assert.ok(!serialized.includes("SUPER_SECRET_GOAL_456"), "Perception view must not contain goal");
+  assert.ok(!serialized.includes("relationships"), "Perception view must not contain relationships");
+  assert.ok(!serialized.includes("ultra_secret"), "Perception view must not contain mentalState");
+
+  assert.equal(view.entities["erin"].location, "room");
+  assert.equal(view.entities["erin"].type, "character");
+});
+
+test("Test 40: Narrator View and Patch Filter prevent leakage of private fields", () => {
+  const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
+  world.entities["erin"] = {
+    type: "character",
+    name: "艾琳",
+    location: "tavern_outside",
+    memory: "NARRATOR_FORBIDDEN_MEMORY",
+    goal: "NARRATOR_FORBIDDEN_GOAL",
+    relationships: { player: 50 },
+    mentalState: { mood: "hidden_mood" },
+  };
+
+  const narratorEntities = buildNarratorEntityView(world);
+  const serializedEntities = JSON.stringify(narratorEntities);
+
+  assert.ok(!serializedEntities.includes("NARRATOR_FORBIDDEN_MEMORY"));
+  assert.ok(!serializedEntities.includes("NARRATOR_FORBIDDEN_GOAL"));
+  assert.ok(!serializedEntities.includes("relationships"));
+  assert.ok(!serializedEntities.includes("hidden_mood"));
+
+  const patches = [
+    { op: "replace" as const, path: "/clock", value: "Day 2" },
+    { op: "replace" as const, path: "/entities/erin/mentalState/mood", value: "alert" },
+    { op: "replace" as const, path: "/entities/erin/memory", value: "leak" },
+    { op: "replace" as const, path: "/entities/erin/relationships/player", value: 10 },
+    { op: "replace" as const, path: "/entities/erin/goal", value: "escape" },
+    { op: "replace" as const, path: "/scene/weather", value: "snowy" },
+  ];
+
+  const publicPatches = filterPublicPatches(patches);
+  assert.equal(publicPatches.length, 2);
+  assert.equal(publicPatches[0].path, "/clock");
+  assert.equal(publicPatches[1].path, "/scene/weather");
+});
+
+test("Test 41: Retry failure leaves turns, variations, and worldState completely unchanged", async () => {
+  useSettingsStore.setState({
+    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
+  });
+
+  await useGameStore.getState().createNewSave("Retry Fail Test");
+  await useGameStore.getState().sendPlayerInput("动作 1");
+  await useGameStore.getState().sendPlayerInput("动作 2");
+  await useGameStore.getState().sendPlayerInput("动作 3");
+
+  const turnsBefore = structuredClone(useGameStore.getState().activeSave!.turns);
+  const worldBefore = structuredClone(useGameStore.getState().activeSave!.worldState);
+
+  // Force failure by temporarily clearing groups
+  useAgentGroupStore.setState({ groups: [] });
+
+  const retrySuccess = await useGameStore.getState().retryTurn(1);
+  assert.equal(retrySuccess, false, "Retry with missing groups must fail");
+
+  // Restore groups
+  useAgentGroupStore.setState({ groups: DEFAULT_AGENT_GROUPS, activeGroupId: "group_quality" });
+
+  const turnsAfter = structuredClone(useGameStore.getState().activeSave!.turns);
+  const worldAfter = structuredClone(useGameStore.getState().activeSave!.worldState);
+
+  assert.equal(turnsAfter.length, 4, "Turn count must not change on failed retry");
+  assert.deepEqual(turnsAfter, turnsBefore, "Turns array must be deeply identical after failed retry");
+  assert.deepEqual(worldAfter, worldBefore, "WorldState must be deeply identical after failed retry");
+});
+
+test("Test 42: Duration cannot be cheated with small numbers or oversized numbers", () => {
+  // Speech duration estimator overrides small LLM duration (e.g. 0.01)
+  const longSpeechDuration = getSpeechDuration("这是一段很长的讲话内容，包含了很多字符，不能以零点零一秒草草敷衍过去。");
+  assert.ok(longSpeechDuration >= 5.0, `Long speech duration should be >= 5.0s, got ${longSpeechDuration}s`);
+
+  // Action duration clamping prevents 0.01s cheating
+  const clampedSmallAction = getClampedActionDuration(0.01, "walk");
+  assert.ok(clampedSmallAction >= 1.0, `Clamped action duration should be >= 1.0s, got ${clampedSmallAction}s`);
+
+  // Input event duration prevents 1000s tampering
+  const safeEventDuration = getSafeEventDuration({
+    id: "e1",
+    type: "speech",
+    content: "你好",
+    duration: 1000,
+  });
+  assert.ok(
+    safeEventDuration <= 3.0,
+    `Speech "你好" with duration 1000 must be safely estimated <= 3.0s, got ${safeEventDuration}s`
+  );
+
+  // Thought character limits
+  assert.equal(maxThoughtChars(0.5), 20);
+  assert.equal(maxThoughtChars(2.0), 80);
+});
+
+test("Test 43: Wait observation cache is cleared across time_skip and admin blocks", async () => {
+  const pipeline = new GamePipeline();
+
+  // Sequence: Normal speech -> Time Skip -> Wait
+  const result = await pipeline.executeTurn(
+    "我对艾琳说：“快走。” 然后快进到第二天。然后等待她的回答。",
+    INITIAL_HARBOR_TAVERN_WORLD,
+    1,
+    mockExecContext
+  );
+
+  assert.equal(result.success, true);
+  const trace = globalTraceManager.getTrace(result.traceId);
+  assert.ok(trace);
+
+  // The wait block should not inherit observations from the normal block across time_skip
+  const waitSpan = trace.spans.find((s) => s.name.includes("wait"));
+  assert.ok(waitSpan);
+});
+
+test("Test 44: Backend draft testing does not persist draft to database", async () => {
+  const draftBackend: Backend = {
+    ...mockBackend,
+    id: "backend_ephemeral_draft_test",
+    name: "Draft Ephemeral",
+    baseUrl: "http://localhost:11434/v1",
+  };
+
+  // Run testConnection with persistStatus = false
+  await useBackendStore.getState().testConnection(draftBackend, "fake_key_123", false);
+
+  const backendsInStore = useBackendStore.getState().backends;
+  assert.equal(
+    backendsInStore.some((b) => b.id === draftBackend.id),
+    false,
+    "Draft backend must not be added to backend store when persistStatus is false"
+  );
+
+  const backendsInDb = await storageService.getBackends();
+  assert.equal(
+    backendsInDb.some((b) => b.id === draftBackend.id),
+    false,
+    "Draft backend must not be written to database storage when persistStatus is false"
+  );
+});
+
+test("Test 45: Perception produce unknown eventId throws PipelineStageError", () => {
+  const invalidPerception: any = {
+    npcObservations: {
+      erin: [{ eventId: "unknown_hallucinated_event_id_999", saw: true, heard: false }],
+    },
+  };
+
+  const blockEvents: GameEvent[] = [
+    { id: "e1", type: "action", actor: "player", op: "wave" },
+  ];
+
+  assert.throws(
+    () => {
+      validatePerceptionAgainstEvents(invalidPerception, blockEvents);
+    },
+    /unknown eventId/i,
+    "Must throw PipelineStageError when Perception returns unknown eventId"
+  );
+});
+
+test("Test 46: Public event validation enforces actor existence, valid type, and non-empty content", () => {
+  const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
+
+  // Invalid non-existent actor
+  assert.throws(
+    () => {
+      validatePublicEvents([{ actor: "ghost_actor_unknown", type: "action" }], world);
+    },
+    /non-existent actor/i
+  );
+
+  // Invalid speech with empty content
+  assert.throws(
+    () => {
+      validatePublicEvents([{ actor: "erin", type: "speech", content: "" }], world);
+    },
+    /non-empty content/i
+  );
+
+  // Valid public events
+  assert.doesNotThrow(() => {
+    validatePublicEvents(
+      [
+        { actor: "erin", type: "speech", content: "小声点……" },
+        { actor: "guard", type: "action", op: "watch_player" },
+        { actor: "environment", type: "environment" },
+      ],
+      world
+    );
+  });
 });

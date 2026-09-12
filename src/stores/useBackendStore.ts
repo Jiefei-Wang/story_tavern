@@ -17,8 +17,16 @@ interface BackendState {
   loadBackends: () => Promise<void>;
   saveBackend: (backend: Backend, apiKey?: string) => Promise<void>;
   deleteBackend: (id: string) => Promise<void>;
-  testConnection: (backend: Backend, apiKeyOverride?: string) => Promise<TestConnectionResult>;
-  refreshModels: (backend: Backend) => Promise<string[]>;
+  testConnection: (
+    backend: Backend,
+    apiKeyOverride?: string,
+    persistStatus?: boolean
+  ) => Promise<TestConnectionResult>;
+  refreshModels: (
+    backend: Backend,
+    apiKeyOverride?: string,
+    persist?: boolean
+  ) => Promise<string[]>;
 }
 
 export const useBackendStore = create<BackendState>((set, get) => ({
@@ -50,7 +58,11 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     set({ backends });
   },
 
-  testConnection: async (backend: Backend, apiKeyOverride?: string) => {
+  testConnection: async (
+    backend: Backend,
+    apiKeyOverride?: string,
+    persistStatus: boolean = false
+  ) => {
     const backendId = backend.id;
     set((state) => ({
       testingStatus: {
@@ -59,31 +71,43 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       },
     }));
 
+    let effectiveSecretRef = backend.secretRef;
+    let isTempSecret = false;
+
     try {
-      let secretRef = backend.secretRef;
       if (apiKeyOverride && apiKeyOverride.trim()) {
-        secretRef = secretRef || `secret_${backend.id}`;
-        await storageService.setSecret(secretRef, apiKeyOverride.trim());
+        if (persistStatus) {
+          effectiveSecretRef = effectiveSecretRef || `secret_${backend.id}`;
+          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
+        } else {
+          // Ephemeral secret for draft testing
+          isTempSecret = true;
+          effectiveSecretRef = `temp_secret_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
+        }
       }
 
       const res = await invoke<TestConnectionResult>("backend_test_connection", {
         baseUrl: backend.baseUrl,
         authType: backend.authType || "bearer",
-        secretRef: secretRef || null,
+        secretRef: effectiveSecretRef || null,
         headers: backend.customHeaders || {},
         timeoutMs: backend.timeoutMs || 15000,
       });
 
-      // Update backend status
-      const updatedBackend: Backend = {
-        ...backend,
-        status: res.success ? "online" : "offline",
-        lastTestedAt: new Date().toISOString(),
-      };
-      await storageService.saveBackend(updatedBackend);
+      if (persistStatus) {
+        const updatedBackend: Backend = {
+          ...backend,
+          status: res.success ? "online" : "offline",
+          lastTestedAt: new Date().toISOString(),
+        };
+        await storageService.saveBackend(updatedBackend);
+        set((state) => ({
+          backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
+        }));
+      }
 
       set((state) => ({
-        backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
         testingStatus: {
           ...state.testingStatus,
           [backendId]: { testing: false, result: res },
@@ -99,15 +123,19 @@ export const useBackendStore = create<BackendState>((set, get) => ({
         latency_ms: 0,
       };
 
-      const updatedBackend: Backend = {
-        ...backend,
-        status: "offline",
-        lastTestedAt: new Date().toISOString(),
-      };
-      await storageService.saveBackend(updatedBackend);
+      if (persistStatus) {
+        const updatedBackend: Backend = {
+          ...backend,
+          status: "offline",
+          lastTestedAt: new Date().toISOString(),
+        };
+        await storageService.saveBackend(updatedBackend);
+        set((state) => ({
+          backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
+        }));
+      }
 
       set((state) => ({
-        backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
         testingStatus: {
           ...state.testingStatus,
           [backendId]: { testing: false, result: errRes },
@@ -115,38 +143,65 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       }));
 
       return errRes;
+    } finally {
+      if (isTempSecret && effectiveSecretRef) {
+        await storageService.deleteSecret(effectiveSecretRef).catch(() => {});
+      }
     }
   },
 
-  refreshModels: async (backend: Backend) => {
+  refreshModels: async (
+    backend: Backend,
+    apiKeyOverride?: string,
+    persist: boolean = false
+  ) => {
+    let effectiveSecretRef = backend.secretRef;
+    let isTempSecret = false;
+
     try {
+      if (apiKeyOverride && apiKeyOverride.trim()) {
+        if (persist) {
+          effectiveSecretRef = effectiveSecretRef || `secret_${backend.id}`;
+          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
+        } else {
+          isTempSecret = true;
+          effectiveSecretRef = `temp_secret_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
+        }
+      }
+
       const models = await invoke<string[]>("backend_list_models", {
         baseUrl: backend.baseUrl,
         authType: backend.authType || "bearer",
-        secretRef: backend.secretRef || null,
+        secretRef: effectiveSecretRef || null,
         headers: backend.customHeaders || {},
         timeoutMs: backend.timeoutMs || 20000,
       });
 
       if (Array.isArray(models) && models.length > 0) {
-        // Merge with existing models
         const existing = backend.models || [];
         const merged = Array.from(new Set([...models, ...existing]));
-        const updated: Backend = {
-          ...backend,
-          models: merged,
-          status: "online",
-        };
-        await storageService.saveBackend(updated);
-        set((state) => ({
-          backends: state.backends.map((b) => (b.id === backend.id ? updated : b)),
-        }));
+        if (persist) {
+          const updated: Backend = {
+            ...backend,
+            models: merged,
+            status: "online",
+          };
+          await storageService.saveBackend(updated);
+          set((state) => ({
+            backends: state.backends.map((b) => (b.id === backend.id ? updated : b)),
+          }));
+        }
         return merged;
       }
       return backend.models || [];
     } catch (err) {
       console.warn("Refresh models failed:", err);
       return backend.models || [];
+    } finally {
+      if (isTempSecret && effectiveSecretRef) {
+        await storageService.deleteSecret(effectiveSecretRef).catch(() => {});
+      }
     }
   },
 }));
