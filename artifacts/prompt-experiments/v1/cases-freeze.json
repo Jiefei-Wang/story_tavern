@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "frozenAt": "2026-09-12T18:27:34.823Z",
+  "casesSha256": "8d0b49e1ea4e02606bb8799330223c9416a98bb9b584476f06c877f884f30291",
+  "caseCount": 18,
+  "counts": {
+    "narrator": {
+      "failed": 5,
+      "passed": 2
+    },
+    "narration_auditor": {
+      "failed": 3,
+      "passed": 1
+    },
+    "input_compiler": {
+      "failed": 1,
+      "passed": 1
+    },
+    "character_change_auditor": {
+      "failed": 3,
+      "passed": 2
+    }
+  },
+  "sourceSha256": {
+    "artifacts/behavior-tests/trajectory-live/modern-legal-item.json": "7fc6fce9c8840177883395046ddba8935d7df4e8b809042278046653e0ba1e98",
+    "artifacts/behavior-tests/targeted-live/delayed-recall.json": "c15958620c19970ea137976bdd22402fd4ca7eb7b8ccf9602dc52980e67c3ec1",
+    "artifacts/behavior-tests/final-live/modern-legal-item.json": "b0dcc2fe676904887fc86ed60cdac567c3be22684027b1c676d1650018ce17a2",
+    "artifacts/behavior-tests/final-live/polar-energy.json": "809401cd94431c964a8af96943f8ba3020388ba91616c08532ce0572168ec6e3",
+    "artifacts/behavior-tests/final-live/diplomatic-whisper.json": "1d80f656d75d856f9e63a0be7d57099d0606a84c5f5a31ad7c111a5b482d5522",
+    "artifacts/behavior-tests/targeted-live/modern-legal-item.json": "a637c442c1390db1b228076005d26ec1530ada58bc2c52a015d13dc47cf1b3df",
+    "artifacts/behavior-tests/final-live/testimony-correction.json": "943103f8dce2b0585bc53e74700a838b1629e2087f2dd9ba1d19c4074d9714d2",
+    "artifacts/behavior-tests/final-live/promise-repair.json": "615f19256a88e9151e6e991ba3c31e0c9879a177f6e01639f37280a7e3d269fd",
+    "artifacts/behavior-tests/trajectory-live/promise-repair.json": "38e5b07fcfe7f5dd676b8b743807269a7ba4e82bef90b6b874f50d7accbe5838"
+  }
+}

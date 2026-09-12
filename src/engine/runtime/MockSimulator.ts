@@ -1,3 +1,7 @@
+import { explicitAdminCommand } from "./InputAuthority";
+import { mockActionResolution } from '../world/ActionResolution';
+import { characterFields, sampleFields } from "../character-schema/CharacterSchema";
+import { HARBOR_WORLD_DEFINITION } from "../character-schema/HarborSchema";
 import {
   AgentDefinition,
   InputCompilerResult,
@@ -16,8 +20,11 @@ export class MockSimulator {
     agentDef?: AgentDefinition
   ): any {
     switch (agentId) {
+      case 'action_adjudicator': return mockActionResolution(context.events || [], context.world, context.playerInput || '');
+      case 'narration_auditor': return { grounded: true, issues: [] };
+      case 'character_change_auditor': return { valid: true, issues: [] }; // Test double; semantic review requires the real auditor.
       case "character_generator":
-        return { name: `莉娅·海风${context.ordinal || 1}`, appearance: "栗色卷发，穿着朴素的蓝色旅行斗篷。", occupation: "港口花商", background: "在沿海小镇长大，靠出售鲜花维持生活。", personality: "开朗而谨慎", goal: "在午前售完篮中的鲜花", mood: "curious" };
+        return { name: `莉娅·海风${context.ordinal || 1}`, attributes: sampleFields(characterFields(context.characterSchema || HARBOR_WORLD_DEFINITION.characterSchema)) };
       case "input_compiler":
         return this.mockInputCompiler(context.player?.input || context.input || "", context);
       case "perception":
@@ -48,48 +55,9 @@ export class MockSimulator {
   private static mockInputCompiler(input: string, context: any = {}): InputCompilerResult {
     const text = input.trim();
     const blocks: any[] = [];
-    const lower = text.toLowerCase();
-
-    // 1. Detect and extract Admin Command
-    let adminCommand = "";
-    let remainingText = text;
-
-    const adminPrefixMatch = text.match(/^(?:admin|管理员|规则|command)[：:]\s*(.*)/i);
-    if (adminPrefixMatch) {
-      adminCommand = adminPrefixMatch[1].trim();
-      remainingText = "";
-    } else if (
-      lower.includes("admin:") ||
-      lower.includes("admin：") ||
-      text.includes("管理员：") ||
-      text.includes("管理员:")
-    ) {
-      const match = text.match(/(?:admin|管理员)[：:]\s*(.*)/i);
-      if (match) {
-        adminCommand = match[1].trim();
-        remainingText = text.replace(/(?:admin|管理员)[：:]\s*.*/i, "").trim();
-      }
-    } else if (
-      text.includes("改变天气") ||
-      text.includes("修改天气") ||
-      text.includes("不能复活") ||
-      text.includes("死人不能") ||
-      text.includes("禁止魔法") ||
-      text.includes("规则：") ||
-      text.includes("设定：")
-    ) {
-      // Inline admin command
-      adminCommand = text;
-      if (text.includes("另外") || text.includes("并且") || text.includes("，然后")) {
-        const parts = text.split(/[，,]\s*(?:另外|并且|然后)/);
-        if (parts.length > 1) {
-          remainingText = parts[0].trim();
-          adminCommand = parts[1].trim();
-        }
-      } else if (!text.includes("走") && !text.includes("说") && !text.includes("看") && !text.includes("拿")) {
-        remainingText = "";
-      }
-    }
+    // Match the pipeline's explicit authority boundary; never infer administration.
+    const adminCommand = explicitAdminCommand(input);
+    let remainingText = adminCommand === null ? text : "";
 
     // 2. Detect and extract Time Skip (Correct regex: do not use character class [快进跳过])
     let timeSkipTarget = "";
@@ -234,6 +202,10 @@ export class MockSimulator {
               eventId: ev.id,
               saw: true,
               heard: true,
+              actor: ev.actor,
+              type: ev.type,
+              op: ev.op,
+              target: ev.target,
               content: ev.content || "...",
             });
           } else {
@@ -242,6 +214,10 @@ export class MockSimulator {
               eventId: ev.id,
               saw: true,
               heard: false,
+              actor: ev.actor,
+              type: ev.type,
+              op: ev.op,
+              target: ev.target,
             });
           }
         } else {
@@ -250,6 +226,10 @@ export class MockSimulator {
             eventId: ev.id,
             saw: true,
             heard: false,
+            actor: ev.actor,
+            type: ev.type,
+            op: ev.op,
+            target: ev.target,
           });
         }
       }
@@ -281,7 +261,7 @@ export class MockSimulator {
     if (!hasPerceived) {
       return {
         thought: null,
-        mentalUpdates: [],
+        stateUpdates: [],
         intents: [],
       };
     }
@@ -307,7 +287,7 @@ export class MockSimulator {
         // Budget constraint: short glance only
         return {
           thought: "他突然靠近……我警惕地扫了他一眼。",
-          mentalUpdates: [{ aspect: "mood", newValue: "alert" }],
+          stateUpdates: [],
           intents: [
             {
               type: "action",
@@ -323,7 +303,7 @@ export class MockSimulator {
         thought: heardSpeech
           ? "他让我今晚离开……难道码头的黑旗走私路线泄露了？我必须小心试探他的底细。"
           : "他朝我走了过来，神色看起来有话要说。",
-        mentalUpdates: [{ aspect: "mood", newValue: "alert" }],
+        stateUpdates: [],
         intents: [
           {
             type: "action",
@@ -333,9 +313,20 @@ export class MockSimulator {
           },
           {
             type: "speech",
-            content: "小声点……你疯了吗？卫兵就在十步之外。你到底知道了什么？",
+            speechPlan: {
+              summary: "提醒玩家压低声音，因为卫兵就在附近，并试探玩家究竟知道了什么。",
+              beats: [
+                { kind: "warning", meaning: "提醒玩家不要大声说话，卫兵就在附近。", required: true },
+                { kind: "question", meaning: "询问玩家到底知道了什么。", required: true },
+              ],
+              goal: "warn_and_probe",
+              stance: "警惕而急切",
+              tone: "压低声音，紧张",
+              verbosity: "normal",
+              boundaries: ["不要透露自己的秘密记忆"],
+            },
             target: "player",
-            duration: Math.min(2.0, availableTime - 0.6),
+            duration: Math.min(2.0, Math.max(1.5, availableTime - 0.6)),
           },
         ],
       };
@@ -345,7 +336,7 @@ export class MockSimulator {
     if (npcId === "guard" || npc?.name?.includes("卫兵")) {
       return {
         thought: "窗边那两个人在窃窃私语，神色不对劲。待会儿去搜他们的行李。",
-        mentalUpdates: [{ aspect: "mood", newValue: "vigilant" }],
+        stateUpdates: [],
         intents: [
           {
             type: "action",
@@ -359,7 +350,7 @@ export class MockSimulator {
 
     return {
       thought: null,
-      mentalUpdates: [],
+      stateUpdates: [],
       intents: [],
     };
   }
@@ -393,15 +384,7 @@ export class MockSimulator {
         const rx = reactionItem.reaction;
         if (!rx) continue;
 
-        if (rx.mentalUpdates && rx.mentalUpdates.length > 0) {
-          for (const m of rx.mentalUpdates) {
-            patches.push({
-              op: "replace",
-              path: `/entities/${npcId}/mentalState/${m.aspect}`,
-              value: m.newValue,
-            });
-          }
-        }
+        // Attribute operations are materialized by the same deterministic builder as live runs.
 
         // Convert successful NPC intents into authoritative publicEvents
         for (const intent of rx.intents || []) {
@@ -410,7 +393,7 @@ export class MockSimulator {
               actor: npcId,
               type: "speech",
               sourceIntentId: intent.id,
-              content: intent.content || "",
+              speechPlan: intent.speechPlan,
               target: intent.target,
               duration: intent.duration,
             });
@@ -418,10 +401,13 @@ export class MockSimulator {
             publicEvents.push({
               actor: npcId,
               type: "action",
+              sourceIntentId: intent.id,
               op: intent.op,
               target: intent.target,
               duration: intent.duration,
             });
+          } else if (intent.type === "wait") {
+            publicEvents.push({ actor: npcId, type: "action", sourceIntentId: intent.id, op: "wait", duration: intent.duration });
           }
         }
 
@@ -437,6 +423,7 @@ export class MockSimulator {
       patches,
       publicEvents,
       narrationHints,
+      acceptedStateUpdates: (npcReactions || []).flatMap(r => (r.reaction.stateUpdates || []).map((_: unknown, updateIndex: number) => ({npcId:r.npcId,updateIndex}))),
     };
   }
 
@@ -544,6 +531,26 @@ export class MockSimulator {
   }
 
   private static mockNarrator(context: any): import("../../types").NarratorResult {
-    return { segments: (context.committedEvents || []).map((event: any) => ({ type: "event_ref", eventId: event.id })) };
+    const segments: any[] = [];
+    for (const event of context.committedEvents || []) {
+      if (event.type === "npc_speech" && event.sourceIntentId) {
+        const plan = event.speechPlan;
+        const beats = plan?.beats?.filter((beat: any) => beat.required !== false) || [];
+        if (beats.length === 0) segments.push({ type: "speech", sourceIntentId: event.sourceIntentId, text: plan?.summary || "" });
+        else beats.forEach((beat: any, index: number) => {
+          if (index > 0) segments.push({ type: "prose", text: "她稍稍停顿了一下。" });
+          segments.push({ type: "speech", sourceIntentId: event.sourceIntentId, text: beat.meaning });
+        });
+      } else if (event.type === "player_speech" && event.sourceIntentId) {
+        segments.push({ type: "speech", sourceIntentId: event.sourceIntentId, text: event.content || "" });
+      } else if (event.type === "npc_action") {
+        segments.push({ type: "prose", text: `${event.actor || "现场的人"}的动作让空气中的气氛微妙地变了。`, sourceEventIds: [event.id] });
+      } else if (event.type === "player_action") {
+        segments.push({ type: "prose", text: "你的动作打破了片刻的静默。", sourceEventIds: [event.id] });
+      } else {
+        segments.push({ type: "prose", text: event.type === "wait" ? "你静候着回应。" : "周围的情形悄然发生了变化。", sourceEventIds: [event.id] });
+      }
+    }
+    return { segments };
   }
 }

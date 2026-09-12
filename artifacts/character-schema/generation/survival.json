@@ -1,0 +1,362 @@
+{
+  "scenario": "survival",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": true,
+  "isolated": true,
+  "created": [
+    [
+      "traveler_1",
+      {
+        "type": "character",
+        "name": "沈砚舟",
+        "location": "tavern_room",
+        "attributes": {
+          "health": 0.68,
+          "hunger": 0.42,
+          "fatigue": 0.55,
+          "privateNote": "我是走南闯北的抄书匠，靠替人誊写文书和抄录碑文糊口。此行从江陵来，想在北方找一处安稳书院落脚。包袱底层压着半块干饼和几枚铜钱，是我最要紧的盘缠，绝不轻易示人。雨天只求一盏热汤、一处干爽的角落。"
+        }
+      }
+    ]
+  ],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_1",
+            "value": {
+              "type": "character",
+              "name": "旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "health",
+                  "label": "health",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.7,
+                  "visibility": "public",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "hunger",
+                  "label": "hunger",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.7,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "fatigue",
+                  "label": "fatigue",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.6,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ]
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。"
+      },
+      "output": {
+        "name": "沈砚舟",
+        "attributes": {
+          "health": 0.68,
+          "hunger": 0.42,
+          "fatigue": 0.55,
+          "privateNote": "我是走南闯北的抄书匠，靠替人誊写文书和抄录碑文糊口。此行从江陵来，想在北方找一处安稳书院落脚。包袱底层压着半块干饼和几枚铜钱，是我最要紧的盘缠，绝不轻易示人。雨天只求一盏热汤、一处干爽的角落。"
+        }
+      }
+    },
+    {
+      "agent": "narrator",
+      "input": {
+        "playerInput": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "committedEvents": [
+          {
+            "id": "turn_1_b0_event_0",
+            "type": "admin_change",
+            "blockId": "explicit_admin",
+            "source": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+            "public": true,
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/traveler_1",
+                "value": {
+                  "id": "traveler_1",
+                  "type": "character",
+                  "name": "沈砚舟",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "health": 0.68
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "publicPatches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_1",
+            "value": {
+              "id": "traveler_1",
+              "type": "character",
+              "name": "沈砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.68
+              }
+            }
+          }
+        ],
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_1",
+            "value": {
+              "id": "traveler_1",
+              "type": "character",
+              "name": "沈砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.68
+              }
+            }
+          }
+        ],
+        "events": [],
+        "scene": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+        },
+        "entities": {
+          "player": {
+            "id": "player",
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7
+            }
+          },
+          "erin": {
+            "id": "erin",
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7
+            }
+          },
+          "traveler_1": {
+            "id": "traveler_1",
+            "type": "character",
+            "name": "沈砚舟",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.68
+            }
+          }
+        },
+        "rules": {
+          "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+        }
+      },
+      "output": {
+        "segments": [
+          {
+            "type": "prose",
+            "text": "雨声把酒馆的窗玻璃敲得发闷，晨光灰蒙蒙地渗进来，落在桌沿和半满的杯口上。"
+          },
+          {
+            "type": "prose",
+            "text": "门轴轻响了一下。一个成年旅人带着一身潮气走进来，肩头的深色外衣湿了大半，脚步不快，像是走了很远的路。他环顾了一圈，没有急着靠近谁，只在离门不远的地方停下。"
+          },
+          {
+            "type": "prose",
+            "text": "他叫沈砚舟。此前没人在这间屋子里见过他。艾琳仍在她原来的位置，玩家也在原处，谁都没有因为他出现而立刻开口。"
+          },
+          {
+            "type": "prose",
+            "text": "他抬手抹去额前的水珠，目光平静地扫过屋内，像是在判断这里是否适合歇脚，随后安静地站定，没有多说一个字。"
+          }
+        ]
+      }
+    }
+  ],
+  "validation": [
+    {
+      "status": "success",
+      "output": {
+        "accepted": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_1",
+            "value": {
+              "type": "character",
+              "name": "沈砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.68,
+                "hunger": 0.42,
+                "fatigue": 0.55,
+                "privateNote": "我是走南闯北的抄书匠，靠替人誊写文书和抄录碑文糊口。此行从江陵来，想在北方找一处安稳书院落脚。包袱底层压着半块干饼和几枚铜钱，是我最要紧的盘缠，绝不轻易示人。雨天只求一盏热汤、一处干爽的角落。"
+              }
+            }
+          }
+        ],
+        "rejected": [],
+        "schemaRule": "all constraints passed",
+        "before": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          }
+        },
+        "after": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          },
+          "traveler_1": {
+            "type": "character",
+            "name": "沈砚舟",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.68,
+              "hunger": 0.42,
+              "fatigue": 0.55,
+              "privateNote": "我是走南闯北的抄书匠，靠替人誊写文书和抄录碑文糊口。此行从江陵来，想在北方找一处安稳书院落脚。包袱底层压着半块干饼和几枚铜钱，是我最要紧的盘缠，绝不轻易示人。雨天只求一盏热汤、一处干爽的角落。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

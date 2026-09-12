@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import { REFUSAL_DETECTOR } from '../src/engine/evaluation/RefusalDetector';
+import { refusalCases } from '../tests/fixtures/refusalCases';
+const folder='artifacts/behavior-tests';
+const configPath=`${folder}/unit-test-config.json`;
+const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
+const baseline=`${folder}/unit-test-config.behavior-baseline.json`;
+if(!fs.existsSync(baseline)) fs.copyFileSync(configPath,baseline);
+const group=config.groups.find((g:any)=>g.id==='group_unit_test');
+if(!group || group.name!=='unit test') throw new Error('Expected existing unit test copy');
+const binding={...structuredClone(group.bindings.find((b:any)=>b.agentId==='npc_reaction')),agentId:REFUSAL_DETECTOR.id};
+group.bindings=[...group.bindings.filter((b:any)=>b.agentId!==REFUSAL_DETECTOR.id),binding];
+config.agents=[...config.agents.filter((a:any)=>a.id!==REFUSAL_DETECTOR.id),REFUSAL_DETECTOR];
+fs.writeFileSync(configPath,JSON.stringify(config,null,2));
+fs.mkdirSync(`${folder}/refusal`,{recursive:true});
+fs.writeFileSync(`${folder}/refusal/register.json`,JSON.stringify({agent:REFUSAL_DETECTOR,binding},null,2));
+fs.writeFileSync(`${folder}/refusal/static-gold.json`,JSON.stringify({kind:'authored_response_gold',cases:refusalCases},null,2));
+console.log('Prepared response-only detector; original eight Fast bindings preserved.');

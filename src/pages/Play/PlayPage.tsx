@@ -626,7 +626,7 @@ export const PlayPage: React.FC = () => {
                 .filter(([id, ent]) => ent.type === "character" && SpatialEngine.isEntityInScene(id, ent, worldState))
                 .map(([id, char]) => {
                   const isPlayer = id === "player";
-                  const mood = char.mentalState?.mood || "normal";
+
 
                   return (
                     <div
@@ -637,26 +637,10 @@ export const PlayPage: React.FC = () => {
                         <span className="text-xs font-semibold text-slate-800">
                           {char.name || id}
                         </span>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            mood === "alert"
-                              ? "bg-amber-100 text-amber-800"
-                              : mood === "suspicious"
-                              ? "bg-purple-100 text-purple-800"
-                              : mood === "cheerful"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-slate-200 text-slate-700"
-                          }`}
-                        >
-                          情绪: {mood}
-                        </span>
+                        <span className="text-xs text-slate-500">{isPlayer ? "玩家" : "人物"}</span>
                       </div>
 
-                      {char.goal && (
-                        <p className="text-[11px] text-slate-500 line-clamp-1">
-                          目标: {char.goal}
-                        </p>
-                      )}
+
                     </div>
                   );
                 })}

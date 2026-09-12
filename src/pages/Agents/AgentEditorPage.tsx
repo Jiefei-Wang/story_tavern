@@ -1,3 +1,6 @@
+import { useGameStore } from "../../stores/useGameStore";
+import { HARBOR_WORLD_DEFINITION } from "../../engine/character-schema/HarborSchema";
+import { buildCharacterSchemaPrompt } from "../../engine/character-schema/CharacterSchema";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -35,9 +38,9 @@ const AVAILABLE_VARIABLES = [
     vars: [
       "{{npc.name}}",
       "{{npc.location}}",
-      "{{npc.mentalState.mood}}",
-      "{{npc.goal}}",
-      "{{npc.memory}}",
+      "{{json npc.attributes}}",
+      "{{json npc.relationships}}",
+      "{{characterSchemaPrompt}}",
       "{{json npc}}",
     ],
   },
@@ -71,10 +74,7 @@ const DEFAULT_SAMPLE_CONTEXT = {
     id: "erin",
     name: "艾琳 (Erin)",
     location: "tavern_outside",
-    mentalState: { mood: "uneasy" },
-    relationships: { player: 20 },
-    goal: "找到明早上船离开港口的门路",
-    memory: "昨晚听见卫兵在码头加强戒备的密谈",
+    attributes: {},
   },
   observations: [
     { eventId: "e1", saw: true, heard: false },
@@ -101,7 +101,7 @@ export const AgentEditorPage: React.FC = () => {
   const [agent, setAgent] = useState<AgentDefinition | null>(null);
   const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
   const [sampleContextJson, setSampleContextJson] = useState(
-    JSON.stringify(DEFAULT_SAMPLE_CONTEXT, null, 2)
+    JSON.stringify({ ...DEFAULT_SAMPLE_CONTEXT, characterSchema: useGameStore.getState().activeSave?.worldDefinition.characterSchema || HARBOR_WORLD_DEFINITION.characterSchema, characterSchemaPrompt: buildCharacterSchemaPrompt(useGameStore.getState().activeSave?.worldDefinition.characterSchema || HARBOR_WORLD_DEFINITION.characterSchema), npc: { ...DEFAULT_SAMPLE_CONTEXT.npc, ...(Object.values(useGameStore.getState().activeSave?.worldState.entities || {}).find(e => e.type === "character") || {}) } }, null, 2)
   );
   const [renderedPreview, setRenderedPreview] = useState<Array<{ role: string; content: string }> | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
@@ -123,7 +123,7 @@ export const AgentEditorPage: React.FC = () => {
         outputSchema: null,
         defaults: {
           temperature: 0.7,
-          maxTokens: 1000,
+          maxTokens: 0,
         },
       };
       setAgent(newDef);
@@ -783,18 +783,19 @@ export const AgentEditorPage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                最大生成 Token (Max Tokens)
+                最大生成 Token (Max Tokens，0 = 无上限)
               </label>
               <input
                 type="number"
                 step={100}
-                value={agent.defaults.maxTokens ?? 1200}
+                min={0}
+                value={agent.defaults.maxTokens ?? 0}
                 onChange={(e) =>
                   setAgent({
                     ...agent,
                     defaults: {
                       ...agent.defaults,
-                      maxTokens: parseInt(e.target.value),
+                      maxTokens: e.target.value ? parseInt(e.target.value) : 0,
                     },
                   })
                 }

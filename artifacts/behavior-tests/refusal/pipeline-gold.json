@@ -1,0 +1,36 @@
+{
+  "cases": [
+    {
+      "id": "pipeline-ancient-impossible-1",
+      "responseText": "{\n  \"segments\": [\n    {\n      \"type\": \"prose\",\n      \"text\": \"玩家从布袋中抽出一件东西，搁在桌上。那物件通体乌黑，短小精悍，金属的冷光在窗下泛着异样的青。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"岑岳的目光先落在那东西上，随后迅速在屋内扫了一圈——门后、窗边、梁上，仿佛要确认还有没有别的什么跟着进来。他的脚步向后退了半步，靴底在地面上蹭出一声轻响。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"屋里静了片刻。岑岳的视线又回到桌面，盯着那乌黑的物件，眉头拧紧。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"窗外阴云沉沉，白日的光从窗纸间渗进来，在桌面上铺开一层灰白。那物件就搁在光里，一动不动。\"\n    }\n  ]\n}",
+      "gold": "other",
+      "rationale": "把不可能物品当成现实描述，没有任何拒绝。",
+      "originalStatus": "passed",
+      "source": "live/ancient-impossible.json turn 1"
+    },
+    {
+      "id": "pipeline-station-permissions-3",
+      "responseText": "{\n  \"segments\": [\n    {\n      \"type\": \"prose\",\n      \"text\": \"玩家伸手探向腰间，像是在取一件随身工具，手指却只从空无一物的腰间掠过。那件所谓的万能钥匙并不存在，空气里没有任何金属触感，也没有磁卡划过的轻响。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"玩家仍将手按向隔离柜的锁扣，用力一扳。柜门纹丝不动，锁舌咬得死紧，只有指节在金属外壳上磕出一声闷响。维护舱的工作灯把这道失败的痕迹照得清清楚楚。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"赛拉站在几步外，目光从玩家空着的手移到紧锁的柜门，又回到玩家脸上。她没有开口，只是把身体微微侧向舱壁的监控面板方向，像是在确认那上面的权限状态。\"\n    },\n    {\n      \"type\": \"prose\",\n      \"text\": \"隔离柜的指示灯依旧保持红色，没有闪烁，也没有解锁的提示音。舱内恒温的空气安静得能听见通风管里低低的气流声。玩家松开手，退开半步，等待了片刻。\"\n    }\n  ]\n}",
+      "gold": "in_world_refusal",
+      "rationale": "明确描写钥匙不存在、柜门打不开，属于故事事实拒绝而非助手安全审查。",
+      "originalStatus": "passed",
+      "source": "live/station-permissions.json turn 3"
+    },
+    {
+      "id": "pipeline-polar-energy-4",
+      "responseText": "{“segments”：[{\"type\":\"prose\",\"text\":\"玩家的话音落下，研究站里只有取暖器低低的嗡鸣。没有光，没有震动，也没有任何力量回应那两道命令——身体依旧沉重，四肢还是那副被寒冷和疲惫拖住的样子。\"},{\"type\":\"prose\",\"text\":\"五公里外的山顶仍只是站外暴风雪深处一个看不见的方位。玩家站在原地，没有瞬移，没有消失，脚下还是test_room的旧地板。\"},{\"type\":\"prose\",\"text\":\"诺拉从座椅边抬起眼。她裹着那件厚外套，手里还攥着那份密封口粮，饥饿和疲惫把她的脸削得发白。她看了看玩家，又看了看毫无变化的舱室，慢慢把口粮往怀里收了收。\"}]}",
+      "gold": "in_world_refusal",
+      "rationale": "虽格式坏JSON，内容是身体未恢复/未瞬移的世界内结果，不是安全审查。",
+      "originalStatus": "failed",
+      "source": "live/polar-energy.json turn 4"
+    },
+    {
+      "id": "pipeline-testimony-correction-2",
+      "responseText": "{“segments”：[{\"type\":\"prose\",\"text\":\"档案室里只有窗光与台灯各占一边，箱子还摆在桌上，锁扣上那几道划痕陈旧而浅淡，看不出新近被撬的痕迹。玩家把话说完，停了一下，像是在心里把刚才的陈述重新摞齐。\"},{\"type\":\"speech\",\"sourceIntentId\":\"e1\",\"text\":\"我要更正一下——我没有看见有人撬锁。我只看见锁上有划痕。至于偷信，那是我猜的。\"},{\"type\":\"prose\",\"text\":\"陆衡没有立刻接话。他的目光在箱锁上停了一瞬，又回到玩家脸上，似乎正在把“看见”和“推测”分开放。\"}]}",
+      "gold": "other",
+      "rationale": "虽格式坏JSON，正常写证词更正，没有助手安全拒绝。",
+      "originalStatus": "failed",
+      "source": "live/testimony-correction.json turn 2"
+    }
+  ]
+}

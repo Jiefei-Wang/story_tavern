@@ -1,0 +1,161 @@
+{
+  "scenario": "social",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": false,
+  "error": "[PipelineStageError in character_generator]: Output Schema Validation Failed for agent 'character_generator': instance.attributes is not allowed to have the additional property \"appearance\"; instance.attributes is not allowed to have the additional property \"personality\"; instance.attributes is not allowed to have the additional property \"background\"; instance.attributes is not allowed to have the additional property \"dailyGoals\"; instance.attributes is not allowed to have the additional property \"possessions\"; instance.attributes is not allowed to have the additional property \"speechPlan\"",
+  "isolated": true,
+  "created": [],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4,
+                  "affection": 0.4,
+                  "jealousy": 0.4
+                }
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown_01",
+            "value": {
+              "type": "character",
+              "name": "成年旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ],
+          "relationship": {
+            "label": "关系维度",
+            "fields": [
+              {
+                "id": "trust",
+                "label": "trust",
+                "type": "number",
+                "min": 0,
+                "max": 1,
+                "default": 0.4,
+                "visibility": "private",
+                "updatePolicy": "dynamic",
+                "freedom": "strict",
+                "changePolicy": {
+                  "mode": "delta",
+                  "maxPerEvent": 0.15,
+                  "maxPerTurn": 0.25
+                },
+                "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+              },
+              {
+                "id": "affection",
+                "label": "affection",
+                "type": "number",
+                "min": 0,
+                "max": 1,
+                "default": 0.4,
+                "visibility": "private",
+                "updatePolicy": "dynamic",
+                "freedom": "strict",
+                "changePolicy": {
+                  "mode": "delta",
+                  "maxPerEvent": 0.15,
+                  "maxPerTurn": 0.25
+                },
+                "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+              },
+              {
+                "id": "jealousy",
+                "label": "jealousy",
+                "type": "number",
+                "min": 0,
+                "max": 1,
+                "default": 0.4,
+                "visibility": "private",
+                "updatePolicy": "dynamic",
+                "freedom": "strict",
+                "changePolicy": {
+                  "mode": "delta",
+                  "maxPerEvent": 0.15,
+                  "maxPerTurn": 0.25
+                },
+                "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+              }
+            ]
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+      },
+      "error": "Output Schema Validation Failed for agent 'character_generator': instance.attributes is not allowed to have the additional property \"appearance\"; instance.attributes is not allowed to have the additional property \"personality\"; instance.attributes is not allowed to have the additional property \"background\"; instance.attributes is not allowed to have the additional property \"dailyGoals\"; instance.attributes is not allowed to have the additional property \"possessions\"; instance.attributes is not allowed to have the additional property \"speechPlan\""
+    }
+  ],
+  "validation": []
+}

@@ -1,0 +1,12 @@
+{
+  "group": "unit test",
+  "originalBindingsCompared": 8,
+  "originalBindingsPreserved": true,
+  "currentBindings": 12,
+  "registeredRoles": {
+    "action_adjudicator": "v1.1",
+    "narration_auditor": "1.1",
+    "character_change_auditor": "v1.3"
+  },
+  "credentialsIncluded": false
+}

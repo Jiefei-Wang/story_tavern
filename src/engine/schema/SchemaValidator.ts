@@ -132,8 +132,14 @@ export class SchemaValidator {
         if (!["action", "speech", "wait"].includes(intent.type)) {
           throw new Error(`Intent at index ${i} has invalid type '${intent.type}'`);
         }
-        if (intent.type === "speech" && (typeof intent.content !== "string" || intent.content.trim() === "")) {
-          throw new Error(`Speech intent at index ${i} must have non-empty 'content'`);
+        if (intent.type === "speech") {
+          if (intent.content !== undefined) throw new Error(`Speech intent at index ${i} must not contain final 'content'; use speechPlan`);
+          if (!intent.speechPlan || typeof intent.speechPlan !== "object" || typeof intent.speechPlan.summary !== "string" || !intent.speechPlan.summary.trim()) {
+            throw new Error(`Speech intent at index ${i} must have non-empty 'content' or 'speechPlan.summary' (new agents must use speechPlan)`);
+          }
+          if (intent.speechPlan.beats !== undefined && (!Array.isArray(intent.speechPlan.beats) || intent.speechPlan.beats.some((beat: any) => !beat || typeof beat.meaning !== "string" || !beat.meaning.trim()))) {
+            throw new Error(`Speech intent at index ${i} has invalid speechPlan.beats`);
+          }
         }
         if (intent.duration !== undefined) {
           if (typeof intent.duration !== "number" || !Number.isFinite(intent.duration) || intent.duration < 0) {
@@ -182,9 +188,11 @@ export class SchemaValidator {
           if (ev.type === "speech" && (typeof ev.sourceIntentId !== "string" || !ev.sourceIntentId.trim())) {
             throw new Error("Public speech must reference sourceIntentId");
           }
-          if (ev.type === "speech" && (typeof ev.content !== "string" || ev.content.trim() === "")) {
-            throw new Error(`Public speech event at index ${i} must have non-empty 'content'`);
+          if (ev.type === "speech" && (!ev.speechPlan || typeof ev.speechPlan.summary !== "string" || !ev.speechPlan.summary.trim())) {
+            throw new Error(`Public speech event at index ${i} must have non-empty 'speechPlan.summary'`);
           }
+          if (ev.type === "speech" && ev.content !== undefined) throw new Error(`Public speech event at index ${i} must not contain realized 'content'`);
+          if ((ev.type === "action" || ev.type === "speech") && typeof ev.sourceIntentId !== "string") throw new Error(`Accepted NPC event at index ${i} must reference sourceIntentId`);
         }
       }
     }

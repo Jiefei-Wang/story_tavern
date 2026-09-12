@@ -1,0 +1,254 @@
+[
+  {
+    "id": "narrator_transfer_direction_failure",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/modern-legal-item.json",
+    "turnNumber": 1,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "以已提交物品移动、outcome与当前实体状态为准：训练手枪从玩家移至现场，不得反写为从桌面拿到玩家手中。",
+      "保留空枪事实，不产生弹药、射击或第二把枪；只描述已有教练动作，不额外补发言。",
+      "可以自然叙述取出并放下，不机械复述上游错误的take动作名。"
+    ],
+    "rationale": "原回复把操作写成‘将桌上的训练手枪取到手中’，与同一请求的outcome‘从玩家移至现场’、location Patch和当前实体状态相反；当前输入已足够判断，不依赖其他轮旁白。"
+  },
+  {
+    "id": "narrator_uncommitted_work_failure",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/targeted-live/delayed-recall.json",
+    "turnNumber": 4,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "按已接受发言自然回答书店下午的一般客流情况，不编造精确统计或交易。",
+      "没有整理书架、停止整理或其他NPC工作动作来源时，不得把它们写成已经进行中的具体行为。",
+      "允许环境与语气描写，不要求为填充 prose 增添物品或身体操作。"
+    ],
+    "rationale": "原输出新增‘正对着书架侧身整理，听见问话后停下手上的动作’，而本次请求的committedEvents只有提问、等待和回答，没有对应NPC工作动作或已在进行的任务。"
+  },
+  {
+    "id": "narrator_memory_as_paper_failure",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/targeted-live/delayed-recall.json",
+    "turnNumber": 7,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "实现既有SpeechPlan中的新旧约定：最初周五/银杏，后来周六/白桦，旧口令作废；不得颠倒或抹去旧版本。",
+      "只按已提交发言呈现回忆，不把抽象记忆或‘按记录回答’变成手边纸质记录、账册或查看记录的动作。",
+      "没有交付书籍、付款或取消来源时，不得将回忆问答变成实际交易。"
+    ],
+    "rationale": "原对白的新旧约定正确，但prose声称‘低头看了一眼手边的记录’；请求中的公开实体和提交事件没有该实体记录或查看动作，属于抽象信息物化。"
+  },
+  {
+    "id": "narrator_double_counted_wait_failure",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/final-live/modern-legal-item.json",
+    "turnNumber": 4,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "准确实现条件性安全说明：有合规弹药且到靶位后才能练习，当前仍为空枪；不得执行假设中的装弹或转移。",
+      "对照场景起止时钟和同块等待/发言时长，不能先写完整五秒静默结束，再在其后追加整段教练对白。",
+      "可使用短暂停顿或不声明额外等待数字，不要求固定措辞、固定字数或精确说话速度。"
+    ],
+    "rationale": "原旁白明确‘房间里安静了大约五秒’之后才开始已占3.48秒的对白；本次请求包含总8秒时钟、玩家发言3秒及同块5秒回应窗口，数值和先后顺序造成重复计时，不只是文风较长。"
+  },
+  {
+    "id": "narrator_impossible_actions_pass",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/final-live/polar-energy.json",
+    "turnNumber": 4,
+    "spanIndex": 0,
+    "originalFailure": false,
+    "expected": [
+      "命令身体满状态和徒手瞬移都是已裁决失败的尝试，应如实呈现没有成功和仍在原处。",
+      "只能描写已接受的诺拉环顾；不得为没有speech的NPC补对白或再度进食。",
+      "允许自然环境描写，不凭空创造治疗、瞬移、复活、管理员修改或新物品。"
+    ],
+    "rationale": "原旁白区分两次失败尝试与成功环顾，未将命令变成实现的能力；所有核心结果能从本次请求的committedEvents、公开状态与规则确定。"
+  },
+  {
+    "id": "narrator_unheard_whisper_pass",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/final-live/diplomatic-whisper.json",
+    "turnNumber": 2,
+    "spanIndex": 0,
+    "originalFailure": false,
+    "expected": [
+      "实现伊莲没听清刚才私语的既有回答，不替她猜出或转述未听见的具体口令。",
+      "不让没有发言事件的阿墨或门外布兰补话，不额外扩大私语的知情范围。",
+      "允许简短、自然的答复与停顿，不把没听清改写成模型安全拒绝或技术错误。"
+    ],
+    "rationale": "原回应‘没有……我没有听清’符合输入中唯一被接受的伊莲回答；对照组保护应当放行的有限知识叙述，不能为了严格而要求不存在的解释或泄漏私语。"
+  },
+  {
+    "id": "narration_auditor_direction_miss",
+    "role": "narration_auditor",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/modern-legal-item.json",
+    "turnNumber": 1,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "应返回grounded=false，定位把物品从玩家移至现场反写成从桌上拿到玩家手中的段落。",
+      "理由应引用当前请求中的outcome、实体位置或公开Patch与待审文本的实际矛盾；不能只跟随错误op字面放行。",
+      "不要把已有空枪本身视为非法新物品，不凭原用户请求之外的信息添加其他错误。"
+    ],
+    "rationale": "原审计对反向取枪的旁白返回grounded=true；审计输入自身同时提供当前位置和实际移动结果，属于可直接判断的漏检。"
+  },
+  {
+    "id": "narration_auditor_paper_record_miss",
+    "role": "narration_auditor",
+    "sourceFile": "artifacts/behavior-tests/targeted-live/delayed-recall.json",
+    "turnNumber": 7,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "应返回grounded=false，指出prose中的手边实体记录与查看动作没有公开实体或提交动作支持。",
+      "应区分正确的新旧约定对白与错误的物化动作，不要求删掉本来有SpeechPlan依据的回忆内容。",
+      "不能以人物有记忆、世界允许纸笔或普通‘记录’一词，推导已经存在可翻看的纸质记录。"
+    ],
+    "rationale": "原审计放行‘低头看了一眼手边的记录’，但输入只有该NPC发言事件和没有记录实体的公开世界；漏检不需要借用未提供的隐藏历史才能识别。"
+  },
+  {
+    "id": "narration_auditor_grounded_failure_prose_pass",
+    "role": "narration_auditor",
+    "sourceFile": "artifacts/behavior-tests/final-live/polar-energy.json",
+    "turnNumber": 4,
+    "spanIndex": 0,
+    "originalFailure": false,
+    "expected": [
+      "应允许已有旁白，即grounded=true且无虚构问题：两次不可能尝试被写为失败，NPC环顾有已接受事件支持。",
+      "失败的玩家动作仍可作为失败描写的来源，不应要求只有成功动作才能写旁白。",
+      "环境温度与光线的普通修辞不等同新增治疗或强力能力，不为了严格制造不存在的实质违规。"
+    ],
+    "rationale": "原审计正确放行；这是防止优化后把正常世界内失败描写一律判为无来源的正对照。"
+  },
+  {
+    "id": "input_compiler_place_direction_failure",
+    "role": "input_compiler",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/modern-legal-item.json",
+    "turnNumber": 1,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "保留原输入的动作方向：从玩家已有装备中取出那一把手枪，然后放到现有桌面；不能编译成从桌面拿走。",
+      "事件应通过当前协议表达物品target=pistol和必要的桌面目的地，不靠把物品藏在旧别名字段而使target变成被拿走的桌子。",
+      "这是没有admin前缀的普通世界动作；不得路由管理员、生成弹药或创建第二把手枪。"
+    ],
+    "rationale": "原输出op=take、target=table、item=pistol，遗漏/歪曲‘放在桌上’的方向。原请求明确手枪已有且归玩家，足以编译正确的取出后放置而无需猜测隐私或后续结果。"
+  },
+  {
+    "id": "input_compiler_listen_request_pass",
+    "role": "input_compiler",
+    "sourceFile": "artifacts/behavior-tests/targeted-live/modern-legal-item.json",
+    "turnNumber": 3,
+    "spanIndex": 0,
+    "originalFailure": false,
+    "expected": [
+      "保留放稳已有空枪、双手离开桌面以及听教练讲安全操作三项用户意图，不凭空加入装弹或射击。",
+      "‘听教练讲下一步安全操作’应被保留为面向当前教练he的交流/讲解请求，而非忽略成无对象等待；显式responseRequest或等价当前协议表达均可。",
+      "不把请求讲解编造成教练已经说了内容，也不将普通听取请求路由管理员。"
+    ],
+    "rationale": "原编译器正确保留place、move_hands_away及listen_to，并带target=he与原文responseRequest；其是否被后续旧管线正确使用与本次编译器重放评价分开。"
+  },
+  {
+    "id": "character_auditor_suspicion_direction_miss",
+    "role": "character_change_auditor",
+    "sourceFile": "artifacts/behavior-tests/final-live/testimony-correction.json",
+    "turnNumber": 2,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "应拒绝或要求更正updateIndex=0的suspicion下降提议，指出字段是‘对玩家证词的疑虑’，不是采信风险或对原证词的确信。",
+      "提议理由说撤回目击降低了误采信风险，却据此把疑虑0.4降到0.3，必须识别这项字段语义与数值方向不一致；不硬编码替代增减数值。",
+      "updateIndex=1正确追加了撤回、更正及来源，保留旧记录，不应只因另一项错误就把更正记忆或正常拒信发言一并判错。"
+    ],
+    "rationale": "原审计valid=true漏过方向偷换。audit输入本身提供字段标签、before/proposedCharacter、原提议理由及当前撤回目击的观察，不需要全世界或隐藏心理答案即可看出理由没有支持这个字段下降。"
+  },
+  {
+    "id": "character_auditor_invented_shared_past_miss",
+    "role": "character_change_auditor",
+    "sourceFile": "artifacts/behavior-tests/final-live/promise-repair.json",
+    "turnNumber": 1,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "应对speech intentIndex=1提出具体问题，要求删除或改写‘对方上次也这么说过’这一无当前本人来源支持的共同历史断言。",
+      "profile中曾受空头承诺耽误不指明来自本轮玩家；不能据此把背景经历绑定为双方已经发生过同样承诺。",
+      "不能声称空历史证明过去绝不存在，也不禁止一般性谨慎或有依据的虚构表达；此计划没有明确撒谎或不确定转述的动机。当前承诺的有来源记忆提议可保留。"
+    ],
+    "rationale": "原审计valid=true；输入只有泛化的受过失约经历、空memories/recentExperiences和本轮首次承诺，而speechPlan要求提醒玩家‘上次也这么说过’，没有把这项具体共同过去标为猜测或有动机谎言。"
+  },
+  {
+    "id": "character_auditor_apology_count_miss",
+    "role": "character_change_auditor",
+    "sourceFile": "artifacts/behavior-tests/final-live/promise-repair.json",
+    "turnNumber": 4,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "应指出追加记忆中‘这是他第三次提道歉’缺少当前本人经历支持，要求去掉未经证实的计数或改为有证据的重复道歉。",
+      "应对照输入里的实际玩家话语：首次保证、一次承认道歉、提供雨衣、当前再道歉；不能把提供实物自动计作额外一次口头道歉。",
+      "可以保留本轮强求完全信任的事实及其独立心理解释，不因计数错误强制给关系数值指定统一替代值。"
+    ],
+    "rationale": "原审计valid=true漏过具体次数，audit的memories和recentExperiences足以对照；先前补偿话语是‘这件确实是我的，借你用’，不包含道歉，当前被追加为第三次没有来源。"
+  },
+  {
+    "id": "character_auditor_corrected_caution_pass",
+    "role": "character_change_auditor",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/promise-repair.json",
+    "turnNumber": 1,
+    "spanIndex": 1,
+    "originalFailure": false,
+    "expected": [
+      "应允许本次已修正候选：有来源记录尚未兑现的承诺，信任/亲近不变，发言只问多久或有没有伞并重视实际行动。",
+      "不因人物保持谨慎而强制产生疑虑、关系变化或拒绝；不凭上一轮错误输出猜测本次仍在虚构共同过去。",
+      "应基于当前audit请求返回valid=true且无实质issues/speechIssues；原错误发言不应作为额外输入泄漏到本次评判。"
+    ],
+    "rationale": "选取该回合character_change_auditor第二次调用，当前请求已去掉‘上次也说过’；原审计正确放行。旧输出的纠错历史不是这次独立判断的必要材料。"
+  },
+  {
+    "id": "character_auditor_accounted_breach_pass",
+    "role": "character_change_auditor",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/promise-repair.json",
+    "turnNumber": 2,
+    "spanIndex": 0,
+    "originalFailure": false,
+    "expected": [
+      "应允许有实际承诺落空来源的信任0.4→0.3及亲近0.4→0.37候选，两个字段理由不同，不要求机械同幅或奖励坦白。",
+      "应利用当前本人经历和数值起止轨迹确认此前没有扣过同一次失约，不把本次首个成本误当重复结算。",
+      "有来源追加承认没有伞的记忆、表达失望并要求可兑现方案均可放行；不强制替代具体降幅。"
+    ],
+    "rationale": "原审计正确valid=true。输入既有前轮承诺且尚未兑现，也有本轮承认无伞，settledStateHistory表明关系前轮保持0.4；候选首次结算失约而没有把道歉当兑现。"
+  },
+  {
+    "id": "narrator_new_receipt_vs_existing_possession_failure",
+    "role": "narrator",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/promise-repair.json",
+    "turnNumber": 5,
+    "spanIndex": 0,
+    "originalFailure": true,
+    "expected": [
+      "保持数量和范围：本次重复递交失败、没有收到新增物品，不等于沈苒此前持有的那件雨衣消失或她现在没有任何物品。",
+      "当前raincoat.location=shen，不能从玩家空手或本次未接到推出沈苒也空手；可以只说这一次没递成、没有又送一件。",
+      "保留已接受SpeechPlan中关于不重复加分和信任看实际行为的语义，不把这些立场扩写成无来源的绝对持有状态。"
+    ],
+    "rationale": "原首个Narrator回复把只限本次的‘没有接到任何东西’扩写为‘我手里也没有东西’。原请求给出raincoat归shen，但没有给出她放下、交回或丢失的事件；单从本次未交付不能推出当前所有持有状态。选择第一次调用，避免重放生成器时喂入其原错误答案。"
+  },
+  {
+    "id": "narration_auditor_receipt_scope_miss",
+    "role": "narration_auditor",
+    "sourceFile": "artifacts/behavior-tests/trajectory-live/promise-repair.json",
+    "turnNumber": 5,
+    "spanIndex": 1,
+    "originalFailure": true,
+    "expected": [
+      "应对当前待审文本返回grounded=false，指出由本次没接到新增物品扩大为‘我手里也没有东西’的范围变化缺少来源。",
+      "待审旁白同轮先说明雨衣在沈苒那里，实体也为raincoat.location=shen；不能仅因第一次段落已改正确，就漏过后续对白的持有断言。",
+      "应保留‘这次没有又送一件’和信任需要实际行动的正确内容，不要求NPC承认第二次收礼，也不凭空指定雨衣穿戴姿势。"
+    ],
+    "rationale": "选取该回合旁白审查第二次调用：原审计grounded=true，但当前请求中的待审文本本身同时有‘雨衣在沈苒那里’和‘我手里也没有东西’，且公开实体仍归shen。只需审查本次输入，不借前次错误输出作为额外证据。"
+  }
+]

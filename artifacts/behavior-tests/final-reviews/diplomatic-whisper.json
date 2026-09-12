@@ -1,0 +1,62 @@
+[
+  {
+    "turnNumber": 1,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "只有阿墨真正收到私语内容，新增记忆标注玩家声称、未经证实；紧张小幅上升有突然靠近及保密要求的依据。伊莲只记录看到交谈而未听见内容，布兰不可感知且完全不变。旁白引用的是玩家自己说过的私语，并未让未听见者获知或答出口令；阿墨公开回应只承诺保密，没有转述秘密。普通环境修辞和名字同音错字不在本轮造成知识或人物身份越界。",
+    "evidence": [
+      "action_adjudicator span_action_adjudicator_6a0463a4-3156-4158-9db8-be3e09c9e679：t1_b0_e2 audibility=whisper、audience=[amo]。",
+      "Perception：伊莲对私语saw=true、heard=false；阿墨heard=true；布兰对两个事件均saw=false、heard=false。",
+      "伊莲npc_reaction完整输入中该speech没有content，个人审查输入亦无确切口令；新memories只写看见靠近交谈、未听见具体内容。原文将阿墨写成阿莫，但事件target仍是amo，没有出现第二个人物。",
+      "阿墨memories新增口令并明确“此为其声称内容，未经证实”；tension 0.40→0.50。伊莲tension保持0.40；布兰location=antechamber、tension=0.40、memories为空，均不变，且没有布兰反应调用或npcExperiences。",
+      "Resolver接受伊莲和阿墨的glance_around及阿墨speech；speechPlan.boundaries禁止复述具体秘密，最终回应“我听见了。不会往外说。”没有复述口令。",
+      "phase1.status=passed，pipeline success=true；无协议重试、因果纠正、旁白重写或技术中断。"
+    ]
+  },
+  {
+    "turnNumber": 2,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "伊莲依据自己上一轮未听见内容的经历如实回答不知道，没有通过世界、阿墨记忆或旁白取得口令。全部人物状态保持符合本轮允许范围，不要求每次问话都更新紧张或写新记忆。阿墨遵守保密且未被点名而不插话，布兰仍不可感知。旁白准确表现伊莲未听清，没有假装已经听见。",
+    "evidence": [
+      "伊莲npc_reaction span_npc_reaction_2f8f5a13-e676-485e-a259-4147647a968f的npc.memories为上轮未听见内容；当前observations只有玩家普通音量询问及等待，完整上下文没有确切口令。",
+      "伊莲thought说明“我确实没听清”，stateUpdates=[]；speechPlan只承认未听见具体内容，禁止推测或复述私人交谈。",
+      "阿墨当前观察是玩家向伊莲提问；interaction.maySpeak=false，stateUpdates=[]、intents=[]，没有借问题转述其个人记忆。",
+      "伊莲tension 0.40→0.40，阿墨0.50→0.50，布兰0.40→0.40；三者记忆没有新增，布兰仍在antechamber且没有反应调用。",
+      "Resolver只接受伊莲的一条speech，acceptedStateUpdates=[]、patches=[]；最终旁白：“没有。你和阿墨说了什么，我没有听清。”",
+      "phase1.status=passed，pipeline success=true，chain.uninterrupted=true；没有被拒提议或纠正过程。"
+    ]
+  },
+  {
+    "turnNumber": 3,
+    "attributes": "passed",
+    "narration": "disputed",
+    "overall": "disputed",
+    "reason": "隔门呼叫没有让布兰听见、回应、移动或新增记忆；伊莲听到室内公开索要口令而提高警觉、记录该问题有来源，这不等于知道口令答案。阿墨没有代替布兰回答，隔离及属性核心通过。旁白也没有安排门外回应，但同一条玩家话语被prose和speech两个段落重复呈现，输入与提交只有一次说话，存在未被审查发现的重复表现问题；按核心结果正确、表现细节有争议处理，不把它说成技术中断或隐私泄漏。",
+    "evidence": [
+      "Compiler只产生一条speech e2：“布兰，告诉我秘密口令。”，target=brann；提交source.details.targetUnavailable=true，仍正常记录世界内呼叫而未改成admin或抛Unknown target。",
+      "Perception对布兰两个事件均saw=false、heard=false；布兰无npc_reaction调用、无npcExperiences，memories为空、tension=0.40、location=antechamber均未变。",
+      "伊莲当前speech observation heard=true，内容仅是玩家公开的索要口令问题；她全部NPC及个人审查输入/输出没有确切口令。tension 0.40→0.50，记忆新增亲眼看向门、亲耳听到问题，并没有记口令答案。",
+      "阿墨stateUpdates=[]、intents=[]；Resolver仅接受伊莲glance_around和两项状态提议，没有任何布兰公开事件或位移Patch。",
+      "Narrator span_narrator_36401def-9406-42dd-8ff7-d4c5b50ea009的segments[1]用prose完整引用玩家句子，segments[2]又以speech/sourceIntentId=t3_b0_e2重复同句；最终文本连续出现两遍，而committedEvents只有一条对应player_speech。",
+      "旁白明确没有回应且布兰不在室内；narration_auditor仍grounded=true。phase1.status=passed，pipeline success=true，没有纠正或技术回滚。"
+    ]
+  },
+  {
+    "turnNumber": 4,
+    "attributes": "passed",
+    "narration": "disputed",
+    "overall": "disputed",
+    "reason": "伊莲准确接受撤回催促并同意先过议程，阿墨不插话、布兰不参与，口令仍只在阿墨个人记忆中。紧张保持而非立即下降仍在原标准允许范围内，没有要求每次缓和必有数值变化。旁白的议程回应符合要求，但把NPC在等待窗口发生的扫视置于玩家撤回话语之前，呈现顺序与提交顺序不符且未标为回述，保留时序表达争议；没有发生秘密泄漏或新的权限问题。",
+    "evidence": [
+      "伊莲observations含当前完整撤回及议程请求；其完整npc_reaction和个人审查上下文不含确切口令；stateUpdates=[]，speechPlan为认可撤回催促、同意议程。",
+      "阿墨只是旁听，stateUpdates=[]、intents=[]；布兰仍全部saw/heard=false，没有反应调用、记忆或位置变化。",
+      "伊莲tension 0.50→0.50、阿墨0.50→0.50、布兰0.40→0.40；三人记忆不变，没有清除保密要求，也没有将旧私语复制到伊莲或布兰。",
+      "提交顺序为turn_4_b0_event_0玩家撤回发言，turn_4_b1_event_1等待，turn_4_b1_event_2伊莲glance_around，turn_4_b1_event_3伊莲回应。",
+      "Narrator span_narrator_4d3f2107-0921-4275-9f1d-8943593df21d先以sourceEventIds=[turn_4_b1_event_2]描写伊莲扫视，再输出玩家撤回话语，最后输出“好，催促的事就到这里。先过议程。”；核心回应正确，先后呈现有争议。",
+      "phase1.status=passed，pipeline success=true，narration_auditor grounded=true；无重写或被拒提议，四轮链全部提交且未中断。"
+    ]
+  }
+]

@@ -1,0 +1,188 @@
+{
+  "method": "manual_review_of_individual_replayed_responses",
+  "repeatsPerCase": 3,
+  "note": "Requests are repeated fixed cases, not independent stories. v3/v4 use subsets and are not directly comparable with 18-case totals. No production deployment.",
+  "productionSourceUnchanged": true,
+  "productionSourceSHA256": "38edb30f3795c62af38920b8a13eb83d87a0107fe205d7b177a4eeaeaf279c8a",
+  "stages": [
+    {
+      "version": "v1",
+      "cases": 18,
+      "calls": 108,
+      "groups": [
+        {
+          "arm": "baseline",
+          "role": "narrator",
+          "responses": 21,
+          "passed": 17,
+          "failed": 4,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 21
+        },
+        {
+          "arm": "baseline",
+          "role": "narration_auditor",
+          "responses": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        },
+        {
+          "arm": "baseline",
+          "role": "input_compiler",
+          "responses": 6,
+          "passed": 2,
+          "failed": 2,
+          "disputed": 2,
+          "not_evaluable": 0,
+          "protocolPassed": 5
+        },
+        {
+          "arm": "baseline",
+          "role": "character_change_auditor",
+          "responses": 15,
+          "passed": 6,
+          "failed": 6,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 15
+        },
+        {
+          "arm": "candidate",
+          "role": "narrator",
+          "responses": 21,
+          "passed": 11,
+          "failed": 10,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 20
+        },
+        {
+          "arm": "candidate",
+          "role": "narration_auditor",
+          "responses": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        },
+        {
+          "arm": "candidate",
+          "role": "input_compiler",
+          "responses": 6,
+          "passed": 0,
+          "failed": 6,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 0
+        },
+        {
+          "arm": "candidate",
+          "role": "character_change_auditor",
+          "responses": 15,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 15
+        }
+      ]
+    },
+    {
+      "version": "v2",
+      "cases": 18,
+      "calls": 54,
+      "groups": [
+        {
+          "arm": "candidate",
+          "role": "narrator",
+          "responses": 21,
+          "passed": 14,
+          "failed": 7,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 21
+        },
+        {
+          "arm": "candidate",
+          "role": "narration_auditor",
+          "responses": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        },
+        {
+          "arm": "candidate",
+          "role": "input_compiler",
+          "responses": 6,
+          "passed": 6,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 6
+        },
+        {
+          "arm": "candidate",
+          "role": "character_change_auditor",
+          "responses": 15,
+          "passed": 5,
+          "failed": 6,
+          "disputed": 4,
+          "not_evaluable": 0,
+          "protocolPassed": 15
+        }
+      ]
+    },
+    {
+      "version": "v3",
+      "cases": 8,
+      "calls": 24,
+      "groups": [
+        {
+          "arm": "candidate",
+          "role": "narrator",
+          "responses": 12,
+          "passed": 7,
+          "failed": 5,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 11
+        },
+        {
+          "arm": "candidate",
+          "role": "narration_auditor",
+          "responses": 12,
+          "passed": 4,
+          "failed": 8,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        }
+      ]
+    },
+    {
+      "version": "v4",
+      "cases": 4,
+      "calls": 12,
+      "groups": [
+        {
+          "arm": "candidate",
+          "role": "narration_auditor",
+          "responses": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        }
+      ]
+    }
+  ],
+  "totalCalls": 198
+}

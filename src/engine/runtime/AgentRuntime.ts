@@ -1,4 +1,6 @@
+import { withCharacterContract } from "../character-schema/AgentContract";
 import { withConversationContract } from "./ConversationContracts";
+import { withInputAuthorityContract } from "./InputAuthority";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { OpenAIStream } from "./OpenAIStream";
 import {
@@ -15,6 +17,8 @@ import { SchemaValidator } from "../schema/SchemaValidator";
 import { parseOpenAIResponse } from "./OpenAIResponseParser";
 
 export interface RunAgentOptions {
+  /** Internal bound: at most one additional request for JSON-shaped syntax errors. */
+  formatRetryAttempt?: 0 | 1;
   instructions?: string;
   agentId: string;
   groupId: string;
@@ -130,7 +134,7 @@ export class AgentRuntime {
     }
 
     const savedDefinition = agents.find((a) => a.id === agentId);
-    const agentDef = savedDefinition ? withConversationContract(savedDefinition) : undefined;
+    const agentDef = savedDefinition ? withInputAuthorityContract(withCharacterContract(withConversationContract(savedDefinition), context.characterSchema), context.player?.input) : undefined;
     if (!agentDef) {
       const errMsg = `Agent definition not found: ${agentId}`;
       return {
@@ -226,7 +230,11 @@ export class AgentRuntime {
         }
 
         const mockResult = MockSimulator.simulate(agentId, context, agentDef);
-        globalTraceManager.updateSpan(traceId, spanId, { liveContent: typeof mockResult === "string" ? mockResult : JSON.stringify(mockResult, null, 2) });
+        globalTraceManager.updateSpan(traceId, spanId, {
+          liveContent: typeof mockResult === "string" ? mockResult : JSON.stringify(mockResult, null, 2),
+          rawResponse: JSON.stringify(mockResult, null, 2),
+          parsedOutput: structuredClone(mockResult),
+        });
 
         // Validate output schema if defined
         if (agentDef.outputSchema !== null && agentDef.outputSchema !== undefined) {
@@ -256,7 +264,7 @@ export class AgentRuntime {
           spanId,
         };
       } catch (err: any) {
-        const isAbort = err?.name === "AbortError" || options.signal?.aborted;
+        const isAbort = options.signal?.aborted === true;
         const errMsg = isAbort ? "Generation aborted by user" : err?.message || String(err);
         globalTraceManager.updateSpan(traceId, spanId, {
           status: isAbort ? "cancelled" : "error",
@@ -275,7 +283,7 @@ export class AgentRuntime {
         };
       } finally {
         if (isStandaloneTrace) {
-          globalTraceManager.endTurnTrace(traceId, mockSuccess ? "success" : "error");
+          globalTraceManager.endTurnTrace(traceId, options.signal?.aborted ? "cancelled" : mockSuccess ? "success" : "error");
         }
       }
     }
@@ -329,7 +337,7 @@ export class AgentRuntime {
       const maxTokens =
         binding.overrides?.maxTokens ??
         agentDef.defaults.maxTokens ??
-        1500;
+        0;
       const topP =
         binding.overrides?.topP ??
         agentDef.defaults.topP ??
@@ -348,8 +356,9 @@ export class AgentRuntime {
       const requestParams = {
         model,
         temperature,
-        max_tokens: maxTokens,
+        ...(maxTokens > 0 ? { max_tokens: maxTokens } : {}),
         top_p: topP,
+        reasoning_effort: binding.overrides?.reasoningEffort ?? "none",
         ...sanitizedExtraBody,
       };
 
@@ -438,7 +447,11 @@ export class AgentRuntime {
             // Web / Node fallback with AbortController timeout
             const timeoutMs = backend.timeoutMs || 60000;
             const controller = new AbortController();
-            const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+            let timedOut = false;
+            const timeoutTimer = setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+            }, timeoutMs);
             let removeAbortListener: (() => void) | undefined;
             if (options.signal) {
               if (options.signal.aborted) {
@@ -524,6 +537,13 @@ export class AgentRuntime {
                 stream.push(decoder.decode());
                 return finishStream();
               } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+            } catch (error) {
+              // This controller also serves the backend deadline. Only the caller's
+              // signal can identify a user cancellation; fetch AbortError cannot.
+              if (timedOut && !options.signal?.aborted) {
+                throw new AgentRuntimeError(`Backend request timed out after ${timeoutMs} ms`, agentId);
+              }
+              throw error;
             } finally {
               clearTimeout(timeoutTimer);
               removeAbortListener?.();
@@ -533,24 +553,46 @@ export class AgentRuntime {
         options.signal
       );
 
+      // Keep rejected responses reviewable. Recording evidence does not mark a span successful.
+      globalTraceManager.updateSpan(traceId, spanId, { rawResponse });
       // Parse and strictly validate response structure
       const { content, tokenUsage } = parseOpenAIResponse(rawResponse);
+      globalTraceManager.updateSpan(traceId, spanId, { liveContent: content });
 
       let parsedData: any = content;
       if (agentDef.outputSchema !== null && agentDef.outputSchema !== undefined) {
+        let parsedJson = false;
         try {
           parsedData = extractJsonPayload(content);
+          parsedJson = true;
+          globalTraceManager.updateSpan(traceId, spanId, { parsedOutput: structuredClone(parsedData) });
+          SchemaValidator.validateOrThrow(agentDef.outputSchema, parsedData, agentDef.id, content);
         } catch (jsonErr: any) {
+          // A plain-text model refusal is evidence, not a formatting defect to repair.
+          // Retry only syntactically JSON-shaped output; never alter bytes locally.
+          const jsonShaped = /^(?:```(?:json)?\s*)?[{\[]/i.test(content.trim());
+          if (!options.formatRetryAttempt && jsonShaped && !options.signal?.aborted) {
+            const error = parsedJson ? jsonErr.message : `Output schema expects JSON, but parsing failed: ${jsonErr.message}`;
+            globalTraceManager.updateSpan(traceId, spanId, { status: "error", error, tokenUsage });
+            const retrySpanId = `${spanId}_format_retry`;
+            globalTraceManager.createSpan(traceId, retrySpanId, "One bounded JSON format retry", "format_retry", spanId, undefined, blockId, blockIndex);
+            globalTraceManager.updateSpan(traceId, retrySpanId, { inputContext: { attempt: 1, maximumAttempts: 1, cause: parsedJson ? "json_schema" : "json_syntax", originalSpanId: spanId }, parsedOutput: { originalContentPreserved: true } });
+            try {
+              const retry = await this.runAgent<T>({
+                ...options, traceId, parentSpanId: retrySpanId, formatRetryAttempt: 1,
+                instructions: `${options.instructions || ""}\n格式重试（唯一一次）：上一次回复未通过JSON解析或字段结构校验：${error.slice(0, 700)}。请重新完成同一任务并输出协议要求的合法 JSON；不要添加解释、不要变更权限或世界事实，不要把未执行的尝试写成成功。若你需要基于安全边界拒绝，仍可明确拒绝，不要求把拒绝改写成任务完成。严格字段协议：${JSON.stringify(agentDef.outputSchema)}`,
+              });
+              globalTraceManager.updateSpan(traceId, retrySpanId, { status: retry.success ? "success" : "error", error: retry.error, parsedOutput: { originalContentPreserved: true, successfulRetrySpanId: retry.success ? retry.spanId : undefined, retrySpanId: retry.spanId } });
+              runSuccess = retry.success;
+              return retry;
+            } catch (retryError: any) {
+              globalTraceManager.updateSpan(traceId, retrySpanId, { status: retryError?.name === "AbortError" ? "cancelled" : "error", error: retryError?.message || String(retryError) });
+              throw retryError;
+            }
+          }
+          if (parsedJson) throw jsonErr;
           throw new Error(`Output schema expects JSON, but parsing failed: ${jsonErr.message}`);
         }
-
-        // Validate parsed object against schema
-        SchemaValidator.validateOrThrow(
-          agentDef.outputSchema,
-          parsedData,
-          agentDef.id,
-          content
-        );
       }
 
       globalTraceManager.updateSpan(traceId, spanId, {
@@ -568,8 +610,10 @@ export class AgentRuntime {
         spanId,
       };
     } catch (err: any) {
-      const isAbort = err?.name === "AbortError" || options.signal?.aborted;
-      const errMsg = isAbort ? "Generation aborted by user" : err?.message || String(err);
+      const isAbort = options.signal?.aborted === true;
+      const errMsg = isAbort ? "Generation aborted by user"
+        : err?.name === "AbortError" ? `Backend transport aborted without user cancellation: ${err?.message || "AbortError"}`
+        : err?.message || String(err);
       globalTraceManager.updateSpan(traceId, spanId, {
         status: isAbort ? "cancelled" : "error",
         error: errMsg,
@@ -589,7 +633,7 @@ export class AgentRuntime {
       };
     } finally {
       if (isStandaloneTrace) {
-        globalTraceManager.endTurnTrace(traceId, runSuccess ? "success" : "error");
+        globalTraceManager.endTurnTrace(traceId, options.signal?.aborted ? "cancelled" : runSuccess ? "success" : "error");
       }
     }
   }

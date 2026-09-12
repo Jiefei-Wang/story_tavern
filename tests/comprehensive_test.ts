@@ -113,7 +113,7 @@ async function runComprehensiveTests() {
   if (!patchApply.success) {
     throw new Error("补丁应用失败: " + patchApply.error);
   }
-  console.log("--> 补丁应用后的世界新状态 (艾琳情绪):", patchApply.newWorld.entities.erin.mentalState?.mood);
+  console.log("--> 补丁应用后的世界新状态 (艾琳情绪):", patchApply.newWorld.entities.erin.attributes?.mood);
   console.log(">>> [PASS] World Resolver 成功回复 RFC 6902 Patch 并原子化提交。\n");
 
   // -------------------------------------------------------------

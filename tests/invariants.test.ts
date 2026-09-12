@@ -244,11 +244,11 @@ test("Test 9: multi-block rollback restores initial world state", async () => {
   const pipeline = new GamePipeline();
   const initialWorld = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
 
-  // Provide an agent context where admin_patch fails
-  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "admin_patch");
+  // A normal block succeeds before a missing time_skip agent fails.
+  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "time_skip");
 
-  // An input that triggers normal block followed by invalid admin block
-  const input = "我走到窗边。然后管理员：修改天气为暴风雨";
+  // This exercises rollback without implicitly granting administrator authority.
+  const input = "我走到窗边，然后快进到第二天";
   // Execute turn
   const result = await pipeline.executeTurn(input, initialWorld, 3, {
     ...mockExecContext,
@@ -906,10 +906,9 @@ test("Test 39: Perception View prevents leakage of NPC private memory, goal, rel
     type: "character",
     name: "艾琳",
     location: "room",
-    memory: "SUPER_SECRET_MEMORY_123",
-    goal: "SUPER_SECRET_GOAL_456",
-    relationships: { player: 99 },
-    mentalState: { mood: "ultra_secret" },
+
+    relationships: { player: { trust: 99 } },
+    attributes: { mood: "ultra_secret", memory: "SUPER_SECRET_MEMORY_123", goal: "SUPER_SECRET_GOAL_456" },
   };
 
   const view = buildPerceptionView(world);
@@ -930,10 +929,9 @@ test("Test 40: Narrator View and Patch Filter prevent leakage of private fields"
     type: "character",
     name: "艾琳",
     location: "tavern_outside",
-    memory: "NARRATOR_FORBIDDEN_MEMORY",
-    goal: "NARRATOR_FORBIDDEN_GOAL",
-    relationships: { player: 50 },
-    mentalState: { mood: "hidden_mood" },
+
+    relationships: { player: { trust: 50 } },
+    attributes: { mood: "hidden_mood", memory: "NARRATOR_FORBIDDEN_MEMORY", goal: "NARRATOR_FORBIDDEN_GOAL" },
   };
 
   const narratorEntities = buildNarratorEntityView(world);
@@ -946,10 +944,10 @@ test("Test 40: Narrator View and Patch Filter prevent leakage of private fields"
 
   const patches = [
     { op: "replace" as const, path: "/clock", value: "Day 2" },
-    { op: "replace" as const, path: "/entities/erin/mentalState/mood", value: "alert" },
-    { op: "replace" as const, path: "/entities/erin/memory", value: "leak" },
-    { op: "replace" as const, path: "/entities/erin/relationships/player", value: 10 },
-    { op: "replace" as const, path: "/entities/erin/goal", value: "escape" },
+    { op: "replace" as const, path: "/entities/erin/attributes/mood", value: "alert" },
+    { op: "replace" as const, path: "/entities/erin/attributes/memory", value: "leak" },
+    { op: "replace" as const, path: "/entities/erin/relationships/player/trust", value: 10 },
+    { op: "replace" as const, path: "/entities/erin/attributes/goal", value: "escape" },
     { op: "replace" as const, path: "/scene/weather", value: "snowy" },
   ];
 

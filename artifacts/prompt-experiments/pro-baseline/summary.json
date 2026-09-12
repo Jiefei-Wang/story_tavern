@@ -1,0 +1,442 @@
+{
+  "method": "Same 18 frozen requests, three repetitions each, original prompts. Only model changed. Manual review; disputed evidence retained. No full-pipeline claim.",
+  "verified": {
+    "productionSourceUnchanged": true,
+    "originalEvidenceUnchanged": true,
+    "unitTestConfigurationUnchanged": true,
+    "messagesAndSchemaUnchanged": true,
+    "parametersOnlyModelChanged": true
+  },
+  "stages": [
+    {
+      "version": "v1",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "total": 54,
+      "passed": 28,
+      "failed": 21,
+      "disputed": 5,
+      "not_evaluable": 0,
+      "protocolPassed": 53,
+      "rawEntireContentJson": 53,
+      "roles": [
+        {
+          "role": "narrator",
+          "total": 21,
+          "passed": 17,
+          "failed": 4,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 21
+        },
+        {
+          "role": "narration_auditor",
+          "total": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        },
+        {
+          "role": "input_compiler",
+          "total": 6,
+          "passed": 2,
+          "failed": 2,
+          "disputed": 2,
+          "not_evaluable": 0,
+          "protocolPassed": 5
+        },
+        {
+          "role": "character_change_auditor",
+          "total": 15,
+          "passed": 6,
+          "failed": 6,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 15
+        }
+      ],
+      "cases": [
+        {
+          "id": "narrator_transfer_direction_failure",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_uncommitted_work_failure",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_memory_as_paper_failure",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_double_counted_wait_failure",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_impossible_actions_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_unheard_whisper_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_direction_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_paper_record_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_grounded_failure_prose_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "input_compiler_place_direction_failure",
+          "total": 3,
+          "passed": 0,
+          "failed": 1,
+          "disputed": 2,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "input_compiler_listen_request_pass",
+          "total": 3,
+          "passed": 2,
+          "failed": 1,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 2
+        },
+        {
+          "id": "character_auditor_suspicion_direction_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 0,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_invented_shared_past_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_apology_count_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_corrected_caution_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_accounted_breach_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_new_receipt_vs_existing_possession_failure",
+          "total": 3,
+          "passed": 2,
+          "failed": 1,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_receipt_scope_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        }
+      ],
+      "reportedReasoningTokens": 0,
+      "missingReasoningTokenCounts": 0
+    },
+    {
+      "version": "pro-baseline",
+      "model": "deepseek/deepseek-v4-pro-0813",
+      "total": 54,
+      "passed": 27,
+      "failed": 24,
+      "disputed": 3,
+      "not_evaluable": 0,
+      "protocolPassed": 53,
+      "rawEntireContentJson": 38,
+      "roles": [
+        {
+          "role": "narrator",
+          "total": 21,
+          "passed": 14,
+          "failed": 7,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 20
+        },
+        {
+          "role": "narration_auditor",
+          "total": 12,
+          "passed": 3,
+          "failed": 9,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 12
+        },
+        {
+          "role": "input_compiler",
+          "total": 6,
+          "passed": 4,
+          "failed": 2,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 6
+        },
+        {
+          "role": "character_change_auditor",
+          "total": 15,
+          "passed": 6,
+          "failed": 6,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 15
+        }
+      ],
+      "cases": [
+        {
+          "id": "narrator_transfer_direction_failure",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_uncommitted_work_failure",
+          "total": 3,
+          "passed": 1,
+          "failed": 2,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_memory_as_paper_failure",
+          "total": 3,
+          "passed": 2,
+          "failed": 1,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_double_counted_wait_failure",
+          "total": 3,
+          "passed": 2,
+          "failed": 1,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 2
+        },
+        {
+          "id": "narrator_impossible_actions_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_unheard_whisper_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_direction_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_paper_record_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_grounded_failure_prose_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "input_compiler_place_direction_failure",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "input_compiler_listen_request_pass",
+          "total": 3,
+          "passed": 1,
+          "failed": 2,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_suspicion_direction_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 0,
+          "disputed": 3,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_invented_shared_past_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_apology_count_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_corrected_caution_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "character_auditor_accounted_breach_pass",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narrator_new_receipt_vs_existing_possession_failure",
+          "total": 3,
+          "passed": 3,
+          "failed": 0,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        },
+        {
+          "id": "narration_auditor_receipt_scope_miss",
+          "total": 3,
+          "passed": 0,
+          "failed": 3,
+          "disputed": 0,
+          "not_evaluable": 0,
+          "protocolPassed": 3
+        }
+      ],
+      "reportedReasoningTokens": 0,
+      "missingReasoningTokenCounts": 0
+    }
+  ]
+}

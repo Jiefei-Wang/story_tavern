@@ -1,0 +1,215 @@
+schema-tests-final.log
+(node:11652) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ reload resumes the most recently saved game instead of the first seeded save (832.4667ms)
+✔ concurrent browser saves and deletion preserve unrelated records (1498.9844ms)
+✔ save management preserves unsaved progress in other saves (395.827ms)
+✔ selecting current variation or invalid indexes does not truncate history (0.7468ms)
+✔ send completing after save selection preserves the selected save (1.6217ms)
+✔ retry completing after save selection preserves the selected save (0.5247ms)
+✔ built-in schema validates admin blocks without generated code (49.4032ms)
+✔ interpreted validation enforces references, alternatives and strict types (62.7599ms)
+✔ invalid schema definitions are rejected even in unused properties (1.7871ms)
+✔ SSE decodes split UTF-8 and CRLF, publishes text before completion and preserves usage (8.6058ms)
+✔ parallel response accumulators never mix different characters (0.3955ms)
+✔ truncated/error streams and output length limits fail instead of committing partial output (0.9319ms)
+ℹ tests 139
+ℹ suites 0
+ℹ pass 139
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11417.6041
+
+schema-csp-final.log
+(node:24136) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ reload resumes the most recently saved game instead of the first seeded save (885.2852ms)
+✔ concurrent browser saves and deletion preserve unrelated records (1562.5162ms)
+✔ save management preserves unsaved progress in other saves (425.9645ms)
+✔ selecting current variation or invalid indexes does not truncate history (0.9542ms)
+✔ send completing after save selection preserves the selected save (1.6344ms)
+✔ retry completing after save selection preserves the selected save (0.526ms)
+✔ built-in schema validates admin blocks without generated code (41.5421ms)
+✔ interpreted validation enforces references, alternatives and strict types (44.9664ms)
+✔ invalid schema definitions are rejected even in unused properties (4.5751ms)
+✔ SSE decodes split UTF-8 and CRLF, publishes text before completion and preserves usage (5.004ms)
+✔ parallel response accumulators never mix different characters (0.3775ms)
+✔ truncated/error streams and output length limits fail instead of committing partial output (0.6278ms)
+ℹ tests 139
+ℹ suites 0
+ℹ pass 139
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11232.0859
+
+schema-build-final.log
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/regexes.js (72:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 2230 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                        0.57 kB │ gzip:   0.37 kB
+dist/assets/index-COoOqbk4.css        52.77 kB │ gzip:   9.38 kB
+dist/assets/testControl-DHU_2OcR.js    2.37 kB │ gzip:   1.15 kB
+dist/assets/index-7cYY6LeR.js        992.78 kB │ gzip: 301.21 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.69s
+
+schema-rust.log
+test commands::backend::tests::test_apply_auth_bearer_empty_secret_ref_fails ... ok
+test commands::backend::tests::test_custom_headers_forbid_authorization_override ... ok
+test commands::secret::tests::test_secret_get_nonexistent ... ok
+test commands::backend::tests::test_apply_auth_bearer_missing_secret_fails_without_openrouter_fallback ... ok
+test commands::db::tests::test_invalid_table_rejection ... ok
+test commands::secret::tests::test_secret_set_and_get ... ok
+test commands::db::tests::test_database_crud_and_traces_table ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src\main.rs (src-tauri\target\debug\deps\story_tavern-b824463ee46c66c4.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests story_tavern_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+legacy-suite.log
+=== 3. Testing ConcurrencyLimiter ===
+  ✓ Concurrency limit respected: max observed 2 <= 2
+
+=== 4. Testing GamePipeline in Mock Mode ===
+  ✓ Pipeline execution succeeded
+  ✓ Narrator prose was generated
+  ✓ Without a proposal, mock must not invent a hardcoded story-specific state change
+  ✓ JSON patches were generated and recorded
+  ✓ Turn trace was recorded in TraceManager
+  ✓ Trace contains 14 spans
+  ✓ Trace contains input_compiler span
+  ✓ Trace contains perception span
+  ✓ Trace contains npc_reaction span
+  ✓ Trace contains world_resolver span
+  ✓ Trace contains narrator span
+
+=== 5. Testing Admin Command Pipeline ===
+  ✓ Admin command turn succeeded
+  ✓ Magic resurrection rule was patched to false by Admin Patch agent
+
+>>> ALL TESTS PASSED SUCCESSFULLY! <<<
+
+
+legacy-admin.log
+          "id": "e2",
+          "type": "speech",
+          "actor": "player",
+          "content": "看外面",
+          "target": "",
+          "duration": 2,
+          "parallelWith": [
+            "e1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b_2",
+      "kind": "admin",
+      "command": "改变天气为下雪天"
+    }
+  ]
+}
+✓ Compound input successfully split into both normal block AND admin block!
+
+>>> ALL ADMIN INTENT TESTS PASSED! <<<
+
+legacy-comprehensive.log
+  '[success] TemporalBlock [normal] (197ms)',
+  '[success] Perception Agent (39ms)',
+  '[success] NPC Reaction Agent (31ms)',
+  '[success] NPC Reaction Agent (35ms)',
+  '[success] NPC intent permissions: erin (1ms)',
+  '[success] NPC intent permissions: guard (1ms)',
+  '[success] Character state proposals: erin (0ms)',
+  '[success] Character state proposals: guard (0ms)',
+  '[success] World Resolver (35ms)',
+  '[success] Public event provenance validation (0ms)',
+  '[success] Character Schema commit gate (0ms)',
+  '[success] TemporalBlock [admin] (94ms)',
+  '[success] Admin Patch Agent (27ms)',
+  '[success] Character Schema commit gate (0ms)',
+  '[success] Narrator (29ms)',
+  '[success] Narrator composition validation (0ms)'
+]
+
+=================================================================
+           所有功能实测全部通过，每个模块均正常回复！              
+=================================================================
+
+
+legacy-live.log
+>>> [PASS] 真实 LLM 成功将指令拆解为 kind='admin' 时序块！
+
+【2/3】正在调用真实大模型 Admin Patch 结算世界变更...
+--> Admin Patch 耗时: 2961ms
+--> 真实 LLM 生成的 RFC 6902 补丁: [
+  {
+    "op": "replace",
+    "path": "/scene/weather",
+    "value": "snow"
+  }
+]
+--> Patch 应用成功，当前天气: snow
+【3/3】正在调用真实大模型 Narrator 生成正文旁白...
+--> Narrator 耗时: 602ms
+--> 真实 LLM 撰写的小说叙事正文:
+
+ { segments: [] }
+
+===============================================================
+   真实大模型端到端调用完全成功！无任何 MOCK 参与！           
+===============================================================
+
+
+legacy-retry2.log
+  {
+    op: 'replace',
+    path: '/entities/guard/attributes/mood',
+    value: 'alert'
+  }
+]
+--> 推进后的世界状态时钟: 1342-06-12T08:46:00
+--> 快进后小说叙事正文:
+ （旁白生成失败，请查看调试记录。）
+>>> [PASS] 自然语言时间快进抽取与世界推进成功！
+
+【3/3】测试重试与分支数据模型结构...
+--> 分支数量: 2
+--> 当前激活分支: 2
+--> 分支 1 叙事: 这是分支 1 的故事推演结果。
+--> 分支 2 叙事: 这是重试后生成的分支 2 的故事推演结果。
+>>> [PASS] 重试与分支数据模型验证成功！
+
+===============================================================
+             全部新功能测试通过，运行正常！                     
+===============================================================
+

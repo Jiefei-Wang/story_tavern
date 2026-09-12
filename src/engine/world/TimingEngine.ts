@@ -1,4 +1,4 @@
-import { GameEvent, NPCIntent } from "../../types";
+import { GameEvent, NPCIntent, SpeechPlan } from "../../types";
 
 /**
  * Deterministic estimator for speech duration based on character count.
@@ -18,6 +18,26 @@ export function getSpeechDuration(content?: string): number {
   if (len <= 30) return 3.0;
   if (len <= 80) return 5.0;
   return Math.max(1.0, len / 5.0);
+}
+
+/** Estimate speech time from semantic intent, before Narrator has written words. */
+export function getSpeechPlanDuration(plan?: SpeechPlan): number {
+  if (!plan || typeof plan !== "object") return 1.5;
+  // Summary describes the utterance; beats/tone/goal describe how to realize it.
+  // Counting both counted the same reply twice and punished descriptive metadata.
+  const semanticText = typeof plan.summary === "string" ? plan.summary.trim() : "";
+  const verbosityMultiplier: Record<NonNullable<SpeechPlan["verbosity"]>, number> = {
+    brief: 0.6,
+    normal: 1,
+    detailed: 1.35,
+    extended: 1.8,
+  };
+  const summaryChars = [...semanticText].filter(char => /[\p{L}\p{N}]/u.test(char)).length;
+  const base = Math.max(1.5, summaryChars / 5);
+  // A terse summary cannot hide arbitrarily many mandatory points. Charge per
+  // distinct obligation, not for the length of its explanatory metadata.
+  const requiredPoints = new Set((plan.beats || []).filter(beat => beat.required === true).map(beat => beat.meaning.trim())).size;
+  return Math.max(1.5, requiredPoints * 0.6, base * (plan.verbosity ? verbosityMultiplier[plan.verbosity] : 1));
 }
 
 /**
@@ -74,15 +94,23 @@ export function getSafeEventDuration(event: GameEvent): number {
 /**
  * Computes safe duration for an NPC intent:
  * - Speech: strictly deterministic by content length.
- * - Action: clamped to reasonable range.
+ * - Brief action: clamped to reasonable range.
+ * - Sustained process: preserves its requested duration when a trusted window is
+ *   supplied. Over-budget duration is returned intact so scheduling rejects the
+ *   intent instead of describing a twenty-minute rest as completed in a second.
  * - Wait: clamped.
  */
-export function getSafeIntentDuration(intent: NPCIntent): number {
+export function getSafeIntentDuration(intent: NPCIntent, availableTime?: number): number {
   if (!intent) return 1.0;
   if (intent.type === "speech") {
-    return getSpeechDuration(intent.content);
+    return intent.speechPlan ? getSpeechPlanDuration(intent.speechPlan) : getSpeechDuration(intent.content);
   }
   if (intent.type === "action") {
+    if (typeof availableTime === "number" && Number.isFinite(availableTime) && availableTime >= 0 &&
+      isSustainedProcessAction(intent.op) && typeof intent.duration === "number" &&
+      Number.isFinite(intent.duration) && intent.duration > 0) {
+      return Math.max(1, intent.duration);
+    }
     return getClampedActionDuration(intent.duration, intent.op);
   }
   if (intent.type === "wait") {
@@ -97,6 +125,17 @@ export function getSafeIntentDuration(intent: NPCIntent): number {
     return 1.0;
   }
   return 1.0;
+}
+
+/** Activity categories only; no scene, character, item or attribute IDs. */
+export function isSustainedProcessAction(op?: string): boolean {
+  if (!op) return false;
+  const normalized = op.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+  const words = normalized.split(/[^a-z]+/).filter(Boolean);
+  if (words.some(word => ["ask", "offer", "invite", "plan", "promise", "request", "describe", "pretend", "agree"].includes(word)) ||
+    /请求|邀请|打算|承诺|假装|描述|答应/.test(normalized)) return false;
+  return words.some(word => ["rest", "sleep", "nap", "eat", "drink", "consume", "meditate", "recover", "recuperate"].includes(word)) ||
+    /休息|睡眠|睡觉|小睡|进食|吃饭|喝水|冥想|静养/.test(normalized);
 }
 
 /**

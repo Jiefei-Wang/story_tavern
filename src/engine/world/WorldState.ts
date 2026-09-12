@@ -14,49 +14,31 @@ export const INITIAL_HARBOR_TAVERN_WORLD: WorldState = {
       type: "character",
       name: "玩家 (Player)",
       location: "tavern_outside",
-      inventory: ["copper_coins_x10", "travel_cloak"],
-      mentalState: {
+      attributes: {
         mood: "calm",
+        inventory: ["copper_coins_x10", "travel_cloak"],
       },
     },
     erin: {
       type: "character",
       name: "艾琳 (Erin)",
       location: "tavern_outside",
-      mentalState: {
-        mood: "uneasy",
-      },
-      relationships: {
-        player: 20,
-      },
-      goal: "找到明早上船离开港口的门路",
-      memory: "昨晚听见卫兵在码头加强戒备的密谈，正急于寻找可信任的同行者。",
+      attributes: { mood: "uneasy", goal: "找到明早上船离开港口的门路", memory: "昨晚听见卫兵在码头加强戒备的密谈，正急于寻找可信任的同行者。" },
+      relationships: { player: { trust: 20 } },
     },
     guard: {
       type: "character",
       name: "港口卫兵 (Guard)",
       location: "tavern_outside",
-      mentalState: {
-        mood: "suspicious",
-      },
-      relationships: {
-        player: -5,
-      },
-      goal: "盘查可疑流动人员，防止走私偷渡",
-      memory: "上级命令今天必须严防死守，盘查任何在码头附近徘徊的陌生面孔。",
+      attributes: { mood: "suspicious", goal: "盘查可疑流动人员，防止走私偷渡", memory: "上级命令今天必须严防死守，盘查任何在码头附近徘徊的陌生面孔。" },
+      relationships: { player: { trust: -5 } },
     },
     tavern_owner: {
       type: "character",
       name: "酒馆老板 (Tavern Owner)",
       location: "tavern_bar",
-      mentalState: {
-        mood: "cheerful",
-      },
-      relationships: {
-        player: 10,
-      },
-      goal: "招揽顾客多卖几桶麦酒，维持小店平安",
-      memory: "昨晚有几个走私贩在角落窃窃私语，但他不想卷入麻烦。",
+      attributes: { mood: "cheerful", goal: "招揽顾客多卖几桶麦酒，维持小店平安", memory: "昨晚有几个走私贩在角落窃窃私语，但他不想卷入麻烦。" },
+      relationships: { player: { trust: 10 } },
     },
     door_01: {
       type: "object",

@@ -14,6 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { AIAssistant } from "../ModelAssistant";
 
 export const Sidebar: React.FC = () => {
   const { settings } = useSettingsStore();
@@ -54,6 +55,7 @@ export const Sidebar: React.FC = () => {
               <History className="w-4 h-4 text-slate-500" />
               <span>历史</span>
             </NavLink>
+            <AIAssistant />
           </nav>
         </div>
 
@@ -75,6 +77,7 @@ export const Sidebar: React.FC = () => {
               <Layers className="w-4 h-4 text-slate-500" />
               <span>Agent 组</span>
             </NavLink>
+
           </nav>
         </div>
 

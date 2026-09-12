@@ -16,7 +16,15 @@
     "check": "npm run check:ts && npm run check:csp && npm run check:rust",
     "build:exe": "tauri build --no-bundle",
     "build:installer": "tauri build",
-    "check:csp": "node --disallow-code-generation-from-strings --import tsx --test tests/**/*.test.ts"
+    "check:csp": "node --disallow-code-generation-from-strings --import tsx --test tests/**/*.test.ts",
+    "eval:narrator": "tsx scripts/narrator_e2e_eval.ts",
+    "eval:character-schema": "tsx scripts/character_schema_playtest.ts",
+    "eval:character-generation": "tsx scripts/character_schema_generation_playtest.ts",
+    "eval:behavior": "tsx scripts/behavior_playtest.ts",
+    "eval:behavior:config": "tsx scripts/prepare_behavior_config.ts",
+    "eval:refusal:config": "tsx scripts/prepare_refusal_config.ts",
+    "eval:refusal": "tsx scripts/refusal_detector_eval.ts",
+    "eval:refusal:probes": "tsx scripts/safety_refusal_probes.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

@@ -1,0 +1,2420 @@
+{
+  "scenario": "生存（无关系）",
+  "mode": "live",
+  "startedAt": "2026-09-12T15:02:53.192Z",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "schema": {
+    "version": 1,
+    "sections": [
+      {
+        "id": "custom",
+        "label": "世界自定义属性",
+        "fields": [
+          {
+            "id": "health",
+            "label": "health",
+            "type": "number",
+            "min": 0,
+            "max": 1,
+            "default": 0.7,
+            "visibility": "public",
+            "updatePolicy": "dynamic",
+            "freedom": "strict"
+          },
+          {
+            "id": "hunger",
+            "label": "hunger",
+            "type": "number",
+            "min": 0,
+            "max": 1,
+            "default": 0.7,
+            "visibility": "private",
+            "updatePolicy": "dynamic",
+            "freedom": "strict",
+            "description": "饥饿程度：0 为饱腹，1 为极度饥饿。",
+            "llmGuidance": "实际进食后降低；仅收到食物不等于已经吃完。"
+          },
+          {
+            "id": "fatigue",
+            "label": "fatigue",
+            "type": "number",
+            "min": 0,
+            "max": 1,
+            "default": 0.6,
+            "visibility": "private",
+            "updatePolicy": "dynamic",
+            "freedom": "strict",
+            "description": "疲劳程度：0 为精力充沛，1 为极度疲劳。",
+            "llmGuidance": "实际劳动后增加，经过休息后降低。"
+          },
+          {
+            "id": "privateNote",
+            "label": "privateNote",
+            "type": "text",
+            "default": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。",
+            "visibility": "private",
+            "updatePolicy": "setup_only",
+            "freedom": "guided"
+          }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "input": "我递给艾琳一块面包和水，说：“吃一点吧。”",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "patches": [],
+      "narration": "雨声在窗外绵密地落着，酒馆里光线昏沉。玩家将面包和水递到艾琳面前。\n\n“吃一点吧。”\n\n艾琳看了看递来的东西，顿了一下，才伸手接过去。\n\n“谢了，我吃点。”",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我递给艾琳一块面包和水，说：“吃一点吧。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {},
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "give",
+                    "target": "erin",
+                    "duration": 1.5
+                  },
+                  {
+                    "id": "e2",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "吃一点吧。",
+                    "target": "erin",
+                    "duration": 1.5,
+                    "parallelWith": [
+                      "e1"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "give",
+                "target": "erin",
+                "duration": 1.5
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "吃一点吧。",
+                "target": "erin",
+                "duration": 1.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": false
+                },
+                {
+                  "eventId": "e2",
+                  "saw": true,
+                  "heard": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": false,
+                "actor": "player",
+                "type": "action",
+                "op": "give",
+                "target": "erin"
+              },
+              {
+                "eventId": "e2",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "吃一点吧。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 2,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1",
+                "e2"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他给我吃的，还说让我吃点。我确实饿了，但藏饼干的事不能说。",
+            "stateUpdates": [],
+            "intents": [
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "谢了，我吃点。",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                },
+                "target": "player",
+                "duration": 1.5
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "give",
+                "target": "erin",
+                "duration": 1.5
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "吃一点吧。",
+                "target": "erin",
+                "duration": 1.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他给我吃的，还说让我吃点。我确实饿了，但藏饼干的事不能说。",
+                  "stateUpdates": [],
+                  "intents": [
+                    {
+                      "type": "speech",
+                      "speechPlan": {
+                        "summary": "谢了，我吃点。",
+                        "tone": "克制",
+                        "verbosity": "brief",
+                        "boundaries": [
+                          "不得透露私人信息"
+                        ]
+                      },
+                      "target": "player",
+                      "duration": 1.5,
+                      "id": "b0_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "health": 0.7,
+                    "hunger": 0.7,
+                    "fatigue": 0.6,
+                    "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 2,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1",
+                "e2"
+              ]
+            }
+          },
+          "output": {
+            "patches": [],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "target": "player",
+                "speechPlan": {
+                  "summary": "谢了，我吃点。",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                }
+              }
+            ],
+            "rejectedIntents": [],
+            "narrationHints": [
+              "艾琳接过食物，克制地道了谢并开始吃"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我递给艾琳一块面包和水，说：“吃一点吧。”",
+            "committedEvents": [
+              {
+                "id": "turn_1_b0_event_0",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "give",
+                  "target": "erin",
+                  "duration": 1.5
+                },
+                "op": "give",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b0_event_1",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e2",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "吃一点吧。",
+                  "target": "erin",
+                  "duration": 1.5,
+                  "parallelWith": [
+                    "e1"
+                  ]
+                },
+                "content": "吃一点吧。",
+                "sourceIntentId": "e2",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b0_event_2",
+                "type": "npc_speech",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "speech",
+                  "sourceIntentId": "b0_erin_intent_0",
+                  "target": "player",
+                  "speechPlan": {
+                    "summary": "谢了，我吃点。",
+                    "tone": "克制",
+                    "verbosity": "brief",
+                    "boundaries": [
+                      "不得透露私人信息"
+                    ]
+                  }
+                },
+                "sourceIntentId": "b0_erin_intent_0",
+                "speechPlan": {
+                  "summary": "谢了，我吃点。",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                },
+                "target": "player",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "give",
+                "target": "erin",
+                "duration": 1.5
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "吃一点吧。",
+                "target": "erin",
+                "duration": 1.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声在窗外绵密地落着，酒馆里光线昏沉。玩家将面包和水递到艾琳面前。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "e2",
+                "text": "吃一点吧。"
+              },
+              {
+                "type": "prose",
+                "text": "艾琳看了看递来的东西，顿了一下，才伸手接过去。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "谢了，我吃点。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [],
+            "accepted": [],
+            "rejected": [],
+            "validation": [],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "committed": false
+          }
+        }
+      ]
+    },
+    {
+      "input": "我邀请艾琳一起坐在火炉边休息十分钟。",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "replace",
+          "path": "/entities/erin/location",
+          "value": "fireplace"
+        }
+      ],
+      "narration": "雨声密密地敲着酒馆的窗，晨光被水汽滤得柔和。炉火噼啪作响，暖意一圈圈漫开。玩家走到壁炉边，艾琳也跟着移步过来。\n\n“艾琳，我们一起坐在火炉边休息十分钟吧。”\n\n玩家在炉边的长凳上坐下，艾琳也在旁边坐了下来。火焰跃动，将两人的影子投在木墙上。\n\n接下来的几分钟里，只有柴火燃烧的细响和窗外连绵的雨声。谁也没有急着开口。",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我邀请艾琳一起坐在火炉边休息十分钟。"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin",
+              "lastSpeakerId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "walk_to",
+                    "target": "fireplace",
+                    "duration": 2
+                  },
+                  {
+                    "id": "e2",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": [
+                      "e1"
+                    ]
+                  },
+                  {
+                    "id": "e3",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "sit_down",
+                    "target": "fireplace",
+                    "duration": 1
+                  }
+                ]
+              },
+              {
+                "id": "b2",
+                "kind": "wait",
+                "responseWindow": true
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": false
+                },
+                {
+                  "eventId": "e2",
+                  "saw": true,
+                  "heard": true
+                },
+                {
+                  "eventId": "e3",
+                  "saw": true,
+                  "heard": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": false,
+                "actor": "player",
+                "type": "action",
+                "op": "walk_to",
+                "target": "fireplace"
+              },
+              {
+                "eventId": "e2",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "艾琳，我们一起坐在火炉边休息十分钟吧。"
+              },
+              {
+                "eventId": "e3",
+                "saw": true,
+                "heard": false,
+                "actor": "player",
+                "type": "action",
+                "op": "sit_down",
+                "target": "fireplace"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1",
+                "e2",
+                "e3"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他叫我一起烤火，我确实累了，坐下歇会儿也好。",
+            "stateUpdates": [],
+            "intents": [
+              {
+                "type": "action",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 1.2
+              },
+              {
+                "type": "action",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 0.8
+              },
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "好，我坐会儿。",
+                  "tone": "疲惫但温和",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                },
+                "target": "player",
+                "duration": 1
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他叫我一起烤火，我确实累了，坐下歇会儿也好。",
+                  "stateUpdates": [],
+                  "intents": [
+                    {
+                      "type": "action",
+                      "op": "walk_to",
+                      "target": "fireplace",
+                      "duration": 1.2,
+                      "id": "b0_erin_intent_0"
+                    },
+                    {
+                      "type": "action",
+                      "op": "sit_down",
+                      "target": "fireplace",
+                      "duration": 1,
+                      "id": "b0_erin_intent_1"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "health": 0.7,
+                    "hunger": 0.7,
+                    "fatigue": 0.6,
+                    "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1",
+                "e2",
+                "e3"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/location",
+                "value": "fireplace"
+              }
+            ],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b0_erin_intent_0",
+                "target": "fireplace",
+                "op": "walk_to"
+              },
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b0_erin_intent_1",
+                "target": "fireplace",
+                "op": "sit_down"
+              }
+            ],
+            "rejectedIntents": [],
+            "narrationHints": [
+              "艾琳接受了玩家的邀请，走向火炉边",
+              "艾琳在火炉边坐下，与玩家一同休息"
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "b2",
+                "type": "action",
+                "actor": "player",
+                "op": "wait",
+                "duration": 5
+              }
+            ],
+            "npcReactions": [],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 5,
+              "response_window": true,
+              "trigger_event_ids": [
+                "b2"
+              ]
+            }
+          },
+          "output": {
+            "patches": [],
+            "publicEvents": [],
+            "rejectedIntents": [],
+            "narrationHints": [
+              "玩家在酒馆里等待了 5 秒，周围没有新的动静。"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我邀请艾琳一起坐在火炉边休息十分钟。",
+            "committedEvents": [
+              {
+                "id": "turn_2_b0_event_0",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "walk_to",
+                  "target": "fireplace",
+                  "duration": 2
+                },
+                "op": "walk_to",
+                "target": "fireplace",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/erin/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_2_b0_event_1",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e2",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": [
+                    "e1"
+                  ]
+                },
+                "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                "sourceIntentId": "e2",
+                "target": "erin",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/erin/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_2_b0_event_2",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e3",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "sit_down",
+                  "target": "fireplace",
+                  "duration": 1
+                },
+                "op": "sit_down",
+                "target": "fireplace",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/erin/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_2_b0_event_3",
+                "type": "npc_action",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "action",
+                  "sourceIntentId": "b0_erin_intent_0",
+                  "target": "fireplace",
+                  "op": "walk_to"
+                },
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "walk_to",
+                "target": "fireplace",
+                "public": true
+              },
+              {
+                "id": "turn_2_b0_event_4",
+                "type": "npc_action",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "action",
+                  "sourceIntentId": "b0_erin_intent_1",
+                  "target": "fireplace",
+                  "op": "sit_down"
+                },
+                "sourceIntentId": "b0_erin_intent_1",
+                "op": "sit_down",
+                "target": "fireplace",
+                "public": true
+              },
+              {
+                "id": "turn_2_b1_event_5",
+                "type": "wait",
+                "actor": "player",
+                "blockId": "b2",
+                "source": {
+                  "duration": 5
+                },
+                "public": true,
+                "patches": []
+              }
+            ],
+            "publicPatches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/location",
+                "value": "fireplace"
+              }
+            ],
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/location",
+                "value": "fireplace"
+              }
+            ],
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，我们一起坐在火炉边休息十分钟吧。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声密密地敲着酒馆的窗，晨光被水汽滤得柔和。炉火噼啪作响，暖意一圈圈漫开。玩家走到壁炉边，艾琳也跟着移步过来。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "e2",
+                "text": "艾琳，我们一起坐在火炉边休息十分钟吧。"
+              },
+              {
+                "type": "prose",
+                "text": "玩家在炉边的长凳上坐下，艾琳也在旁边坐了下来。火焰跃动，将两人的影子投在木墙上。"
+              },
+              {
+                "type": "prose",
+                "text": "接下来的几分钟里，只有柴火燃烧的细响和窗外连绵的雨声。谁也没有急着开口。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [],
+            "accepted": [],
+            "rejected": [],
+            "validation": [],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/location",
+                "value": "fireplace"
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "input": "我请艾琳帮忙把一袋木柴搬到门边。",
+      "success": false,
+      "passed": false,
+      "error": "[PipelineStageError in input_compiler]: Unknown or absent speech target 'erin'",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "patches": [],
+      "narration": "执行中断: [PipelineStageError in input_compiler]: Unknown or absent speech target 'erin'",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我请艾琳帮忙把一袋木柴搬到门边。"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin",
+              "lastSpeakerId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "艾琳，能帮我把这袋木柴搬到门边吗？",
+                    "target": "erin",
+                    "duration": 2
+                  }
+                ]
+              },
+              {
+                "id": "b2",
+                "kind": "wait",
+                "responseWindow": true
+              }
+            ]
+          }
+        }
+      ],
+      "validation": []
+    },
+    {
+      "input": "快进十分钟，让我们有时间坐在火炉旁吃完面包并休息。",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.5,
+            "fatigue": 0.5,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "fireplace",
+          "attributes": {
+            "health": 0.7,
+            "hunger": 0.7,
+            "fatigue": 0.6,
+            "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "replace",
+          "path": "/entities/player/location",
+          "value": "fireplace"
+        },
+        {
+          "op": "replace",
+          "path": "/entities/player/attributes/hunger",
+          "value": 0.5
+        },
+        {
+          "op": "replace",
+          "path": "/entities/player/attributes/fatigue",
+          "value": 0.5
+        },
+        {
+          "op": "replace",
+          "path": "/clock",
+          "value": "1342-06-12T08:26:00"
+        },
+        {
+          "op": "replace",
+          "path": "/scene/lighting",
+          "value": "morning"
+        }
+      ],
+      "narration": "柴火在石砌的炉膛里噼啪作响，暖意一点点渗进湿冷的衣料。玩家在炉边的长凳上坐稳，从行囊里取出那块硬面包，就着火光慢慢咀嚼。艾琳也在近旁，谁都没有急着开口。\n\n雨点敲着酒馆的窗棂，声音均匀而绵密。十分钟在沉默与炉火的轻响里悄然过去，面包吃完了，肩背的酸痛也松了几分。墙上的挂钟指针挪到了八点二十六分，窗外仍是灰蒙蒙的雨幕。",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "快进十分钟，让我们有时间坐在火炉旁吃完面包并休息。"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin",
+              "lastSpeakerId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "walk_to",
+                    "target": "fireplace",
+                    "duration": 2
+                  },
+                  {
+                    "id": "e2",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "sit_down",
+                    "target": "fireplace",
+                    "duration": 1,
+                    "parallelWith": [
+                      "e1"
+                    ]
+                  },
+                  {
+                    "id": "e3",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "eat",
+                    "target": "bread",
+                    "duration": 5
+                  },
+                  {
+                    "id": "e4",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "rest",
+                    "target": "fireplace",
+                    "duration": 5,
+                    "parallelWith": [
+                      "e3"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "b2",
+                "kind": "time_skip",
+                "to": "ten_minutes_later"
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "eat",
+                "target": "bread",
+                "duration": 5
+              },
+              {
+                "id": "e4",
+                "type": "action",
+                "actor": "player",
+                "op": "rest",
+                "target": "fireplace",
+                "duration": 5,
+                "parallelWith": [
+                  "e3"
+                ]
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": false
+                },
+                {
+                  "eventId": "e2",
+                  "saw": true,
+                  "heard": false
+                },
+                {
+                  "eventId": "e3",
+                  "saw": true,
+                  "heard": false
+                },
+                {
+                  "eventId": "e4",
+                  "saw": true,
+                  "heard": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "eat",
+                "target": "bread",
+                "duration": 5
+              },
+              {
+                "id": "e4",
+                "type": "action",
+                "actor": "player",
+                "op": "rest",
+                "target": "fireplace",
+                "duration": 5,
+                "parallelWith": [
+                  "e3"
+                ]
+              }
+            ],
+            "npcReactions": [],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 4,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1",
+                "e2",
+                "e3",
+                "e4"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/player/location",
+                "value": "fireplace"
+              },
+              {
+                "op": "replace",
+                "path": "/entities/player/attributes/hunger",
+                "value": 0.5
+              },
+              {
+                "op": "replace",
+                "path": "/entities/player/attributes/fatigue",
+                "value": 0.5
+              }
+            ],
+            "publicEvents": [],
+            "rejectedIntents": [],
+            "narrationHints": [
+              "玩家走到壁炉边并坐下",
+              "玩家在炉火旁吃了面包并休息了一会儿",
+              "艾琳就在壁炉旁，但未作出反应"
+            ]
+          }
+        },
+        {
+          "agent": "time_skip",
+          "input": {
+            "skipTarget": "ten_minutes_later",
+            "world": {
+              "clock": "1342-06-12T08:16:00",
+              "scene": {
+                "location": "tavern_room",
+                "weather": "rainy",
+                "lighting": "morning"
+              },
+              "rules": {},
+              "entities": {
+                "player": {
+                  "type": "character",
+                  "name": "玩家",
+                  "location": "fireplace",
+                  "attributes": {
+                    "health": 0.7,
+                    "hunger": 0.5,
+                    "fatigue": 0.5,
+                    "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                  }
+                },
+                "erin": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "fireplace",
+                  "attributes": {
+                    "health": 0.7,
+                    "hunger": 0.7,
+                    "fatigue": 0.6,
+                    "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                  }
+                }
+              },
+              "conversation": {
+                "lastAddressedNpcId": "erin",
+                "focusNpcId": "erin",
+                "lastSpeakerId": "erin"
+              }
+            },
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。"
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/clock",
+                "value": "1342-06-12T08:26:00"
+              },
+              {
+                "op": "replace",
+                "path": "/scene/lighting",
+                "value": "morning"
+              }
+            ],
+            "stateUpdates": [
+              {
+                "path": "attributes.fatigue",
+                "op": "delta",
+                "value": -0.02
+              }
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "快进十分钟，让我们有时间坐在火炉旁吃完面包并休息。",
+            "committedEvents": [
+              {
+                "id": "turn_4_b0_event_0",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "walk_to",
+                  "target": "fireplace",
+                  "duration": 2
+                },
+                "op": "walk_to",
+                "target": "fireplace",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/player/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_4_b0_event_1",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e2",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "sit_down",
+                  "target": "fireplace",
+                  "duration": 1,
+                  "parallelWith": [
+                    "e1"
+                  ]
+                },
+                "op": "sit_down",
+                "target": "fireplace",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/player/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_4_b0_event_2",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e3",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "eat",
+                  "target": "bread",
+                  "duration": 5
+                },
+                "op": "eat",
+                "target": "bread",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/player/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_4_b0_event_3",
+                "type": "player_action",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e4",
+                  "type": "action",
+                  "actor": "player",
+                  "op": "rest",
+                  "target": "fireplace",
+                  "duration": 5,
+                  "parallelWith": [
+                    "e3"
+                  ]
+                },
+                "op": "rest",
+                "target": "fireplace",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/entities/player/location",
+                    "value": "fireplace"
+                  }
+                ]
+              },
+              {
+                "id": "turn_4_b1_event_4",
+                "type": "time_skip",
+                "blockId": "b2",
+                "source": "ten_minutes_later",
+                "public": true,
+                "patches": [
+                  {
+                    "op": "replace",
+                    "path": "/clock",
+                    "value": "1342-06-12T08:26:00"
+                  }
+                ]
+              }
+            ],
+            "publicPatches": [
+              {
+                "op": "replace",
+                "path": "/entities/player/location",
+                "value": "fireplace"
+              },
+              {
+                "op": "replace",
+                "path": "/clock",
+                "value": "1342-06-12T08:26:00"
+              }
+            ],
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/player/location",
+                "value": "fireplace"
+              },
+              {
+                "op": "replace",
+                "path": "/clock",
+                "value": "1342-06-12T08:26:00"
+              }
+            ],
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "walk_to",
+                "target": "fireplace",
+                "duration": 2
+              },
+              {
+                "id": "e2",
+                "type": "action",
+                "actor": "player",
+                "op": "sit_down",
+                "target": "fireplace",
+                "duration": 1,
+                "parallelWith": [
+                  "e1"
+                ]
+              },
+              {
+                "id": "e3",
+                "type": "action",
+                "actor": "player",
+                "op": "eat",
+                "target": "bread",
+                "duration": 5
+              },
+              {
+                "id": "e4",
+                "type": "action",
+                "actor": "player",
+                "op": "rest",
+                "target": "fireplace",
+                "duration": 5,
+                "parallelWith": [
+                  "e3"
+                ]
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7
+                }
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "柴火在石砌的炉膛里噼啪作响，暖意一点点渗进湿冷的衣料。玩家在炉边的长凳上坐稳，从行囊里取出那块硬面包，就着火光慢慢咀嚼。艾琳也在近旁，谁都没有急着开口。"
+              },
+              {
+                "type": "prose",
+                "text": "雨点敲着酒馆的窗棂，声音均匀而绵密。十分钟在沉默与炉火的轻响里悄然过去，面包吃完了，肩背的酸痛也松了几分。墙上的挂钟指针挪到了八点二十六分，窗外仍是灰蒙蒙的雨幕。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/player/location",
+                "value": "fireplace"
+              },
+              {
+                "op": "replace",
+                "path": "/entities/player/attributes/hunger",
+                "value": 0.5
+              },
+              {
+                "op": "replace",
+                "path": "/entities/player/attributes/fatigue",
+                "value": 0.5
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.5,
+                  "fatigue": 0.5,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/clock",
+                "value": "1342-06-12T08:26:00"
+              },
+              {
+                "op": "replace",
+                "path": "/scene/lighting",
+                "value": "morning"
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.5,
+                  "fatigue": 0.5,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.5,
+                  "fatigue": 0.5,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "fireplace",
+                "attributes": {
+                  "health": 0.7,
+                  "hunger": 0.7,
+                  "fatigue": 0.6,
+                  "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

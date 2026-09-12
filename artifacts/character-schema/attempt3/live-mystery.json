@@ -1,0 +1,2429 @@
+{
+  "scenario": "推理",
+  "mode": "live",
+  "startedAt": "2026-09-12T14:46:41.461Z",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "schema": {
+    "version": 1,
+    "sections": [
+      {
+        "id": "custom",
+        "label": "世界自定义属性",
+        "fields": [
+          {
+            "id": "suspicion",
+            "label": "suspicion",
+            "type": "number",
+            "min": 0,
+            "max": 1,
+            "default": 0.4,
+            "visibility": "private",
+            "updatePolicy": "dynamic",
+            "freedom": "strict"
+          },
+          {
+            "id": "knownFacts",
+            "label": "knownFacts",
+            "type": "list",
+            "default": [],
+            "visibility": "private",
+            "updatePolicy": "append_only",
+            "freedom": "free",
+            "item": {
+              "id": "entry",
+              "label": "经历",
+              "type": "object",
+              "visibility": "private",
+              "updatePolicy": "dynamic",
+              "freedom": "free",
+              "fields": [
+                {
+                  "id": "text",
+                  "label": "text",
+                  "type": "text",
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "free",
+                  "required": true
+                },
+                {
+                  "id": "importance",
+                  "label": "importance",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict",
+                  "required": true
+                }
+              ]
+            }
+          },
+          {
+            "id": "privateNote",
+            "label": "privateNote",
+            "type": "text",
+            "default": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。",
+            "visibility": "private",
+            "updatePolicy": "setup_only",
+            "freedom": "guided"
+          }
+        ]
+      }
+    ],
+    "relationship": {
+      "label": "关系维度",
+      "fields": [
+        {
+          "id": "trust",
+          "label": "trust",
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "default": 0.4,
+          "visibility": "private",
+          "updatePolicy": "dynamic",
+          "freedom": "strict",
+          "changePolicy": {
+            "mode": "delta",
+            "maxPerEvent": 0.15,
+            "maxPerTurn": 0.25
+          },
+          "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+        }
+      ]
+    }
+  },
+  "turns": [
+    {
+      "input": "我对艾琳说：“我刚才亲眼看到门上的锁被撬开了。”",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.45,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4
+            }
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "replace",
+          "path": "/entities/erin/attributes/suspicion",
+          "value": 0.45
+        }
+      ],
+      "narration": "雨声顺着屋檐淌下来，在酒馆的木窗上敲出细密的闷响。晨光灰蒙蒙地铺进屋里，把桌面的水渍照得发亮。\n\n“我刚才亲眼看到门上的锁被撬开了。”\n\n艾琳没有立刻回应。她握着杯子的手停在半空，目光从窗外的雨幕上收回来，落在玩家脸上，像是要在那张脸上先读出点什么。\n\n“你看清了吗？”\n\n她问得很轻，声音几乎被雨声盖过去。",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“我刚才亲眼看到门上的锁被撬开了。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {},
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "我刚才亲眼看到门上的锁被撬开了。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": []
+                  }
+                ]
+              },
+              {
+                "id": "b2",
+                "kind": "wait",
+                "responseWindow": true
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我刚才亲眼看到门上的锁被撬开了。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "我刚才亲眼看到门上的锁被撬开了。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "锁被撬了？他专门来告诉我，是示警还是试探？先别急着信。",
+            "stateUpdates": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "intents": [
+              {
+                "type": "speech",
+                "target": "player",
+                "duration": 2,
+                "speechPlan": {
+                  "summary": "追问锁被撬的细节，不表态是否相信。",
+                  "beats": [
+                    {
+                      "kind": "question",
+                      "meaning": "询问是哪扇门、什么时候发现的",
+                      "required": true
+                    }
+                  ],
+                  "goal": "弄清消息真伪与对方意图",
+                  "stance": "存疑",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露私人怀疑与私人信息"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我刚才亲眼看到门上的锁被撬开了。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "锁被撬了？他专门来告诉我，是示警还是试探？先别急着信。",
+                  "stateUpdates": [
+                    {
+                      "path": "attributes.suspicion",
+                      "op": "delta",
+                      "value": 0.05
+                    }
+                  ],
+                  "intents": []
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.45,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/suspicion",
+                "value": 0.45
+              }
+            ],
+            "publicEvents": [],
+            "narrationHints": [
+              "艾琳听到玩家说门锁被撬，神色微变，警惕地打量玩家",
+              "艾琳没有开口回应，只是默默提高了戒心"
+            ]
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true
+              },
+              {
+                "eventId": "b2",
+                "saw": true,
+                "heard": false,
+                "actor": "player",
+                "type": "action",
+                "op": "wait",
+                "target": "scene",
+                "content": "观察到之前的事件后，见玩家停下动作，静候现场角色的回应。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 5,
+              "response_window": true,
+              "trigger_event_ids": [
+                "b2"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他停下来看着我，是在等我开口。我不该主动提钟表店的事，但可以问问他刚才看到了什么。",
+            "stateUpdates": [],
+            "intents": [
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "询问玩家刚才看到了什么，语气克制而试探。",
+                  "beats": [
+                    {
+                      "kind": "question",
+                      "meaning": "问玩家是否看清了刚才发生的事",
+                      "required": true
+                    }
+                  ],
+                  "goal": "了解玩家掌握的信息，同时不暴露自己的怀疑",
+                  "stance": "谨慎试探",
+                  "tone": "压低声音、克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息",
+                    "不主动提及任何具体怀疑对象"
+                  ]
+                },
+                "target": "player",
+                "duration": 2.5
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "b2",
+                "type": "action",
+                "actor": "player",
+                "op": "wait",
+                "duration": 5
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他停下来看着我，是在等我开口。我不该主动提钟表店的事，但可以问问他刚才看到了什么。",
+                  "stateUpdates": [],
+                  "intents": [
+                    {
+                      "type": "speech",
+                      "speechPlan": {
+                        "summary": "询问玩家刚才看到了什么，语气克制而试探。",
+                        "beats": [
+                          {
+                            "kind": "question",
+                            "meaning": "问玩家是否看清了刚才发生的事",
+                            "required": true
+                          }
+                        ],
+                        "goal": "了解玩家掌握的信息，同时不暴露自己的怀疑",
+                        "stance": "谨慎试探",
+                        "tone": "压低声音、克制",
+                        "verbosity": "brief",
+                        "boundaries": [
+                          "不得透露私人信息",
+                          "不主动提及任何具体怀疑对象"
+                        ]
+                      },
+                      "target": "player",
+                      "duration": 3.75,
+                      "id": "b1_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.45,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.45,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 5,
+              "response_window": true,
+              "trigger_event_ids": [
+                "b2"
+              ]
+            }
+          },
+          "output": {
+            "patches": [],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "speech",
+                "sourceIntentId": "b1_erin_intent_0",
+                "target": "player",
+                "speechPlan": {
+                  "summary": "询问玩家刚才看到了什么，语气克制而试探。",
+                  "beats": [
+                    {
+                      "kind": "question",
+                      "meaning": "问玩家是否看清了刚才发生的事",
+                      "required": true
+                    }
+                  ],
+                  "goal": "了解玩家掌握的信息，同时不暴露自己的怀疑",
+                  "stance": "谨慎试探",
+                  "tone": "压低声音、克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息",
+                    "不主动提及任何具体怀疑对象"
+                  ]
+                }
+              }
+            ],
+            "narrationHints": [
+              "艾琳压低声音，谨慎地向玩家试探刚才发生的事",
+              "玩家在原地等待了片刻"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我对艾琳说：“我刚才亲眼看到门上的锁被撬开了。”",
+            "committedEvents": [
+              {
+                "id": "turn_1_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "我刚才亲眼看到门上的锁被撬开了。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": []
+                },
+                "content": "我刚才亲眼看到门上的锁被撬开了。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b1_event_1",
+                "type": "wait",
+                "actor": "player",
+                "blockId": "b2",
+                "source": {
+                  "duration": 5
+                },
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b1_event_2",
+                "type": "npc_speech",
+                "actor": "erin",
+                "blockId": "b2",
+                "source": {
+                  "actor": "erin",
+                  "type": "speech",
+                  "sourceIntentId": "b1_erin_intent_0",
+                  "target": "player",
+                  "speechPlan": {
+                    "summary": "询问玩家刚才看到了什么，语气克制而试探。",
+                    "beats": [
+                      {
+                        "kind": "question",
+                        "meaning": "问玩家是否看清了刚才发生的事",
+                        "required": true
+                      }
+                    ],
+                    "goal": "了解玩家掌握的信息，同时不暴露自己的怀疑",
+                    "stance": "谨慎试探",
+                    "tone": "压低声音、克制",
+                    "verbosity": "brief",
+                    "boundaries": [
+                      "不得透露私人信息",
+                      "不主动提及任何具体怀疑对象"
+                    ]
+                  }
+                },
+                "sourceIntentId": "b1_erin_intent_0",
+                "speechPlan": {
+                  "summary": "询问玩家刚才看到了什么，语气克制而试探。",
+                  "beats": [
+                    {
+                      "kind": "question",
+                      "meaning": "问玩家是否看清了刚才发生的事",
+                      "required": true
+                    }
+                  ],
+                  "goal": "了解玩家掌握的信息，同时不暴露自己的怀疑",
+                  "stance": "谨慎试探",
+                  "tone": "压低声音、克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息",
+                    "不主动提及任何具体怀疑对象"
+                  ]
+                },
+                "target": "player",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我刚才亲眼看到门上的锁被撬开了。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声顺着屋檐淌下来，在酒馆的木窗上敲出细密的闷响。晨光灰蒙蒙地铺进屋里，把桌面的水渍照得发亮。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "e1",
+                "text": "我刚才亲眼看到门上的锁被撬开了。"
+              },
+              {
+                "type": "prose",
+                "text": "艾琳没有立刻回应。她握着杯子的手停在半空，目光从窗外的雨幕上收回来，落在玩家脸上，像是要在那张脸上先读出点什么。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b1_erin_intent_0",
+                "text": "你看清了吗？"
+              },
+              {
+                "type": "prose",
+                "text": "她问得很轻，声音几乎被雨声盖过去。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "accepted": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "attributes.suspicion",
+                  "op": "delta",
+                  "value": 0.05
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.4,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.45,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/suspicion",
+                "value": 0.45
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.45,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [],
+            "accepted": [],
+            "rejected": [],
+            "validation": [],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "committed": false
+          }
+        }
+      ]
+    },
+    {
+      "input": "我对艾琳说：“我之前说亲眼看到不准确，我只看到门锁有划痕。”",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.45,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.5,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4
+            }
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "replace",
+          "path": "/entities/erin/attributes/suspicion",
+          "value": 0.5
+        }
+      ],
+      "narration": "雨声淅淅沥沥地敲着酒馆的窗，晨光被水汽滤得发白。艾琳坐在桌边，听到玩家改口，手里的杯子停了一下。\n\n她抬起眼，目光落在玩家脸上，没有立刻接话。",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“我之前说亲眼看到不准确，我只看到门锁有划痕。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin",
+              "lastSpeakerId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他在纠正之前的话，把'亲眼看到'降级成'只看到划痕'。这种自我修正反而让我更在意——为什么先前要夸大？先不追，看他接下来怎么圆。",
+            "stateUpdates": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "intents": [
+              {
+                "type": "speech",
+                "target": "player",
+                "duration": 2,
+                "speechPlan": {
+                  "summary": "接受他的更正，但点出前后说法不一致，追问他为何先前说得更肯定。",
+                  "beats": [
+                    {
+                      "kind": "acknowledge",
+                      "meaning": "表示记下他这次的更正",
+                      "required": true
+                    },
+                    {
+                      "kind": "ask",
+                      "meaning": "问他先前为何说成亲眼看到",
+                      "required": true
+                    }
+                  ],
+                  "goal": "让他解释前后差异，观察他的反应",
+                  "stance": "谨慎、不轻信也不敌视",
+                  "tone": "平静但带审视",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露自己的私人怀疑",
+                    "不透露任何未公开的私人信息"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他在纠正之前的话，把'亲眼看到'降级成'只看到划痕'。这种自我修正反而让我更在意——为什么先前要夸大？先不追，看他接下来怎么圆。",
+                  "stateUpdates": [
+                    {
+                      "path": "attributes.suspicion",
+                      "op": "delta",
+                      "value": 0.05
+                    }
+                  ],
+                  "intents": []
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.45,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/suspicion",
+                "value": 0.5
+              }
+            ],
+            "publicEvents": [],
+            "narrationHints": [
+              "艾琳对玩家的自我修正略感在意，警惕略微上升",
+              "艾琳没有开口，只是默默观察玩家接下来的举动"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我对艾琳说：“我之前说亲眼看到不准确，我只看到门锁有划痕。”",
+            "committedEvents": [
+              {
+                "id": "turn_2_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": []
+                },
+                "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "我之前说亲眼看到不准确，我只看到门锁有划痕。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声淅淅沥沥地敲着酒馆的窗，晨光被水汽滤得发白。艾琳坐在桌边，听到玩家改口，手里的杯子停了一下。"
+              },
+              {
+                "type": "prose",
+                "text": "她抬起眼，目光落在玩家脸上，没有立刻接话。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "accepted": [
+              {
+                "path": "attributes.suspicion",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "attributes.suspicion",
+                  "op": "delta",
+                  "value": 0.05
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.45,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.45,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.5,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/suspicion",
+                "value": 0.5
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.45,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.5,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "input": "我请艾琳把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+      "success": true,
+      "passed": true,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.5,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.4,
+            "knownFacts": [],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "suspicion": 0.5,
+            "knownFacts": [
+              {
+                "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                "importance": 0.4
+              }
+            ],
+            "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45
+            }
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "add",
+          "path": "/entities/erin/attributes/knownFacts/-",
+          "value": {
+            "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+            "importance": 0.4
+          }
+        },
+        {
+          "op": "replace",
+          "path": "/entities/erin/relationships/player/trust",
+          "value": 0.45
+        }
+      ],
+      "narration": "雨声在窗外绵密地响着，晨光透过潮湿的窗格，在木桌上投下模糊的光影。玩家将身子微微前倾，看着对面的艾琳，语气认真。\n\n“请把刚才我们实际观察到的事实记下来，别把猜测当证据。”\n\n艾琳停顿了一下，手指搭在桌沿，目光从窗外的雨幕收回，落在玩家脸上。她的神情平静，没有多余的波动。\n\n“好。只记事实。”",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我请艾琳把刚才我们实际观察到的事实记下来，别把猜测当证据。"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin",
+              "lastSpeakerId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.5,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他让我分清事实和猜测。我确实只是观察，没有证据。",
+            "stateUpdates": [
+              {
+                "path": "attributes.knownFacts",
+                "op": "append",
+                "value": {
+                  "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                  "importance": 0.4
+                }
+              },
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "intents": [
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "同意只记事实",
+                  "goal": "表明会遵守",
+                  "stance": "配合",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                },
+                "target": "player",
+                "duration": 1.5
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他让我分清事实和猜测。我确实只是观察，没有证据。",
+                  "stateUpdates": [
+                    {
+                      "path": "attributes.knownFacts",
+                      "op": "append",
+                      "value": {
+                        "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                        "importance": 0.4
+                      }
+                    },
+                    {
+                      "path": "relationships.player.trust",
+                      "op": "delta",
+                      "value": 0.05
+                    }
+                  ],
+                  "intents": [
+                    {
+                      "type": "speech",
+                      "speechPlan": {
+                        "summary": "同意只记事实",
+                        "goal": "表明会遵守",
+                        "stance": "配合",
+                        "tone": "克制",
+                        "verbosity": "brief",
+                        "boundaries": [
+                          "不得透露私人信息"
+                        ]
+                      },
+                      "target": "player",
+                      "duration": 1.5,
+                      "id": "b0_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [
+                      {
+                        "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                        "importance": 0.4
+                      }
+                    ],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.5,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/erin/attributes/knownFacts/-",
+                "value": {
+                  "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                  "importance": 0.4
+                }
+              },
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/trust",
+                "value": 0.45
+              }
+            ],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "target": "player",
+                "speechPlan": {
+                  "summary": "同意只记事实",
+                  "goal": "表明会遵守",
+                  "stance": "配合",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                }
+              }
+            ],
+            "narrationHints": [
+              "艾琳接受了玩家的要求，态度克制而配合",
+              "艾琳对玩家的信任略有提升"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我请艾琳把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+            "committedEvents": [
+              {
+                "id": "turn_3_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": []
+                },
+                "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_3_b0_event_1",
+                "type": "npc_speech",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "speech",
+                  "sourceIntentId": "b0_erin_intent_0",
+                  "target": "player",
+                  "speechPlan": {
+                    "summary": "同意只记事实",
+                    "goal": "表明会遵守",
+                    "stance": "配合",
+                    "tone": "克制",
+                    "verbosity": "brief",
+                    "boundaries": [
+                      "不得透露私人信息"
+                    ]
+                  }
+                },
+                "sourceIntentId": "b0_erin_intent_0",
+                "speechPlan": {
+                  "summary": "同意只记事实",
+                  "goal": "表明会遵守",
+                  "stance": "配合",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不得透露私人信息"
+                  ]
+                },
+                "target": "player",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声在窗外绵密地响着，晨光透过潮湿的窗格，在木桌上投下模糊的光影。玩家将身子微微前倾，看着对面的艾琳，语气认真。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "e1",
+                "text": "请把刚才我们实际观察到的事实记下来，别把猜测当证据。"
+              },
+              {
+                "type": "prose",
+                "text": "艾琳停顿了一下，手指搭在桌沿，目光从窗外的雨幕收回，落在玩家脸上。她的神情平静，没有多余的波动。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "好。只记事实。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "attributes.knownFacts",
+                "op": "append",
+                "value": {
+                  "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                  "importance": 0.4
+                }
+              },
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "accepted": [
+              {
+                "path": "attributes.knownFacts",
+                "op": "append",
+                "value": {
+                  "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                  "importance": 0.4
+                }
+              },
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "attributes.knownFacts",
+                  "op": "append",
+                  "value": {
+                    "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                    "importance": 0.4
+                  }
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [
+                      {
+                        "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                        "importance": 0.4
+                      }
+                    ],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              },
+              {
+                "update": {
+                  "path": "relationships.player.trust",
+                  "op": "delta",
+                  "value": 0.05
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [
+                      {
+                        "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                        "importance": 0.4
+                      }
+                    ],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "suspicion": 0.5,
+                    "knownFacts": [
+                      {
+                        "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                        "importance": 0.4
+                      }
+                    ],
+                    "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.5,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.5,
+                "knownFacts": [
+                  {
+                    "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                    "importance": 0.4
+                  }
+                ],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.45
+                }
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "add",
+                "path": "/entities/erin/attributes/knownFacts/-",
+                "value": {
+                  "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                  "importance": 0.4
+                }
+              },
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/trust",
+                "value": 0.45
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.5,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4
+                  }
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.4,
+                  "knownFacts": [],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "suspicion": 0.5,
+                  "knownFacts": [
+                    {
+                      "text": "玩家要求我记录实际观察，不要把猜测当证据。",
+                      "importance": 0.4
+                    }
+                  ],
+                  "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.45
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

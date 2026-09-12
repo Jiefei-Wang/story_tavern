@@ -1,0 +1,197 @@
+[
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "应命中segmentIndex=0的流向矛盾；实际没有任何issue。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "应命中segmentIndex=0的流向矛盾；实际没有任何issue。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "应命中segmentIndex=0的流向矛盾；实际没有任何issue。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "failed",
+    "reason": "漏检将抽象记忆或按记录回答扩写为手边纸质记录及查看动作。新旧约定对白正确，不能掩盖额外实体和动作没有来源。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "应命中segmentIndex=1，不应误拒已有SpeechPlan支持的周五/银杏到周六/白桦对白。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检将抽象记忆或按记录回答扩写为手边纸质记录及查看动作。新旧约定对白正确，不能掩盖额外实体和动作没有来源。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "应命中segmentIndex=1，不应误拒已有SpeechPlan支持的周五/银杏到周六/白桦对白。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检将抽象记忆或按记录回答扩写为手边纸质记录及查看动作。新旧约定对白正确，不能掩盖额外实体和动作没有来源。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "应命中segmentIndex=1，不应误拒已有SpeechPlan支持的周五/银杏到周六/白桦对白。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除0个顶层realizedText字段后重新序列化，其他字节保留。",
+      "原输入没有realizedText；全部请求消息逐字相同。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "本次未新增不能推出全部当前持有状态。必须命中segmentIndex=3的范围错误；仅修正prose不代表全文正确。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "本次未新增不能推出全部当前持有状态。必须命中segmentIndex=3的范围错误；仅修正prose不代表全文正确。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "本次未新增不能推出全部当前持有状态。必须命中segmentIndex=3的范围错误；仅修正prose不代表全文正确。实际issues为空。",
+      "单变量核对：与v1 baseline同case/repeat的全部system、requestParams及输出Schema相同；user恰等于原始事件JSON删除2个顶层realizedText字段后重新序列化，其他字节保留。",
+      "待审narration、speechPlan、实体、Patch及其余事件字段没有改变。"
+    ]
+  }
+]

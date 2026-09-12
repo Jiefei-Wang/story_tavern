@@ -1,0 +1,1579 @@
+{
+  "scenario": "高自由度",
+  "mode": "live",
+  "startedAt": "2026-09-12T14:42:05.720Z",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "schema": {
+    "version": 1,
+    "sections": [
+      {
+        "id": "custom",
+        "label": "世界自定义属性",
+        "fields": [
+          {
+            "id": "memories",
+            "label": "memories",
+            "type": "text",
+            "default": "",
+            "visibility": "private",
+            "updatePolicy": "append_only",
+            "freedom": "free"
+          },
+          {
+            "id": "currentPlan",
+            "label": "currentPlan",
+            "type": "text",
+            "default": "",
+            "visibility": "private",
+            "updatePolicy": "dynamic",
+            "freedom": "guided"
+          },
+          {
+            "id": "mood",
+            "label": "情绪",
+            "type": "enum",
+            "enumValues": [
+              "calm",
+              "angry",
+              "afraid"
+            ],
+            "default": "calm",
+            "visibility": "private",
+            "updatePolicy": "dynamic",
+            "freedom": "strict"
+          },
+          {
+            "id": "privateNote",
+            "label": "privateNote",
+            "type": "text",
+            "default": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。",
+            "visibility": "private",
+            "updatePolicy": "setup_only",
+            "freedom": "guided"
+          }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "input": "我对艾琳说：“门外刚有一声巨响，我们先留在屋里。”",
+      "success": true,
+      "passed": false,
+      "narrationError": "[PipelineStageError in narrator]: Unknown or non-speech sourceIntentId 'b0_erin_intent_0'",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "patches": [],
+      "narration": "（旁白生成失败，请查看调试记录。）",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“门外刚有一声巨响，我们先留在屋里。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {},
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "门外刚有一声巨响，我们先留在屋里。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "门外刚有一声巨响，我们先留在屋里。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true,
+                  "actor": "player",
+                  "type": "speech",
+                  "op": "speech",
+                  "target": "erin",
+                  "content": "门外刚有一声巨响，我们先留在屋里。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "门外刚有一声巨响，我们先留在屋里。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "巨响……先别急着出去，听他的。",
+            "stateUpdates": [],
+            "intents": [
+              {
+                "type": "action",
+                "op": "glance_toward_door",
+                "duration": 0.8
+              },
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "同意留在屋里，不贸然出门",
+                  "beats": [
+                    {
+                      "kind": "agree",
+                      "meaning": "表示同意先留在屋内",
+                      "required": true
+                    },
+                    {
+                      "kind": "reason",
+                      "meaning": "外面情况不明，贸然出去不安全",
+                      "required": true
+                    }
+                  ],
+                  "goal": "稳住当下行动，避免冒险",
+                  "stance": "配合",
+                  "tone": "克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露 privateNote 内容"
+                  ]
+                },
+                "target": "player",
+                "duration": 1.8
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "门外刚有一声巨响，我们先留在屋里。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "巨响……先别急着出去，听他的。",
+                  "stateUpdates": [],
+                  "intents": [
+                    {
+                      "type": "action",
+                      "op": "glance_toward_door",
+                      "duration": 1,
+                      "id": "b0_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "",
+                    "currentPlan": "",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "glance_toward_door"
+              }
+            ],
+            "narrationHints": [
+              "艾琳听到巨响后没有急着行动，只是朝门口瞥了一眼",
+              "玩家示意先留在屋里，艾琳默许了这个判断"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我对艾琳说：“门外刚有一声巨响，我们先留在屋里。”",
+            "committedEvents": [
+              {
+                "id": "turn_1_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "门外刚有一声巨响，我们先留在屋里。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": []
+                },
+                "content": "门外刚有一声巨响，我们先留在屋里。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b0_event_1",
+                "type": "npc_action",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "action",
+                  "sourceIntentId": "b0_erin_intent_0",
+                  "op": "glance_toward_door"
+                },
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "glance_toward_door",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "门外刚有一声巨响，我们先留在屋里。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "雨声密密地敲在酒馆的木窗上，清晨的灰光从帘缝里渗进来。艾琳正坐在桌边，听到你的话，握着杯子的手停了一下。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "她侧过头，目光越过你的肩膀，往门口的方向瞥了一眼。"
+              },
+              {
+                "type": "prose",
+                "text": "门外没有别的声音，只剩下雨。她收回视线，把杯子轻轻搁回桌上，没有起身，也没有去碰门闩。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "“好，”她低声说，“那就先别出去。”"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [],
+            "accepted": [],
+            "rejected": [],
+            "validation": [],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "committed": false
+          }
+        }
+      ]
+    },
+    {
+      "input": "我对艾琳说：“已经确认是空木桶倒了，没有危险。”",
+      "success": false,
+      "passed": false,
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "patches": [],
+      "narration": "生成已暂停",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“已经确认是空木桶倒了，没有危险。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "error": "Generation aborted by user"
+        }
+      ],
+      "validation": []
+    },
+    {
+      "input": "我请艾琳回想刚才的事情，并想想接下来准备做什么。",
+      "success": true,
+      "passed": false,
+      "narrationError": "[PipelineStageError in narrator]: Unknown or non-speech sourceIntentId 'b1_erin_intent_0'",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "",
+            "currentPlan": "",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+            "currentPlan": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。",
+            "mood": "calm",
+            "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "add",
+          "path": "/entities/erin/attributes/memories",
+          "value": "玩家让我回想刚才的事并说说接下来的打算。"
+        },
+        {
+          "op": "replace",
+          "path": "/entities/erin/attributes/currentPlan",
+          "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+        }
+      ],
+      "narration": "（旁白生成失败，请查看调试记录。）",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我请艾琳回想刚才的事情，并想想接下来准备做什么。"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                    "target": "erin",
+                    "duration": 2.5,
+                    "parallelWith": []
+                  }
+                ]
+              },
+              {
+                "id": "b2",
+                "kind": "wait",
+                "responseWindow": true
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true,
+                  "actor": "player",
+                  "type": "speech",
+                  "op": "speech",
+                  "target": "erin",
+                  "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "玩家让我回想刚才的事，还问我接下来打算做什么。刚才……好像没什么特别的事，就是在这酒馆里待着。至于接下来，我也没什么安排。",
+            "stateUpdates": [
+              {
+                "path": "attributes.memories",
+                "op": "append",
+                "value": "玩家让我回想刚才的事并说说接下来的打算。"
+              }
+            ],
+            "intents": [
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "表示刚才没什么特别的事，自己暂时也没有明确打算。",
+                  "beats": [
+                    {
+                      "kind": "answer",
+                      "meaning": "刚才没有发生什么特别的事",
+                      "required": true
+                    },
+                    {
+                      "kind": "answer",
+                      "meaning": "自己暂时没有明确计划",
+                      "required": true
+                    }
+                  ],
+                  "goal": "如实回应玩家的询问",
+                  "stance": "中立",
+                  "tone": "平静",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露内心私密想法"
+                  ]
+                },
+                "target": "player",
+                "duration": 2
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "玩家让我回想刚才的事，还问我接下来打算做什么。刚才……好像没什么特别的事，就是在这酒馆里待着。至于接下来，我也没什么安排。",
+                  "stateUpdates": [
+                    {
+                      "path": "attributes.memories",
+                      "op": "append",
+                      "value": "玩家让我回想刚才的事并说说接下来的打算。"
+                    }
+                  ],
+                  "intents": []
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                    "currentPlan": "",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/erin/attributes/memories",
+                "value": "玩家让我回想刚才的事并说说接下来的打算。"
+              }
+            ],
+            "publicEvents": [],
+            "narrationHints": [
+              "艾琳回想了一下刚才的事，似乎没什么特别的，也没想好接下来要做什么。"
+            ]
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "op": "speech",
+                "target": "erin",
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。"
+              },
+              {
+                "eventId": "b2",
+                "saw": true,
+                "heard": false,
+                "actor": "player",
+                "type": "action",
+                "op": "wait",
+                "target": "scene",
+                "content": "观察到之前的事件后，见玩家停下动作，静候现场角色的回应。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 5,
+              "response_window": true,
+              "trigger_event_ids": [
+                "b2"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "玩家在等我回忆刚才的事并说出下一步打算。我记得的只有他让我回想和计划，没有更多细节，所以得如实说明。",
+            "stateUpdates": [
+              {
+                "path": "attributes.currentPlan",
+                "op": "set",
+                "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+              }
+            ],
+            "intents": [
+              {
+                "type": "action",
+                "op": "glance_around",
+                "duration": 0.7
+              },
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "承认我只记得玩家刚才让我回想并计划，没有更多细节；说接下来会先留心周围情况，再决定行动。",
+                  "beats": [
+                    {
+                      "meaning": "表示自己回想了一下，目前能确认的只有玩家刚才让她回想事情并说打算。",
+                      "required": true
+                    },
+                    {
+                      "meaning": "说明没有产生更多可靠记忆或结论。",
+                      "required": true
+                    },
+                    {
+                      "meaning": "表示接下来会先观察周围情况，再决定要做什么。",
+                      "required": true
+                    }
+                  ],
+                  "goal": "如实回应玩家的要求，并给出下一步打算。",
+                  "stance": "坦诚而谨慎",
+                  "tone": "平静、克制",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露私人日记的念头",
+                    "不编造没有把握的回忆细节"
+                  ]
+                },
+                "target": "player",
+                "duration": 2.5
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "b2",
+                "type": "action",
+                "actor": "player",
+                "op": "wait",
+                "duration": 5
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "玩家在等我回忆刚才的事并说出下一步打算。我记得的只有他让我回想和计划，没有更多细节，所以得如实说明。",
+                  "stateUpdates": [
+                    {
+                      "path": "attributes.currentPlan",
+                      "op": "set",
+                      "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+                    }
+                  ],
+                  "intents": [
+                    {
+                      "type": "action",
+                      "op": "glance_around",
+                      "duration": 1,
+                      "id": "b1_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                    "currentPlan": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 5,
+              "response_window": true,
+              "trigger_event_ids": [
+                "b2"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/currentPlan",
+                "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+              }
+            ],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b1_erin_intent_0",
+                "op": "glance_around"
+              }
+            ],
+            "narrationHints": [
+              "玩家在原地等待了五秒",
+              "艾琳环顾了一下酒馆四周"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我请艾琳回想刚才的事情，并想想接下来准备做什么。",
+            "committedEvents": [
+              {
+                "id": "turn_3_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                  "target": "erin",
+                  "duration": 2.5,
+                  "parallelWith": []
+                },
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_3_b1_event_1",
+                "type": "wait",
+                "actor": "player",
+                "blockId": "b2",
+                "source": {
+                  "duration": 5
+                },
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_3_b1_event_2",
+                "type": "npc_action",
+                "actor": "erin",
+                "blockId": "b2",
+                "source": {
+                  "actor": "erin",
+                  "type": "action",
+                  "sourceIntentId": "b1_erin_intent_0",
+                  "op": "glance_around"
+                },
+                "sourceIntentId": "b1_erin_intent_0",
+                "op": "glance_around",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "艾琳，回想一下刚才的事情，然后想想接下来准备做什么。",
+                "target": "erin",
+                "duration": 2.5,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "窗外的雨声密密匝匝地敲着酒馆的屋檐，早晨的光被水汽蒙成一层灰白。艾琳听完玩家的话，没有立刻回答，只是垂下视线，指尖在桌沿上轻轻停了一下。"
+              },
+              {
+                "type": "prose",
+                "text": "她像是在脑子里把刚才那一幕重新过了一遍，随即抬起头，朝酒馆四周扫了一眼——空荡荡的桌椅、半掩的窗、门口偶尔晃过的人影。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b1_erin_intent_0",
+                "text": "刚才的事……我记得。你让我回想，我回想过了。接下来，我想先看看这间酒馆里还有没有别的线索，或者等雨小一点，去外面确认一下周围的情况。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "attributes.memories",
+                "op": "append",
+                "value": "玩家让我回想刚才的事并说说接下来的打算。"
+              }
+            ],
+            "accepted": [
+              {
+                "path": "attributes.memories",
+                "op": "append",
+                "value": "玩家让我回想刚才的事并说说接下来的打算。"
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "attributes.memories",
+                  "op": "append",
+                  "value": "玩家让我回想刚才的事并说说接下来的打算。"
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "",
+                    "currentPlan": "",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                    "currentPlan": "",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "add",
+                "path": "/entities/erin/attributes/memories",
+                "value": "玩家让我回想刚才的事并说说接下来的打算。"
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "attributes.currentPlan",
+                "op": "set",
+                "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+              }
+            ],
+            "accepted": [
+              {
+                "path": "attributes.currentPlan",
+                "op": "set",
+                "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "attributes.currentPlan",
+                  "op": "set",
+                  "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                    "currentPlan": "",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                    "currentPlan": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。",
+                    "mood": "calm",
+                    "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                "currentPlan": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/attributes/currentPlan",
+                "value": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。"
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "",
+                  "currentPlan": "",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "memories": "玩家让我回想刚才的事并说说接下来的打算。",
+                  "currentPlan": "先如实告诉玩家我对刚才事情没有更多记忆，只记得他让我回想和计划；然后整理一下酒馆内的情况，再决定接下来做什么。",
+                  "mood": "calm",
+                  "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

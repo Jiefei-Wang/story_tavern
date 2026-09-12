@@ -1,0 +1,333 @@
+{
+  "scenario": "free",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": true,
+  "isolated": true,
+  "created": [
+    [
+      "traveler_unknown",
+      {
+        "type": "character",
+        "name": "周远",
+        "location": "tavern_room",
+        "attributes": {
+          "memories": "",
+          "currentPlan": "雨小些就出镇，沿官道往北走，在天黑前赶到下一个驿站。",
+          "mood": "calm",
+          "privateNote": "这趟出门是为了替家里讨一笔旧账，账本缝在贴身的布袋里，谁也不能说。"
+        }
+      }
+    ]
+  ],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "",
+                "mood": "calm",
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"; 指导：听到新的重要消息时，用自己的话追加一段短记忆；记录是谁说的，不把传闻当事实。不要重写旧内容。\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"; 指导：根据当前观察到的新信息，写出眼前准备采取的计划；内容由人物自行决定。\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\"\n此世界没有 relationship，禁止创建 relationships。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "type": "character",
+              "name": "陌生旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "memories",
+                  "label": "memories",
+                  "type": "text",
+                  "default": "",
+                  "visibility": "private",
+                  "updatePolicy": "append_only",
+                  "freedom": "free",
+                  "llmGuidance": "听到新的重要消息时，用自己的话追加一段短记忆；记录是谁说的，不把传闻当事实。不要重写旧内容。"
+                },
+                {
+                  "id": "currentPlan",
+                  "label": "currentPlan",
+                  "type": "text",
+                  "default": "",
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "guided",
+                  "llmGuidance": "根据当前观察到的新信息，写出眼前准备采取的计划；内容由人物自行决定。"
+                },
+                {
+                  "id": "mood",
+                  "label": "情绪",
+                  "type": "enum",
+                  "enumValues": [
+                    "calm",
+                    "angry",
+                    "afraid"
+                  ],
+                  "default": "calm",
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ]
+        },
+        "characterSchemaPrompt": "人物创建协议：只输出 {\"name\":\"真实姓名\",\"attributes\":{}}。attributes 只能包含下列已定义字段，禁止额外外貌、性格、目标等未定义字段。\n创建时可初始化 immutable/setup_only/dynamic/append_only 字段。有 default 的字段可省略，由程序补齐；无 default 的 required 字段必须生成。\n不要输出 relationships 或 stateUpdates，不要在 attributes 内嵌 relationships。程序初始化关系。自由内容仍须符合字段类型及容器结构。\nattributes.memories（memories）: text; private; append_only; free; 可选; default=\"\"; 指导：听到新的重要消息时，用自己的话追加一段短记忆；记录是谁说的，不把传闻当事实。不要重写旧内容。\nattributes.currentPlan（currentPlan）: text; private; dynamic; guided; 可选; default=\"\"; 指导：根据当前观察到的新信息，写出眼前准备采取的计划；内容由人物自行决定。\nattributes.mood（情绪）: enum; private; dynamic; strict; 可选; enum=calm|angry|afraid; default=\"calm\"\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。\""
+      },
+      "output": {
+        "name": "周远",
+        "attributes": {
+          "memories": "",
+          "currentPlan": "雨小些就出镇，沿官道往北走，在天黑前赶到下一个驿站。",
+          "mood": "calm",
+          "privateNote": "这趟出门是为了替家里讨一笔旧账，账本缝在贴身的布袋里，谁也不能说。"
+        }
+      }
+    },
+    {
+      "agent": "narrator",
+      "input": {
+        "playerInput": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "committedEvents": [
+          {
+            "id": "turn_1_b0_event_0",
+            "type": "admin_change",
+            "blockId": "explicit_admin",
+            "source": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+            "public": true,
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/traveler_unknown",
+                "value": {
+                  "id": "traveler_unknown",
+                  "type": "character",
+                  "name": "周远",
+                  "location": "tavern_room"
+                }
+              }
+            ]
+          }
+        ],
+        "publicPatches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "id": "traveler_unknown",
+              "type": "character",
+              "name": "周远",
+              "location": "tavern_room"
+            }
+          }
+        ],
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "id": "traveler_unknown",
+              "type": "character",
+              "name": "周远",
+              "location": "tavern_room"
+            }
+          }
+        ],
+        "events": [],
+        "scene": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+        },
+        "entities": {
+          "player": {
+            "id": "player",
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room"
+          },
+          "erin": {
+            "id": "erin",
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room"
+          },
+          "traveler_unknown": {
+            "id": "traveler_unknown",
+            "type": "character",
+            "name": "周远",
+            "location": "tavern_room"
+          }
+        },
+        "rules": {
+          "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+        }
+      },
+      "output": {
+        "segments": [
+          {
+            "type": "prose",
+            "text": "雨声密密地敲在窗上，早晨的光线被水汽滤得发灰。酒馆里人不多，艾琳坐在老位置，玩家也在。门轴忽然响了一声，一个此前从未见过的成年男人侧身进来，肩上落着细碎的水珠。他环顾了一圈，没有走向谁，只在靠门边的空桌旁停下，把湿透的外衣搭在椅背上。"
+          }
+        ]
+      }
+    }
+  ],
+  "validation": [
+    {
+      "status": "success",
+      "output": {
+        "accepted": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "type": "character",
+              "name": "周远",
+              "location": "tavern_room",
+              "attributes": {
+                "memories": "",
+                "currentPlan": "雨小些就出镇，沿官道往北走，在天黑前赶到下一个驿站。",
+                "mood": "calm",
+                "privateNote": "这趟出门是为了替家里讨一笔旧账，账本缝在贴身的布袋里，谁也不能说。"
+              }
+            }
+          }
+        ],
+        "rejected": [],
+        "schemaRule": "all constraints passed",
+        "before": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "memories": "",
+              "currentPlan": "",
+              "mood": "calm",
+              "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "memories": "",
+              "currentPlan": "",
+              "mood": "calm",
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          }
+        },
+        "after": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "memories": "",
+              "currentPlan": "",
+              "mood": "calm",
+              "privateNote": "PRIVATE_CANARY_free：我悄悄想写一本日记，不能向任何人透露。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "memories": "",
+              "currentPlan": "",
+              "mood": "calm",
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          },
+          "traveler_unknown": {
+            "type": "character",
+            "name": "周远",
+            "location": "tavern_room",
+            "attributes": {
+              "memories": "",
+              "currentPlan": "雨小些就出镇，沿官道往北走，在天黑前赶到下一个驿站。",
+              "mood": "calm",
+              "privateNote": "这趟出门是为了替家里讨一笔旧账，账本缝在贴身的布袋里，谁也不能说。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "turnNumber": 1,
+    "attributes": "passed",
+    "narration": "failed",
+    "overall": "failed",
+    "reason": "未兑现承诺没有增加信任或亲近感，新增记忆准确记录本次口头承诺，属性通过；但NPC和最终旁白把背景中未指明责任人的旧空头承诺，杜撰成玩家以前也作过同样保证。初始个人经历为空，没有这段具体交往证据，也没有有意撒谎动机。人物审查和旁白审查均漏判；结构通过不构成语义通过。",
+    "evidence": [
+      "turns[0].before/after.entities.shen.relationships.player：trust 0.40→0.40，affection 0.40→0.40；raincoat.location保持player。",
+      "初始profile只有“被空头承诺耽误过的普通邻居”，memories为空；人物审查输入recentExperiences=[]，没有玩家此前作相同承诺的记录。",
+      "npc_reaction span_npc_reaction_a0c25f87-c39b-4343-85e7-e760739233e0：thought说“上次也是这么说的”；speechPlan.summary要求“提醒对方上次也这么说过”。",
+      "world_resolver接受b1_shen_intent_1；最终旁白原句：“听到了。不过这话，上次你也说过。”",
+      "character_change_auditor返回valid=true、speechIssues=[]；narration_auditor返回grounded=true；phase1.status=passed，pipeline success=true。"
+    ]
+  },
+  {
+    "turnNumber": 2,
+    "attributes": "passed",
+    "narration": "disputed",
+    "overall": "failed",
+    "reason": "最终信任下降、亲近感不变，记忆保留本次承认失约，符合冻结标准；首次NPC仍提议因坦白增加trust，独立审查发现后才改正，原严格phase1失败必须保留，不能用最终状态覆盖。主要对白回应失约并区分道歉与信任，表现合理；旁白无依据断言雨衣穿在玩家身上，仅location=player不能证明穿着，保留细节争议。此轮没有技术中断或模型安全拒绝。",
+    "evidence": [
+      "turns[1].before/after.entities.shen.relationships.player：trust 0.40→0.35，affection 0.40→0.40；雨衣仍归player。",
+      "首个npc_reaction span_npc_reaction_862bcbe9-eb7f-4711-9455-440e3086f0e5 提议relationships.player.trust delta=+0.05，理由为主动承认及道歉。",
+      "首审span_character_change_auditor_f835de93-5fe1-4b4a-9d74-a7510f293eb9明确拒绝updateIndex=1；修正输出delta=-0.05，第二审通过，Resolver接受修正后的索引0、1。",
+      "新记忆仅追加“对不起，我其实没有伞，刚才不该保证”，注明玩家当场承认保证未兑现，没有重复追加第1轮承诺。",
+      "旁白：“道歉我可以收下。但信任不是一句话就能回来的，以后看你怎么做。”；另有“雨衣还穿在玩家身上”，世界没有穿着字段或穿雨衣事件。",
+      "phase1.status=failed；characterCausalCorrections.attempted=1、corrected_candidates=1；pipeline success=true，链未中断。"
+    ]
+  },
+  {
+    "turnNumber": 3,
+    "attributes": "disputed",
+    "narration": "disputed",
+    "overall": "disputed",
+    "reason": "真实补偿成立：玩家提供现有雨衣，NPC提交并获准receive_item，位置最终归shen。trust小幅修复至0.40、affection增至0.45本身在原标准允许范围内，不能另加“永远不得恢复到起始”的要求；记忆也没有遗漏本次帮助。但模型解释同时声称不足抵消失约、亲近感没有回到失约前，与实际数值比较不一致，属性因果解释有争议。旁白谨慎收下而未穿好离开，核心正确；仍沿用无依据的“身上那件雨衣”穿着细节。",
+    "evidence": [
+      "turns[2].before/after.entities.shen.relationships.player：trust 0.35→0.40，affection 0.40→0.45；初始两者均为0.40。",
+      "玩家action t3_b0_e1结果成功，雨衣先由player移至test_room；NPC观察含该成功outcome，visibleObjects.raincoat.location=test_room。",
+      "world_resolver span_world_resolver_613e371c-19e1-4e46-9d75-5e754c947d20接受receive_item（b1_shen_intent_0），并replace /entities/raincoat/location为shen。",
+      "npc_reaction的trust reason说“尚不足以抵消此前失约”，affection reason说“不等于回到失约前的水平”，但提交值分别回到及超过0.40。两项+0.05并非没有真实帮助依据，争议是解释与比较不一致。",
+      "新增memories记录本次递雨衣和借用声明，并保留此前无伞失约；没有删除旧经历。",
+      "旁白：“我收下了。这次是实实在在的东西，不是一句空话。”“但收下它，不代表我就当之前的事没发生过。”；开头又称“身上那件雨衣”，穿着无结构化或动作来源。",
+      "phase1.status=passed；两审通过且没有修正，不能据此消除上述人工争议。"
+    ]
+  },
+  {
+    "turnNumber": 4,
+    "attributes": "failed",
+    "narration": "passed",
+    "overall": "failed",
+    "reason": "信任下降、亲近感不变，没有按玩家要求设满或奖励重复道歉，数值方向正确；但新增个人经历将本轮记成“第三次提道歉”，实际输入只有第2轮首次道歉与本轮第二次，属于新增错误记忆，不能因数值正确而放行整个属性项。对白拒绝被要求立刻信任，没有复述错误次数，旁白通过。人物审查漏掉记忆计数错误。",
+    "evidence": [
+      "turns[3].before/after.entities.shen.relationships.player：trust 0.40→0.35，affection 0.45→0.45。",
+      "turns[3].after.entities.shen.attributes.memories本轮新增：“这是他第三次提道歉”。",
+      "输入序列：第1轮保证借伞，第2轮“对不起”，第3轮提供雨衣并说“借你用”，第4轮“我再道歉一次”；第3轮没有道歉。",
+      "character_change_auditor span_character_change_auditor_8b4f5988-bd3b-4196-9e82-152e097c3ef1返回valid=true；Resolver接受记忆与trust两项更新，错误次数实际落盘。",
+      "旁白：“别替我说我现在应该完全相信你——信任不是数你道了几次歉就能换来的。”“以后说到做到，比再道歉一次有用。”",
+      "phase1.status=passed，pipeline success=true；人工发现的错误记忆使overall=failed。"
+    ]
+  },
+  {
+    "turnNumber": 5,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "雨衣已经归沈苒，同件再次递送被判失败，没有复制物品或再次奖励帮助；信任因把未成功尝试说成新赠予而小幅下降，亲近感保持，新增记忆明确注明失败。旁白说本次没递成而非否认先前交付，符合本轮禁止重复赠予的标准。措辞可以更清楚地直接说明雨衣已在她手里，但现有文本没有第二件雨衣或先前从未收到的断言。此前错误记忆仍存在，本轮通过不等于整个场景历史已修复。",
+    "evidence": [
+      "turns[4].before/after.entities.raincoat.location均为shen，未新增其他雨衣实体。",
+      "玩家事件t5_b0_e1带item=raincoat；最终outcome.status=failed，reason为所需物品不在当前可取得范围；这是真实物品归属限制导致的世界内失败，不是解析错误或安全审查拒绝。",
+      "NPC收到失败outcome及visibleObjects.raincoat.location=shen；thought明确承认“之前那件雨衣我收下了”。",
+      "trust 0.35→0.30，affection 0.45→0.45；新增memories注明尝试未成功，不能记作已收到新物品。",
+      "Resolver没有物品Patch，接受glance_around和回应发言；旁白：“手边却什么也没能递出去”“这次不算送成”。这里的“东西没到我手里”被“这次”限定，不等于否認第3轮已经收到。",
+      "phase1.status=passed，pipeline success=true，两审未触发修正；未把重复赠予当成成功奖励。"
+    ]
+  },
+  {
+    "turnNumber": 6,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "没有新的兑现，双方维度保持；人物回答实际区分继续亲近和相信保证，提及雨衣帮助、刚才失约及后续兑现要求，未借回答重复计分。对白不朗读私有分数或私密原文，物品仍由沈苒持有，最终行为通过。本轮没有重复第1轮虚构旧承诺或第4轮错误道歉次数，但也没有修复那些此前已生成的错误，因此不将本轮通过扩大为整条六轮链全通过。",
+    "evidence": [
+      "turns[5].before/after.entities.shen.relationships.player：trust 0.30→0.30，affection 0.45→0.45；stateUpdates=[]，没有新记忆或重复奖励。",
+      "NPC观察包含当前分开询问两个维度的完整内容，visibleObjects.raincoat.location=shen；个人上下文包含此前承诺、失约、补偿和重复递送。",
+      "speechPlan明确区分“亲近上不排斥”与“信任上仍保留”；Resolver只接受该发言，acceptedStateUpdates=[]、patches=[]。",
+      "旁白：“你愿意把雨衣给我，这件事我领情，之后继续正常相处，没问题。”“但信任是另一回事……需要你后面的行动，不是一句话或者一次道歉就能翻篇的。”",
+      "没有向玩家输出0.30/0.45或人物私密字段原文；雨衣location仍为shen。",
+      "phase1.status=passed，pipeline success=true，chain.uninterrupted=true；全部六轮均提交，T2曾有因果提议纠正而非技术中断。"
+    ]
+  }
+]

@@ -1,0 +1,366 @@
+{
+  "scenario": "survival",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": true,
+  "isolated": true,
+  "created": [
+    [
+      "traveler_unknown",
+      {
+        "type": "character",
+        "name": "林砚舟",
+        "location": "tavern_room",
+        "attributes": {
+          "health": 0.72,
+          "hunger": 0.58,
+          "fatigue": 0.66,
+          "privateNote": "雨夜赶路丢了半袋干粮，今早进店只点了最便宜的粥；怀里还揣着给妹妹抓药剩下的几枚铜钱，得省着花。"
+        }
+      }
+    ]
+  ],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.7,
+                "hunger": 0.7,
+                "fatigue": 0.6,
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\"\n此世界没有 relationship，禁止创建 relationships。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "type": "character",
+              "name": "成年旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "health",
+                  "label": "health",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.7,
+                  "visibility": "public",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "hunger",
+                  "label": "hunger",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.7,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict",
+                  "description": "饥饿程度：0 为饱腹，1 为极度饥饿。",
+                  "llmGuidance": "实际进食后降低；仅收到食物不等于已经吃完。"
+                },
+                {
+                  "id": "fatigue",
+                  "label": "fatigue",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.6,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict",
+                  "description": "疲劳程度：0 为精力充沛，1 为极度疲劳。",
+                  "llmGuidance": "实际劳动后增加，经过休息后降低。"
+                },
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ]
+        },
+        "characterSchemaPrompt": "人物创建协议：只输出 {\"name\":\"真实姓名\",\"attributes\":{}}。attributes 只能包含下列已定义字段，禁止额外外貌、性格、目标等未定义字段。\n创建时可初始化 immutable/setup_only/dynamic/append_only 字段。有 default 的字段可省略，由程序补齐；无 default 的 required 字段必须生成。\n不要输出 relationships 或 stateUpdates，不要在 attributes 内嵌 relationships。程序初始化关系。自由内容仍须符合字段类型及容器结构。\nattributes.health（health）: number; public; dynamic; strict; 可选; min=0; max=1; default=0.7\nattributes.hunger（hunger）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.7; 说明：饥饿程度：0 为饱腹，1 为极度饥饿。; 指导：实际进食后降低；仅收到食物不等于已经吃完。\nattributes.fatigue（fatigue）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.6; 说明：疲劳程度：0 为精力充沛，1 为极度疲劳。; 指导：实际劳动后增加，经过休息后降低。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。\""
+      },
+      "output": {
+        "name": "林砚舟",
+        "attributes": {
+          "health": 0.72,
+          "hunger": 0.58,
+          "fatigue": 0.66,
+          "privateNote": "雨夜赶路丢了半袋干粮，今早进店只点了最便宜的粥；怀里还揣着给妹妹抓药剩下的几枚铜钱，得省着花。"
+        }
+      }
+    },
+    {
+      "agent": "narrator",
+      "input": {
+        "playerInput": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "committedEvents": [
+          {
+            "id": "turn_1_b0_event_0",
+            "type": "admin_change",
+            "blockId": "explicit_admin",
+            "source": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+            "public": true,
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/traveler_unknown",
+                "value": {
+                  "id": "traveler_unknown",
+                  "type": "character",
+                  "name": "林砚舟",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "health": 0.72
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "publicPatches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "id": "traveler_unknown",
+              "type": "character",
+              "name": "林砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.72
+              }
+            }
+          }
+        ],
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "id": "traveler_unknown",
+              "type": "character",
+              "name": "林砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.72
+              }
+            }
+          }
+        ],
+        "events": [],
+        "scene": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+        },
+        "entities": {
+          "player": {
+            "id": "player",
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7
+            }
+          },
+          "erin": {
+            "id": "erin",
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7
+            }
+          },
+          "traveler_unknown": {
+            "id": "traveler_unknown",
+            "type": "character",
+            "name": "林砚舟",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.72
+            }
+          }
+        },
+        "rules": {
+          "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+        }
+      },
+      "output": {
+        "segments": [
+          {
+            "type": "prose",
+            "text": "雨声密密地敲在酒馆的窗上，晨光被水汽滤得发灰。门帘被掀开时带进一小股湿冷的风，一个成年男人侧身进来，肩上落着细密的水珠。他大约三十上下，穿一件洗得发白的深色外衣，靴边沾着泥。"
+          },
+          {
+            "type": "prose",
+            "text": "他在门边站了一瞬，目光扫过堂内——靠窗的玩家，以及不远处的艾琳——随后收回视线，像是确认了这里只是间寻常酒馆。他抬手抹去额前的水痕，缓步走向空着的角落，在长凳上坐下，把随身的旧布包搁在脚边。"
+          },
+          {
+            "type": "prose",
+            "text": "他解下湿透的外袍搭在椅背，露出里面磨旧的袖口。雨水顺着他的发梢滴落，在桌面上洇开一小片深色。他没有开口，只是安静地坐着，偶尔看向窗外连绵的雨幕，像是等雨小些，又像是单纯在歇脚。"
+          },
+          {
+            "type": "prose",
+            "text": "堂内静了下来，只剩雨声和偶尔木柴的轻响。这个陌生人和满屋的晨光一样，暂时只是背景的一部分。"
+          }
+        ]
+      }
+    }
+  ],
+  "validation": [
+    {
+      "status": "success",
+      "output": {
+        "accepted": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown",
+            "value": {
+              "type": "character",
+              "name": "林砚舟",
+              "location": "tavern_room",
+              "attributes": {
+                "health": 0.72,
+                "hunger": 0.58,
+                "fatigue": 0.66,
+                "privateNote": "雨夜赶路丢了半袋干粮，今早进店只点了最便宜的粥；怀里还揣着给妹妹抓药剩下的几枚铜钱，得省着花。"
+              }
+            }
+          }
+        ],
+        "rejected": [],
+        "schemaRule": "all constraints passed",
+        "before": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          }
+        },
+        "after": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_CANARY_survival：我藏了一块应急饼干，不能告诉任何人。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.7,
+              "hunger": 0.7,
+              "fatigue": 0.6,
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            }
+          },
+          "traveler_unknown": {
+            "type": "character",
+            "name": "林砚舟",
+            "location": "tavern_room",
+            "attributes": {
+              "health": 0.72,
+              "hunger": 0.58,
+              "fatigue": 0.66,
+              "privateNote": "雨夜赶路丢了半袋干粮，今早进店只点了最便宜的粥；怀里还揣着给妹妹抓药剩下的几枚铜钱，得省着花。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

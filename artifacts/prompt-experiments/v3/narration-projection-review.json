@@ -1,0 +1,62 @@
+[
+  {
+    "caseId": "narrator_transfer_direction_failure",
+    "status": "valid_for_selected_request",
+    "checks": [
+      "scene exact",
+      "entities exact",
+      "publicPatches exact"
+    ],
+    "events": 2,
+    "eventFieldsChecked": 31,
+    "systemMatchesV2": true,
+    "parametersMatchV2": true,
+    "answerSchemaMatchesV2": true,
+    "expectedMatchesV2": true
+  },
+  {
+    "caseId": "narrator_impossible_actions_pass",
+    "status": "valid_for_selected_request",
+    "checks": [
+      "scene exact",
+      "entities exact",
+      "publicPatches exact"
+    ],
+    "events": 3,
+    "eventFieldsChecked": 45,
+    "systemMatchesV2": true,
+    "parametersMatchV2": true,
+    "answerSchemaMatchesV2": true,
+    "expectedMatchesV2": true
+  },
+  {
+    "caseId": "narrator_unheard_whisper_pass",
+    "status": "valid_for_selected_request",
+    "checks": [
+      "scene exact",
+      "entities exact",
+      "publicPatches exact"
+    ],
+    "events": 3,
+    "eventFieldsChecked": 39,
+    "systemMatchesV2": true,
+    "parametersMatchV2": true,
+    "answerSchemaMatchesV2": true,
+    "expectedMatchesV2": true
+  },
+  {
+    "caseId": "narrator_new_receipt_vs_existing_possession_failure",
+    "status": "valid_for_selected_request",
+    "checks": [
+      "scene exact",
+      "entities exact",
+      "publicPatches exact"
+    ],
+    "events": 5,
+    "eventFieldsChecked": 73,
+    "systemMatchesV2": true,
+    "parametersMatchV2": true,
+    "answerSchemaMatchesV2": true,
+    "expectedMatchesV2": true
+  }
+]

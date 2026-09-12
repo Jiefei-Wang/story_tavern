@@ -10,7 +10,8 @@ import {
   ChevronUp,
   Settings,
 } from "lucide-react";
-import { AgentGroup } from "../../types";
+import { AgentGroup, REASONING_EFFORT_OPTIONS, ReasoningEffort } from "../../types";
+import { ExtraBodyEditor } from "./ExtraBodyEditor";
 import { useAgentGroupStore } from "../../stores/useAgentGroupStore";
 import { useAgentStore } from "../../stores/useAgentStore";
 import { useBackendStore } from "../../stores/useBackendStore";
@@ -289,10 +290,12 @@ export const AgentGroupsPage: React.FC = () => {
                           {binding.overrides?.temperature !== undefined &&
                             `Temp: ${binding.overrides.temperature} `}
                           {binding.overrides?.maxTokens !== undefined &&
-                            `Tokens: ${binding.overrides.maxTokens}`}
-                          {!binding.overrides?.temperature &&
-                            !binding.overrides?.maxTokens &&
+                            `Tokens: ${binding.overrides.maxTokens === 0 ? "无上限" : binding.overrides.maxTokens}`}
+                          {binding.overrides?.temperature === undefined &&
+                            binding.overrides?.maxTokens === undefined &&
                             "使用默认"}
+                          <div>思维: {binding.overrides?.reasoningEffort ?? "none"}</div>
+                          {Object.keys(binding.overrides?.extraBody ?? {}).length > 0 && <div>extraBody: {Object.keys(binding.overrides!.extraBody!).length} 个字段（优先）</div>}
                         </td>
 
                         {/* Expand Button */}
@@ -320,7 +323,18 @@ export const AgentGroupsPage: React.FC = () => {
                       {isExpanded && (
                         <tr className="bg-slate-50/50">
                           <td colSpan={5} className="py-3 px-6">
-                            <div className="flex items-center gap-6 text-xs">
+                            <div className="flex flex-wrap items-center gap-6 text-xs">
+                              <label className="flex items-center gap-2 text-slate-600 font-medium">
+                                思维强度
+                                <select aria-label={`${agent.name} 思维强度`}
+                                  value={binding.overrides?.reasoningEffort ?? "none"}
+                                  onChange={(e) => updateBinding(selectedGroup.id, agent.id, {
+                                    overrides: { reasoningEffort: e.target.value as ReasoningEffort },
+                                  })}
+                                  className="bg-white border border-slate-200 rounded px-2 py-1 text-xs">
+                                  {REASONING_EFFORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.value})</option>)}
+                                </select>
+                              </label>
                               <div className="flex items-center gap-2">
                                 <span className="text-slate-600 font-medium">
                                   Temperature:
@@ -347,13 +361,14 @@ export const AgentGroupsPage: React.FC = () => {
 
                               <div className="flex items-center gap-2">
                                 <span className="text-slate-600 font-medium">
-                                  Max Tokens:
+                                  Max Tokens (0 = 无上限):
                                 </span>
                                 <input
                                   type="number"
                                   step={100}
+                                  min={0}
                                   value={binding.overrides?.maxTokens ?? ""}
-                                  placeholder={String(agent.defaults.maxTokens ?? 1000)}
+                                  placeholder={String(agent.defaults.maxTokens ?? 0)}
                                   onChange={(e) =>
                                     updateBinding(selectedGroup.id, agent.id, {
                                       overrides: {
@@ -367,6 +382,10 @@ export const AgentGroupsPage: React.FC = () => {
                                 />
                               </div>
                             </div>
+                            <p className="mt-3 text-xs text-slate-500">默认发送 reasoning_effort: none。所有档位均可选择并原样发送，是否支持由后端决定，不自动降级。后端使用其他字段时可在 extraBody 中配置。</p>
+                            <ExtraBodyEditor key={`${selectedGroup.id}:${agent.id}`}
+                              value={binding.overrides?.extraBody}
+                              onSave={(extraBody) => updateBinding(selectedGroup.id, agent.id, { overrides: { extraBody } })} />
                           </td>
                         </tr>
                       )}

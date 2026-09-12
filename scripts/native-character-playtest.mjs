@@ -38,11 +38,11 @@ const newPeople = Object.entries(state.activeSave.worldState.entities).filter(([
 assert.equal(newPeople.length, 1);
 const [id, person] = newPeople[0];
 assert(person.name && person.name !== '漂亮女孩');
-assert(person.background && person.appearance && person.occupation && person.personality);
+assert(person.attributes && typeof person.attributes === 'object');
 assert.deepEqual(person.relationships, {});
 const generator = progress.trace.spans.find(s => s.agentId === 'character_generator');
 assert(generator);
-assert.deepEqual(Object.keys(generator.inputContext).sort(), ['count', 'environment', 'ordinal', 'request']);
+assert.deepEqual(Object.keys(generator.inputContext).sort(), ['characterSchema', 'characterSchemaPrompt', 'count', 'environment', 'ordinal', 'request']);
 assert(!JSON.stringify(generator.inputContext).includes('昨晚听见卫兵'));
 assert(seenPartial, 'Must observe real output while a native model call is still running');
 await command('save');

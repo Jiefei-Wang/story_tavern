@@ -26,7 +26,7 @@ async function runTests() {
   console.log("\n=== 1. Testing PlaceholderEngine ===");
   const testContext = {
     player: { input: "Hello world" },
-    npc: { name: "Erin", mentalState: { mood: "uneasy" } },
+    npc: { name: "Erin", attributes: { mood: "uneasy" } },
     reaction: { available_time: 2.5 },
   };
 
@@ -35,7 +35,7 @@ async function runTests() {
   assert(out1 === "Player said: Hello world", "Basic variable replacement works");
 
   // Test nested variable
-  const out2 = renderTemplate("Mood is {{npc.mentalState.mood}}", testContext);
+  const out2 = renderTemplate("Mood is {{npc.attributes.mood}}", testContext);
   assert(out2 === "Mood is uneasy", "Nested variable replacement works");
 
   // Test json modifier
@@ -57,7 +57,7 @@ async function runTests() {
   const patchRes = applyPatches(initialWorld, [
     {
       op: "replace",
-      path: "/entities/erin/mentalState/mood",
+      path: "/entities/erin/attributes/mood",
       value: "alert",
     },
     {
@@ -69,7 +69,7 @@ async function runTests() {
 
   assert(patchRes.success === true, "Patch applied successfully");
   assert(
-    patchRes.newWorld.entities.erin.mentalState?.mood === "alert",
+    patchRes.newWorld.entities.erin.attributes?.mood === "alert",
     "Mood correctly updated to alert"
   );
   assert(
@@ -77,7 +77,7 @@ async function runTests() {
     "Magic resurrection correctly disabled"
   );
   assert(
-    initialWorld.entities.erin.mentalState?.mood === "uneasy",
+    initialWorld.entities.erin.attributes?.mood === "uneasy",
     "Initial world remained immutable"
   );
 
@@ -117,8 +117,8 @@ async function runTests() {
   assert(turnResult.success === true, "Pipeline execution succeeded");
   assert(Boolean(turnResult.turn.narratorOutput), "Narrator prose was generated");
   assert(
-    turnResult.turn.worldStateAfter.entities.erin.mentalState?.mood === "alert",
-    "World state committed Erin's mood as alert"
+    turnResult.turn.worldStateAfter.entities.erin.attributes?.mood === INITIAL_HARBOR_TAVERN_WORLD.entities.erin.attributes?.mood,
+    "Without a proposal, mock must not invent a hardcoded story-specific state change"
   );
   assert(turnResult.turn.patches.length > 0, "JSON patches were generated and recorded");
 

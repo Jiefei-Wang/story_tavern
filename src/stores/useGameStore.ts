@@ -1,7 +1,11 @@
+import { HARBOR_WORLD_DEFINITION } from "../engine/character-schema/HarborSchema";
+import { editSaveSchema } from "../engine/character-schema/EditSchema";
+import { CharacterSchemaDefinition } from "../types";
 import { create } from "zustand";
 import { GameSave, GameTurn, WorldState } from "../types";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../engine/world/WorldState";
 import { gamePipeline } from "../engine/pipeline/GamePipeline";
+import { safePipelineError } from '../engine/errors/PipelineStageError';
 import { storageService } from "../db/storage";
 import { useAgentStore } from "./useAgentStore";
 import { useAgentGroupStore } from "./useAgentGroupStore";
@@ -10,6 +14,7 @@ import { useSettingsStore } from "./useSettingsStore";
 import { globalTraceManager } from "../engine/tracing/TraceManager";
 
 interface GameState {
+  saveCharacterSchema: (schema: CharacterSchemaDefinition, newWorld?: boolean) => Promise<void>;
   activeSave: GameSave | null;
   saves: GameSave[];
   isExecuting: boolean;
@@ -30,6 +35,16 @@ interface GameState {
 let activeAbortController: AbortController | null = null;
 
 export const useGameStore = create<GameState>((set, get) => ({
+  saveCharacterSchema: async (schema, newWorld = false) => {
+    const { activeSave, isExecuting } = get();
+    if (!activeSave || isExecuting) throw new Error('请等待当前回合完成再编辑 Schema');
+    const candidate = editSaveSchema(activeSave, schema, newWorld);
+    set({ isExecuting: true });
+    try {
+      await storageService.saveGame(candidate);
+      set({ saves: newWorld ? [...get().saves, candidate] : get().saves.map(s => s.id === candidate.id ? candidate : s), activeSave: get().activeSave?.id === activeSave.id ? candidate : get().activeSave });
+    } finally { set({ isExecuting: false }); }
+  },
   activeSave: null,
   saves: [],
   isExecuting: false,
@@ -54,6 +69,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   createNewSave: async (name: string = "新游戏") => {
     const activeGroupId = useAgentGroupStore.getState().activeGroupId || "group_quality";
     const newSave: GameSave = {
+      worldDefinition: structuredClone(HARBOR_WORLD_DEFINITION),
       id: `save_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
       name: `${name} · ${new Date().toLocaleTimeString("zh-CN")}`,
       createdAt: new Date().toISOString(),
@@ -125,11 +141,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         currentWorld,
         nextTurnIndex,
         {
+          recentTurns: activeSave.turns,
           agents,
           groups,
           backends,
           activeGroupId,
           mockMode,
+          worldDefinition: activeSave.worldDefinition,
           signal: abortController.signal,
           onTraceStarted: (traceId) => {
             if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
@@ -187,7 +205,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         pendingPlayerInput: null,
         currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
         executionError: get().activeSave?.id === activeSave.id
-          ? (result.success ? null : result.error || "Turn execution failed") : get().executionError,
+          ? (result.success ? null : safePipelineError(new Error(result.error), result.traceId)) : get().executionError,
       });
 
       return result.success;
@@ -199,7 +217,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         isExecuting: false,
         pendingPlayerInput: null,
-        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? err?.message || String(err) : get().executionError),
+        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? safePipelineError(err) : get().executionError),
         currentTraceId: isAbort ? (get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId) : get().currentTraceId,
       });
       return false;
@@ -242,11 +260,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         initialWorld,
         targetTurn.turnIndex,
         {
+          recentTurns: activeSave.turns.slice(0, targetIndex),
           agents,
           groups,
           backends,
           activeGroupId,
           mockMode,
+          worldDefinition: activeSave.worldDefinition,
           signal: abortController.signal,
           onTraceStarted: (traceId) => {
             if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
@@ -282,7 +302,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           isExecuting: false,
           pendingPlayerInput: null,
           currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
-          executionError: get().activeSave?.id === activeSave.id ? result.error || "Retry failed" : get().executionError,
+          executionError: get().activeSave?.id === activeSave.id ? safePipelineError(new Error(result.error), result.traceId) : get().executionError,
         });
         return false;
       }
@@ -350,7 +370,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         isExecuting: false,
         pendingPlayerInput: null,
-        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? err?.message || String(err) : get().executionError),
+        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? safePipelineError(err) : get().executionError),
         currentTraceId: isAbort ? (get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId) : get().currentTraceId,
       });
       return false;

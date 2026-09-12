@@ -1,0 +1,1502 @@
+{
+  "scenario": "恋爱/社交",
+  "mode": "live",
+  "startedAt": "2026-09-12T14:38:27.550Z",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "schema": {
+    "version": 1,
+    "sections": [
+      {
+        "id": "custom",
+        "label": "世界自定义属性",
+        "fields": [
+          {
+            "id": "privateNote",
+            "label": "privateNote",
+            "type": "text",
+            "default": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。",
+            "visibility": "private",
+            "updatePolicy": "setup_only",
+            "freedom": "guided"
+          }
+        ]
+      }
+    ],
+    "relationship": {
+      "label": "关系维度",
+      "fields": [
+        {
+          "id": "trust",
+          "label": "trust",
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "default": 0.4,
+          "visibility": "private",
+          "updatePolicy": "dynamic",
+          "freedom": "strict",
+          "changePolicy": {
+            "mode": "delta",
+            "maxPerEvent": 0.15,
+            "maxPerTurn": 0.25
+          },
+          "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+        },
+        {
+          "id": "affection",
+          "label": "affection",
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "default": 0.4,
+          "visibility": "private",
+          "updatePolicy": "dynamic",
+          "freedom": "strict",
+          "changePolicy": {
+            "mode": "delta",
+            "maxPerEvent": 0.15,
+            "maxPerTurn": 0.25
+          },
+          "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+        },
+        {
+          "id": "jealousy",
+          "label": "jealousy",
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "default": 0.4,
+          "visibility": "private",
+          "updatePolicy": "dynamic",
+          "freedom": "strict",
+          "changePolicy": {
+            "mode": "delta",
+            "maxPerEvent": 0.15,
+            "maxPerTurn": 0.25
+          },
+          "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+        }
+      ]
+    }
+  },
+  "turns": [
+    {
+      "input": "我对艾琳说：“这把雨伞借给你，外面下雨了。”",
+      "success": true,
+      "passed": false,
+      "narrationError": "[PipelineStageError in narrator]: Unknown or non-speech sourceIntentId 'b0_erin_intent_0'",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.4,
+              "affection": 0.4,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45,
+              "affection": 0.44,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "patches": [
+        {
+          "op": "replace",
+          "path": "/entities/erin/relationships/player/trust",
+          "value": 0.45
+        },
+        {
+          "op": "replace",
+          "path": "/entities/erin/relationships/player/affection",
+          "value": 0.44
+        }
+      ],
+      "narration": "（旁白生成失败，请查看调试记录。）",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“这把雨伞借给你，外面下雨了。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {},
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "这把雨伞借给你，外面下雨了。",
+                    "target": "erin",
+                    "duration": 2,
+                    "parallelWith": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "这把雨伞借给你，外面下雨了。",
+                "target": "erin",
+                "duration": 2,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true,
+                  "actor": "player",
+                  "type": "speech",
+                  "op": "speech",
+                  "target": "erin",
+                  "content": "这把雨伞借给你，外面下雨了。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4,
+                  "affection": 0.4,
+                  "jealousy": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "这把雨伞借给你，外面下雨了。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他主动把伞借给我……外面确实在下雨。这个举动有点突然，但不像是有恶意。",
+            "stateUpdates": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              },
+              {
+                "path": "relationships.player.affection",
+                "op": "delta",
+                "value": 0.04
+              }
+            ],
+            "intents": [
+              {
+                "type": "action",
+                "op": "glance_around",
+                "duration": 0.5
+              },
+              {
+                "type": "speech",
+                "target": "player",
+                "duration": 1.6,
+                "speechPlan": {
+                  "summary": "对借伞表示感谢，并确认对方是否真的不需要伞。",
+                  "beats": [
+                    {
+                      "kind": "acknowledge",
+                      "meaning": "感谢对方的好意",
+                      "required": true
+                    },
+                    {
+                      "kind": "ask",
+                      "meaning": "询问对方自己是否也需要用伞",
+                      "required": true
+                    }
+                  ],
+                  "goal": "礼貌接受好意并确认对方不会因此淋雨",
+                  "stance": "感激但克制",
+                  "tone": "温和",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露私下准备的礼物",
+                    "不主动提及自己的私人安排"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "这把雨伞借给你，外面下雨了。",
+                "target": "erin",
+                "duration": 2,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他主动把伞借给我……外面确实在下雨。这个举动有点突然，但不像是有恶意。",
+                  "stateUpdates": [
+                    {
+                      "path": "relationships.player.trust",
+                      "op": "delta",
+                      "value": 0.05
+                    },
+                    {
+                      "path": "relationships.player.affection",
+                      "op": "delta",
+                      "value": 0.04
+                    }
+                  ],
+                  "intents": [
+                    {
+                      "type": "action",
+                      "op": "glance_around",
+                      "duration": 1,
+                      "id": "b0_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45,
+                      "affection": 0.44,
+                      "jealousy": 0.4
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4,
+                    "affection": 0.4,
+                    "jealousy": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/trust",
+                "value": 0.45
+              },
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/affection",
+                "value": 0.44
+              }
+            ],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "glance_around"
+              }
+            ],
+            "narrationHints": [
+              "艾琳接过雨伞的提议后，下意识地环顾四周，似乎在确认周围有没有人注意到这一幕",
+              "艾琳对玩家的信任与好感略微上升"
+            ]
+          }
+        },
+        {
+          "agent": "narrator",
+          "input": {
+            "playerInput": "我对艾琳说：“这把雨伞借给你，外面下雨了。”",
+            "committedEvents": [
+              {
+                "id": "turn_1_b0_event_0",
+                "type": "player_speech",
+                "actor": "player",
+                "blockId": "b1",
+                "source": {
+                  "id": "e1",
+                  "type": "speech",
+                  "actor": "player",
+                  "content": "这把雨伞借给你，外面下雨了。",
+                  "target": "erin",
+                  "duration": 2,
+                  "parallelWith": []
+                },
+                "content": "这把雨伞借给你，外面下雨了。",
+                "sourceIntentId": "e1",
+                "target": "erin",
+                "public": true,
+                "patches": []
+              },
+              {
+                "id": "turn_1_b0_event_1",
+                "type": "npc_action",
+                "actor": "erin",
+                "blockId": "b1",
+                "source": {
+                  "actor": "erin",
+                  "type": "action",
+                  "sourceIntentId": "b0_erin_intent_0",
+                  "op": "glance_around"
+                },
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "glance_around",
+                "public": true
+              }
+            ],
+            "publicPatches": [],
+            "patches": [],
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "这把雨伞借给你，外面下雨了。",
+                "target": "erin",
+                "duration": 2,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            },
+            "rules": {}
+          },
+          "output": {
+            "segments": [
+              {
+                "type": "prose",
+                "text": "艾琳正坐在靠窗的位置，手里捧着一只半空的杯子。窗外的雨顺着木檐淌成一道细线。听见你的话，她抬起头来，目光先落在那把伞上，又下意识地往四周扫了一圈，像是在确认店里还有没有别的什么人注意到这边。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "……你确定？"
+              },
+              {
+                "type": "prose",
+                "text": "她没有立刻伸手去接，指尖在杯沿上停了一下，指节因为用力而微微发白。雨声闷闷地压在屋顶上，衬得店里比平时更安静。"
+              },
+              {
+                "type": "speech",
+                "sourceIntentId": "b0_erin_intent_0",
+                "text": "这把伞看着不便宜。你就这么借给一个……不太熟的人？"
+              },
+              {
+                "type": "prose",
+                "text": "她说完，视线又往门口的方向飘了飘。门外雨幕连成一片，灰蒙蒙的，看不太清街对面。她抿了抿嘴，像是在等你的回答，又像是随时准备把话头收回去。"
+              }
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              },
+              {
+                "path": "relationships.player.affection",
+                "op": "delta",
+                "value": 0.04
+              }
+            ],
+            "accepted": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.05
+              },
+              {
+                "path": "relationships.player.affection",
+                "op": "delta",
+                "value": 0.04
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "relationships.player.trust",
+                  "op": "delta",
+                  "value": 0.05
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.4,
+                      "affection": 0.4,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45,
+                      "affection": 0.4,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              },
+              {
+                "update": {
+                  "path": "relationships.player.affection",
+                  "op": "delta",
+                  "value": 0.04
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45,
+                      "affection": 0.4,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45,
+                      "affection": 0.44,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4,
+                  "affection": 0.4,
+                  "jealousy": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.45,
+                  "affection": 0.44,
+                  "jealousy": 0.4
+                }
+              }
+            },
+            "committed": false
+          }
+        },
+        {
+          "type": "character_patch_validation",
+          "status": "success",
+          "output": {
+            "accepted": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/trust",
+                "value": 0.45
+              },
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/affection",
+                "value": 0.44
+              }
+            ],
+            "rejected": [],
+            "schemaRule": "all constraints passed",
+            "before": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.4,
+                    "affection": 0.4,
+                    "jealousy": 0.4
+                  }
+                }
+              }
+            },
+            "after": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.45,
+                    "affection": 0.44,
+                    "jealousy": 0.4
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "input": "我对艾琳说：“对不起，我刚才说借伞，其实伞已经借给别人了。”",
+      "success": false,
+      "passed": false,
+      "error": "[PipelineStageError in world_resolver]: Public action 'erin' has invalid sourceIntentId, actor, target or op",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45,
+              "affection": 0.44,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45,
+              "affection": 0.44,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "patches": [],
+      "narration": "执行中断: [PipelineStageError in world_resolver]: Public action 'erin' has invalid sourceIntentId, actor, target or op",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我对艾琳说：“对不起，我刚才说借伞，其实伞已经借给别人了。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "对不起，我刚才说借伞，其实伞已经借给别人了。",
+                    "target": "erin",
+                    "duration": 3,
+                    "parallelWith": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "对不起，我刚才说借伞，其实伞已经借给别人了。",
+                "target": "erin",
+                "duration": 3,
+                "parallelWith": []
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "npcObservations": {
+              "erin": [
+                {
+                  "eventId": "e1",
+                  "saw": true,
+                  "heard": true,
+                  "actor": "player",
+                  "type": "speech",
+                  "op": "speech",
+                  "target": "erin",
+                  "content": "对不起，我刚才说借伞，其实伞已经借给别人了。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "agent": "npc_reaction",
+          "input": {
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "npc": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.45,
+                  "affection": 0.44,
+                  "jealousy": 0.4
+                }
+              },
+              "id": "erin"
+            },
+            "observations": [
+              {
+                "eventId": "e1",
+                "saw": true,
+                "heard": true,
+                "actor": "player",
+                "type": "speech",
+                "target": "erin",
+                "content": "对不起，我刚才说借伞，其实伞已经借给别人了。"
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "reaction": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            },
+            "interaction": {
+              "addressed": true,
+              "maySpeak": true,
+              "speechPermission": "direct"
+            }
+          },
+          "output": {
+            "thought": "他刚才说借伞，我还以为他特意为我留的。原来已经给别人了……不过至少他主动道歉了，没有继续瞒着。",
+            "stateUpdates": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.03
+              },
+              {
+                "path": "relationships.player.jealousy",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "intents": [
+              {
+                "type": "action",
+                "op": "glance_away",
+                "duration": 0.5
+              },
+              {
+                "type": "speech",
+                "speechPlan": {
+                  "summary": "接受道歉，但语气里带一点失望，表示自己本来有点期待那把伞",
+                  "beats": [
+                    {
+                      "kind": "acknowledge",
+                      "meaning": "接受对方的道歉，不追究隐瞒",
+                      "required": true
+                    },
+                    {
+                      "kind": "express",
+                      "meaning": "轻描淡写地承认自己刚才确实有点期待",
+                      "required": false
+                    }
+                  ],
+                  "goal": "保持体面，同时让对方知道自己在意",
+                  "stance": "克制但略失落",
+                  "tone": "平静",
+                  "verbosity": "brief",
+                  "boundaries": [
+                    "不透露自己私下准备的礼物",
+                    "不追问伞借给了谁"
+                  ]
+                },
+                "target": "player",
+                "duration": 2
+              }
+            ]
+          }
+        },
+        {
+          "agent": "world_resolver",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "speech",
+                "actor": "player",
+                "content": "对不起，我刚才说借伞，其实伞已经借给别人了。",
+                "target": "erin",
+                "duration": 3,
+                "parallelWith": []
+              }
+            ],
+            "npcReactions": [
+              {
+                "npcId": "erin",
+                "reaction": {
+                  "thought": "他刚才说借伞，我还以为他特意为我留的。原来已经给别人了……不过至少他主动道歉了，没有继续瞒着。",
+                  "stateUpdates": [
+                    {
+                      "path": "relationships.player.trust",
+                      "op": "delta",
+                      "value": 0.03
+                    },
+                    {
+                      "path": "relationships.player.jealousy",
+                      "op": "delta",
+                      "value": 0.05
+                    }
+                  ],
+                  "intents": [
+                    {
+                      "type": "action",
+                      "op": "glance_away",
+                      "duration": 1,
+                      "id": "b0_erin_intent_0"
+                    }
+                  ]
+                },
+                "proposedCharacter": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.48,
+                      "affection": 0.44,
+                      "jealousy": 0.45
+                    }
+                  }
+                }
+              }
+            ],
+            "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.affection（affection）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。\nrelationships.<现有人物ID>.jealousy（jealousy）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。",
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                }
+              },
+              "erin": {
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room",
+                "attributes": {
+                  "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                },
+                "relationships": {
+                  "player": {
+                    "trust": 0.45,
+                    "affection": 0.44,
+                    "jealousy": 0.4
+                  }
+                }
+              }
+            },
+            "rules": {},
+            "reactionBudget": {
+              "available_time": 3,
+              "response_window": false,
+              "trigger_event_ids": [
+                "e1"
+              ]
+            }
+          },
+          "output": {
+            "patches": [
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/trust",
+                "value": 0.48
+              },
+              {
+                "op": "replace",
+                "path": "/entities/erin/relationships/player/jealousy",
+                "value": 0.45
+              }
+            ],
+            "publicEvents": [
+              {
+                "actor": "erin",
+                "type": "action",
+                "sourceIntentId": "b0_erin_intent_0",
+                "op": "glance_away",
+                "target": "player"
+              }
+            ],
+            "narrationHints": [
+              "艾琳听到玩家的道歉，情绪略微缓和但带着一丝失落",
+              "艾琳移开了视线，没有继续追问"
+            ]
+          }
+        }
+      ],
+      "validation": [
+        {
+          "type": "character_update_validation",
+          "status": "success",
+          "output": {
+            "proposed": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.03
+              },
+              {
+                "path": "relationships.player.jealousy",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "accepted": [
+              {
+                "path": "relationships.player.trust",
+                "op": "delta",
+                "value": 0.03
+              },
+              {
+                "path": "relationships.player.jealousy",
+                "op": "delta",
+                "value": 0.05
+              }
+            ],
+            "rejected": [],
+            "validation": [
+              {
+                "update": {
+                  "path": "relationships.player.trust",
+                  "op": "delta",
+                  "value": 0.03
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.45,
+                      "affection": 0.44,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.48,
+                      "affection": 0.44,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              },
+              {
+                "update": {
+                  "path": "relationships.player.jealousy",
+                  "op": "delta",
+                  "value": 0.05
+                },
+                "valid": true,
+                "errors": [],
+                "before": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.48,
+                      "affection": 0.44,
+                      "jealousy": 0.4
+                    }
+                  }
+                },
+                "after": {
+                  "type": "character",
+                  "name": "艾琳",
+                  "location": "tavern_room",
+                  "attributes": {
+                    "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+                  },
+                  "relationships": {
+                    "player": {
+                      "trust": 0.48,
+                      "affection": 0.44,
+                      "jealousy": 0.45
+                    }
+                  }
+                },
+                "schemaRule": "passed"
+              }
+            ],
+            "before": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.45,
+                  "affection": 0.44,
+                  "jealousy": 0.4
+                }
+              }
+            },
+            "after": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.48,
+                  "affection": 0.44,
+                  "jealousy": 0.45
+                }
+              }
+            },
+            "committed": false
+          }
+        }
+      ]
+    },
+    {
+      "input": "我把自己的雨衣递给艾琳，说：“这次是真的，你先用吧。”",
+      "success": false,
+      "passed": false,
+      "error": "[PipelineStageError in perception]: Output Schema Validation Failed for agent 'perception': instance.npcObservations.erin[1].op is not of a type(s) string",
+      "leaked": false,
+      "valid": true,
+      "before": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45,
+              "affection": 0.44,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "after": {
+        "player": {
+          "type": "character",
+          "name": "玩家",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          }
+        },
+        "erin": {
+          "type": "character",
+          "name": "艾琳",
+          "location": "tavern_room",
+          "attributes": {
+            "privateNote": "PRIVATE_CANARY_social：我私下准备了一份礼物，不能告诉任何人。"
+          },
+          "relationships": {
+            "player": {
+              "trust": 0.45,
+              "affection": 0.44,
+              "jealousy": 0.4
+            }
+          }
+        }
+      },
+      "patches": [],
+      "narration": "执行中断: [PipelineStageError in perception]: Output Schema Validation Failed for agent 'perception': instance.npcObservations.erin[1].op is not of a type(s) string",
+      "agents": [
+        {
+          "agent": "input_compiler",
+          "input": {
+            "player": {
+              "input": "我把自己的雨衣递给艾琳，说：“这次是真的，你先用吧。”"
+            },
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "conversation": {
+              "lastAddressedNpcId": "erin",
+              "focusNpcId": "erin"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "output": {
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "normal",
+                "events": [
+                  {
+                    "id": "e1",
+                    "type": "action",
+                    "actor": "player",
+                    "op": "give",
+                    "target": "erin",
+                    "item": "雨衣",
+                    "duration": 1.5
+                  },
+                  {
+                    "id": "e2",
+                    "type": "speech",
+                    "actor": "player",
+                    "content": "这次是真的，你先用吧。",
+                    "target": "erin",
+                    "duration": 2,
+                    "parallelWith": [
+                      "e1"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "agent": "perception",
+          "input": {
+            "events": [
+              {
+                "id": "e1",
+                "type": "action",
+                "actor": "player",
+                "op": "give",
+                "target": "erin",
+                "item": "雨衣",
+                "duration": 1.5
+              },
+              {
+                "id": "e2",
+                "type": "speech",
+                "actor": "player",
+                "content": "这次是真的，你先用吧。",
+                "target": "erin",
+                "duration": 2,
+                "parallelWith": [
+                  "e1"
+                ]
+              }
+            ],
+            "scene": {
+              "location": "tavern_room",
+              "weather": "rainy",
+              "lighting": "morning"
+            },
+            "entities": {
+              "player": {
+                "id": "player",
+                "type": "character",
+                "name": "玩家",
+                "location": "tavern_room"
+              },
+              "erin": {
+                "id": "erin",
+                "type": "character",
+                "name": "艾琳",
+                "location": "tavern_room"
+              }
+            }
+          },
+          "error": "Output Schema Validation Failed for agent 'perception': instance.npcObservations.erin[1].op is not of a type(s) string"
+        }
+      ],
+      "validation": []
+    }
+  ]
+}

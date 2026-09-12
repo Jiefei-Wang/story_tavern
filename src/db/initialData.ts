@@ -1,7 +1,11 @@
+import { HARBOR_WORLD_DEFINITION } from "../engine/character-schema/HarborSchema";
 import { withConversationContract } from "../engine/runtime/ConversationContracts";
 import { AgentDefinition, AgentGroup, Backend, GameSave } from "../types";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../engine/world/WorldState";
 import { CHARACTER_GENERATOR } from "../engine/characters/CharacterGenerator";
+import { ACTION_ADJUDICATOR } from '../engine/world/ActionResolution';
+import { CHARACTER_CHANGE_AUDITOR } from '../engine/world/CharacterChangeAuditor';
+import { NARRATION_AUDITOR } from '../engine/narration/NarrationAuditor';
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
@@ -22,11 +26,11 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
    - "speech": 说话对白（包含 actor, content, target, duration, parallelWith）
 2. "wait": 等待NPC反应，设置 responseWindow=true
 3. "time_skip": 时间快进（包含 to，例如 "next_morning"）
-4. "admin": 管理员世界法则/环境修改指令（包含 command，例如以 admin: 开头、改变天气、修改/禁止规则的指令）
+4. "admin": 仅当整条原始输入以 admin: 或 管理员: 开头时可用（包含 command；兼容大小写和中文冒号）
 
 重要原则：
-- 若玩家输入含有 "admin:"、"管理员:"、"改变天气"、"修改规则" 等管理指令，必须将其作为独立 kind="admin" 的 block 输出，绝不能当作普通 action！
-- 一句话若同时包含角色动作和管理指令，必须分别拆解为独立的 normal 块和 admin 块。
+- 没有上述开头前缀时，绝不输出 admin 块。引号内、句中、后续子句中的 admin 也不授权。
+- 改变天气、修改规则、古代掏枪等无权限或不可能的意图仍属于玩家尝试；交由世界规则裁定，不得升级为管理员操作。
 
 输出示例：
 {
@@ -43,11 +47,6 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       "id": "b2",
       "kind": "wait",
       "responseWindow": true
-    },
-    {
-      "id": "b3",
-      "kind": "admin",
-      "command": "改变天气为下雪天"
     }
   ]
 }`,
@@ -102,7 +101,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.2,
-      maxTokens: 1000,
+      maxTokens: 0,
     },
   },
   {
@@ -118,6 +117,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
         role: "system",
         content: `你是一个有限视角感知判定引擎。
 依据当前场景、事件发生者、事件距离以及声音大小，判断场景中的每个 NPC 看见了什么（saw）、听见了什么（heard）。
+输出观察时必须复制事件本身的公开语义字段 actor、type、op、target；不要只输出 eventId。action 的语义只有在 saw=true 时提供，speech 的 content 只有在 heard=true 时提供。不要泄漏未听见的对白或不可见事件。
 输出格式：
 {
   "npcObservations": {
@@ -155,6 +155,10 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
                 eventId: { type: "string" },
                 saw: { type: "boolean" },
                 heard: { type: "boolean" },
+                actor: { type: "string" },
+                type: { type: "string" },
+                op: { type: "string" },
+                target: { type: "string" },
                 content: { type: "string" },
               },
               required: ["eventId", "saw", "heard"],
@@ -166,7 +170,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.2,
-      maxTokens: 1000,
+      maxTokens: 0,
     },
   },
   {
@@ -183,17 +187,20 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
         content: `你只能扮演并推演指定的单个 NPC。
 绝对不允许获知其他人的内心想法或隐藏世界信息。
 你必须严格遵守 reaction.available_time 的时间预算。在短时间内不能进行复杂演说或过多动作。
-允许完全不行动或不说话（thought: null, mentalUpdates: [], intents: []）。
+允许完全不行动或不说话（thought: null, stateUpdates: [], intents: []）。
+
+speech intent 只表达“角色想说什么”，不要写最终小说台词。使用自然语言 SpeechPlan，不要使用 subject/predicate 等复杂语言学 DSL：
+{ "summary": "总体语义", "beats": [{ "kind": "answer", "meaning": "必须表达的意思", "required": true }], "goal": "目的", "stance": "立场", "tone": "态度", "verbosity": "brief|normal|detailed|extended", "boundaries": ["不能擅自透露的内容"] }
 
 输出格式：
 {
   "thought": "内心的简短独白或想法",
-  "mentalUpdates": [
-    { "aspect": "mood", "newValue": "alert" }
+  "stateUpdates": [
+    { "path": "attributes.<schema字段ID>", "op": "set", "value": "符合该字段定义的值" }
   ],
   "intents": [
     { "type": "action", "op": "glance_around", "duration": 0.6 },
-    { "type": "speech", "content": "话语对白", "target": "player", "duration": 2.0 }
+    { "type": "speech", "speechPlan": { "summary": "想向玩家表达的意思", "beats": [{ "meaning": "必须表达的事实", "required": true }], "tone": "克制", "verbosity": "normal", "boundaries": [] }, "target": "player", "duration": 2.0 }
   ]
 }`,
       },
@@ -212,15 +219,18 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       type: "object",
       properties: {
         thought: { type: ["string", "null"] },
-        mentalUpdates: {
+        stateUpdates: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              aspect: { type: "string" },
-              newValue: {},
+              path: { type: "string" },
+              op: { type: "string", enum: ["set", "delta", "append"] },
+              value: {},
+              reason: { type: "string" },
             },
-            required: ["aspect"],
+            required: ["path", "op", "value"],
+            additionalProperties: false,
           },
         },
         intents: {
@@ -233,6 +243,16 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
               op: { type: "string" },
               target: { type: "string" },
               content: { type: "string" },
+              speechPlan: {
+                type: "object",
+                properties: {
+                  summary: { type: "string", minLength: 1 },
+                  beats: { type: "array", items: { type: "object", properties: { kind: { type: "string" }, meaning: { type: "string", minLength: 1 }, required: { type: "boolean" } }, required: ["meaning"] } },
+                  goal: { type: "string" }, stance: { type: "string" }, tone: { type: "string" }, verbosity: { type: "string", enum: ["brief", "normal", "detailed", "extended"] }, boundaries: { type: "array", items: { type: "string" } },
+                },
+                required: ["summary"],
+                additionalProperties: false,
+              },
               duration: { type: "number", minimum: 0 },
             },
             required: ["type"],
@@ -243,13 +263,13 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.7,
-      maxTokens: 1200,
+      maxTokens: 0,
     },
   },
   {
     id: "world_resolver",
     name: "World Resolver",
-    description: "统一结算物理与心智变化，生成 RFC 6902 JSON Patch 并验证时间预算与世界规则。",
+    description: "裁决动作与物理结果，选择合法人物提议；身体及资源过程由执行后的独立阶段结算。",
     tags: ["世界结算", "RFC6902"],
     version: "v1.0",
     updatedAt: "2026-09-11",
@@ -259,24 +279,25 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
         role: "system",
         content: `你是世界结算仲裁者 (World Resolver)。
 接收玩家事件与所有 NPC 的意图，验证是否符合规则与物理可行性。
-唯一修改世界状态的手段是生成 RFC 6902 JSON Patch。
-禁止直接重写整个世界。只输出差异 patches。
+物品、环境和位置等物理结果使用 RFC 6902 JSON Patch。人物属性只通过 acceptedStateUpdates 选择已有候选，由程序生成差异；不得手写 attributes/relationships Patch。
+实际进食、休息、施法或使用能力等过程的身体与资源效果，在已接受动作执行后由独立阶段结算。本阶段提交物理结果，不提前结算人物效果。禁止直接重写整个世界。
 
+每个 NPC intent 都必须在 accepted publicEvents 或 rejectedIntents 中出现一次，不能静默吞掉。accepted intent 必须引用 sourceIntentId；speech 只携带并原样保留 speechPlan，不生成 content，Narrator 会负责措辞。action 也必须携带 sourceIntentId。
 如果 NPC 的意图在物理与规则上成功发生，必须同时在 publicEvents 中输出对应公开事件（供 Narrator 描述）：
-- speech: 对白事件，包含 actor、type: "speech"、content
-- action: 动作事件，包含 actor、type: "action"、op、target（可选）
+- speech: 包含 actor、type: "speech"、sourceIntentId、target、speechPlan
+- action: 包含 actor、type: "action"、sourceIntentId、op、target（可选）
 - environment: 环境事件
 
 输出格式：
 {
   "patches": [
-    { "op": "replace", "path": "/entities/erin/mentalState/mood", "value": "alert" },
     { "op": "replace", "path": "/entities/player/location", "value": "tavern_outside_window" }
   ],
   "publicEvents": [
-    { "actor": "erin", "type": "speech", "sourceIntentId": "b0_erin_intent_0", "target": "player", "content": "小声点……卫兵就在旁边。" },
-    { "actor": "guard", "type": "action", "op": "watch_player" }
+    { "actor": "erin", "type": "speech", "sourceIntentId": "b0_erin_intent_0", "target": "player", "speechPlan": { "summary": "想提醒玩家保持安静" } },
+    { "actor": "guard", "type": "action", "sourceIntentId": "b0_guard_intent_0", "op": "watch_player" }
   ],
+  "acceptedStateUpdates": [],
   "narrationHints": [
     "艾琳变得警惕",
     "玩家走到了窗边"
@@ -323,10 +344,15 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
               op: { type: "string" },
               target: { type: "string" },
               content: { type: "string" },
+              speechPlan: { type: "object", properties: { summary: { type: "string", minLength: 1 }, beats: { type: "array" }, goal: { type: "string" }, stance: { type: "string" }, tone: { type: "string" }, verbosity: { type: "string" }, boundaries: { type: "array" } }, required: ["summary"], additionalProperties: true },
               duration: { type: "number" },
             },
             required: ["actor", "type"],
           },
+        },
+        rejectedIntents: {
+          type: "array",
+          items: { type: "object", properties: { intent: { type: "object" }, reason: { type: "string", minLength: 1 } }, required: ["intent", "reason"] },
         },
         narrationHints: {
           type: "array",
@@ -337,7 +363,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.2,
-      maxTokens: 1000,
+      maxTokens: 0,
     },
   },
   {
@@ -403,7 +429,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.3,
-      maxTokens: 800,
+      maxTokens: 0,
     },
   },
   {
@@ -460,7 +486,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     },
     defaults: {
       temperature: 0.1,
-      maxTokens: 800,
+      maxTokens: 0,
     },
   },
   {
@@ -474,18 +500,17 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       {
         id: "m1",
         role: "system",
-        content: `你是一个高水准的西幻纯文字RPG小说家与旁白。
+        content: `你是小说表现层 Narrator，而不是世界规则层。世界可以是西幻、现代、科幻、赛博朋克、推理、末日、现实题材或用户自定义类型；从 scene、world description、rules、entities 和事件判断风格，没有明确风格时使用中性自然的沉浸式小说语言。
 你只能描述玩家能感知到的物理事实、对白、神态与环境变化。
-根据真实提交的公开事实生成旁白。
-不得描述未提交的意图。
+NPC SpeechPlan 是角色已经决定要表达的真实语义意图。你负责把它写成自然对白，可以改变措辞、句式、停顿、语气、修辞、长度和分段，也可以穿插低后果动作与环境描写；但不得改变说话者、对象、核心事实、确定程度、关键立场、required 信息、boundaries 或角色知识边界。若角色撒谎，忠实写出谎言，不得在 prose 中泄漏真相。
+根据真实提交的公开事实生成小说正文；不要把结构化事件机械翻译成“某人执行了某动作”。
 绝对严禁泄露 NPC 的隐藏内心独白、私有记忆或心智状态！
-不要以 "Narrator:" 或 "旁白:" 开头，直接输出纯小说正文。
-文字质感应当精炼、生动、富有画面感。`,
+输出 JSON {segments:[{type:"prose",text,sourceEventIds?}|{type:"speech",sourceIntentId,text}]}。同一 sourceIntentId 可出现多次以支持长对白与动作交错。speech 必须引用 accepted speech 的 sourceIntentId；不得创造没有 authoritative source 的对白或有世界后果的新事件。所有 accepted NPC speech 至少实现一次。`,
       },
       {
         id: "m2",
         role: "user",
-        content: `玩家本轮输入:\n{{playerInput}}\n\n本轮已经真实发生且玩家可以观察到的事件:\n{{json committedEvents}}\n\n公开世界变化:\n{{json publicPatches}}\n\n当前场景:\n{{json scene}}\n\n根据以上已提交事实生成旁白，不得描述未提交的意图，不得泄露 NPC 私有状态或内心活动，请直接输出小说正文:`,
+        content: `玩家本轮输入:\n{{playerInput}}\n\n本轮已经真实发生且玩家可以观察到的事件（speechPlan 是 NPC 语义权威，不能当作现成台词复制）:\n{{json committedEvents}}\n\n公开世界变化:\n{{json publicPatches}}\n\n当前场景:\n{{json scene}}\n\n公开实体:\n{{json entities}}\n\n请输出自然小说段落的结构化 JSON:`,
       },
     ],
     inputs: [
@@ -493,13 +518,14 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       { name: "committedEvents", type: "CommittedTurnEvent[]", description: "本轮真实发生的公开事件", required: true },
       { name: "publicPatches", type: "Patch[]", description: "公开世界增量", required: true },
       { name: "scene", type: "SceneContext", description: "场景信息", required: true },
+      { name: "entities", type: "PublicEntities", description: "公开实体", required: true },
       { name: "events", type: "GameEvent[]", description: "兼容输入", required: false },
       { name: "patches", type: "Patch[]", description: "兼容输入", required: false },
     ],
-    outputSchema: null, // Outputs pure prose text
+      outputSchema: null, // withConversationContract supplies the structured schema
     defaults: {
       temperature: 0.8,
-      maxTokens: 1500,
+      maxTokens: 0,
     },
   },
 ];
@@ -602,37 +628,44 @@ export const DEFAULT_AGENT_GROUPS: AgentGroup[] = [
       {
         agentId: "input_compiler",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "perception",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "npc_reaction",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "world_resolver",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "time_skip",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "admin_patch",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
       {
         agentId: "narrator",
         backendId: "backend_openrouter",
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+        model: "deepseek/deepseek-v4.1-flash",
+        overrides: { reasoningEffort: "none" },
       },
     ],
   },
@@ -682,6 +715,7 @@ export const DEFAULT_AGENT_GROUPS: AgentGroup[] = [
 ];
 
 export const INITIAL_DEMO_SAVE: GameSave = {
+  worldDefinition: HARBOR_WORLD_DEFINITION,
   id: "save_harbor_tavern",
   name: "王城的黄昏 · 港口酒馆",
   createdAt: "2026-09-11T19:30:00.000Z",
@@ -706,9 +740,14 @@ export const INITIAL_DEMO_SAVE: GameSave = {
 };
 
 BUILTIN_AGENTS.push(CHARACTER_GENERATOR);
+BUILTIN_AGENTS.push(ACTION_ADJUDICATOR, NARRATION_AUDITOR, CHARACTER_CHANGE_AUDITOR);
 for (const group of DEFAULT_AGENT_GROUPS) {
+  for (const [id, sourceId] of [['action_adjudicator','world_resolver'], ['narration_auditor','narrator'], ['character_change_auditor','world_resolver']]) {
+    const inherited = group.bindings.find(b => b.agentId === sourceId);
+    if (inherited) group.bindings.push({ ...structuredClone(inherited), agentId: id });
+  }
   const source = group.bindings.find(binding => binding.agentId === 'admin_patch');
-  if (source) group.bindings.push({ agentId: 'character_generator', backendId: source.backendId, model: source.model });
+  if (source) group.bindings.push({ agentId: 'character_generator', backendId: source.backendId, model: source.model, overrides: { reasoningEffort: source.overrides?.reasoningEffort ?? 'none' } });
 }
 
 for (let i = 0; i < BUILTIN_AGENTS.length; i++) BUILTIN_AGENTS[i] = withConversationContract(BUILTIN_AGENTS[i]);

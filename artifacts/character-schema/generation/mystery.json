@@ -1,0 +1,179 @@
+{
+  "scenario": "mystery",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": false,
+  "error": "[PipelineStageError in character_generator]: Output Schema Validation Failed for agent 'character_generator': instance.attributes is not allowed to have the additional property \"relationships\"",
+  "isolated": true,
+  "created": [],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_adult_unknown",
+            "value": {
+              "type": "character",
+              "name": "成年旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "suspicion",
+                  "label": "suspicion",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.4,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "knownFacts",
+                  "label": "knownFacts",
+                  "type": "list",
+                  "default": [],
+                  "visibility": "private",
+                  "updatePolicy": "append_only",
+                  "freedom": "free",
+                  "item": {
+                    "id": "entry",
+                    "label": "经历",
+                    "type": "object",
+                    "visibility": "private",
+                    "updatePolicy": "dynamic",
+                    "freedom": "free",
+                    "fields": [
+                      {
+                        "id": "text",
+                        "label": "text",
+                        "type": "text",
+                        "visibility": "private",
+                        "updatePolicy": "dynamic",
+                        "freedom": "free",
+                        "required": true
+                      },
+                      {
+                        "id": "importance",
+                        "label": "importance",
+                        "type": "number",
+                        "min": 0,
+                        "max": 1,
+                        "visibility": "private",
+                        "updatePolicy": "dynamic",
+                        "freedom": "strict",
+                        "required": true
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ],
+          "relationship": {
+            "label": "关系维度",
+            "fields": [
+              {
+                "id": "trust",
+                "label": "trust",
+                "type": "number",
+                "min": 0,
+                "max": 1,
+                "default": 0.4,
+                "visibility": "private",
+                "updatePolicy": "dynamic",
+                "freedom": "strict",
+                "changePolicy": {
+                  "mode": "delta",
+                  "maxPerEvent": 0.15,
+                  "maxPerTurn": 0.25
+                },
+                "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+              }
+            ]
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的 append.value 直接是单个列表项，不包装 item/entry 键，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+      },
+      "error": "Output Schema Validation Failed for agent 'character_generator': instance.attributes is not allowed to have the additional property \"relationships\""
+    }
+  ],
+  "validation": []
+}

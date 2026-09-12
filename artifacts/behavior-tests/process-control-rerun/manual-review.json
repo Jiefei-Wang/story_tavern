@@ -1,0 +1,21 @@
+[
+  {
+    "turnNumber": 1,
+    "attributes": "passed",
+    "narration": "disputed",
+    "overall": "disputed",
+    "reason": "追加控制实际触发施法：原有蜡烛lit由false变为true，NPC资源成本在动作完成后的独立阶段以真实施法eventId为来源结算，mana从0.6降至0.35，没有预扣、双扣或资源耗尽。旁白的点燃事实有真实来源，也没有升级法术。但同块已接受意图按examine_self→cast_spell→speech排列，旁白却先说‘我现在就…’再施法，原计划本身的将来式与动作次序亦不一致。记录为叙事顺序有争议，不把主要资源结算修复冒充整轮无瑕疵。",
+    "evidence": [
+      "low-magic-execution-control.json#/turns/0/trace/spans/8/parsedOutput：原NPC只提议mood与memories，没有mana变化；intents含真实cast_spell(target=candle,duration=2)。",
+      "#/turns/0/trace/spans/12/parsedOutput：Resolver patches只有 /entities/candle/lit=true，acceptedStateUpdates只选择原有mood/memory提议；publicEvents接受cast_spell并绑定b1_mira_intent_1。",
+      "#/turns/0/committedEvents/3：id=turn_1_b1_event_3，type=npc_action，op=cast_spell，target=candle，source.duration=2，outcome.status=success。",
+      "#/turns/0/trace/spans/16/inputContext：结算时visibleObjects.candle.lit=true，npc.attributes.mana仍0.6；observations包含已成功施法事件。",
+      "#/turns/0/trace/spans/16/parsedOutput：mana delta=-0.25，sourceEventIds=[turn_1_b1_event_3]，reason=‘实际用指尖小火苗施法点燃蜡烛，按真实动作消耗精力。’，intents=[]。",
+      "#/turns/0/trace/spans/17/inputContext/audit/phase=completed_process；parsedOutput.valid=true。人工独立核对该来源和物理状态成立，不仅依据审计标签。",
+      "#/turns/0/after/entities/mira/attributes/mana=0.35，candle.lit=true，实体ID未新增；记忆顺序追加当前请求与实际施法，没有覆写原请求或虚构未执行法术。",
+      "#/turns/0/committedEvents/1/source.duration=30、timeSemantics=inclusive_block_window；clock 18:00:00→18:00:35，另含玩家话语5秒，未把等待误算30分钟或把施法2秒再重复加到等待之外。",
+      "#/turns/0/narration：‘火苗落下，烛芯被引燃’与成功施法及lit=true一致；初句蜡烛未点燃是在叙述本轮起点，不是声称结算末态仍未点燃。",
+      "顺序疑点：#/turns/0/trace/spans/8/parsedOutput/intents、/turns/0/trace/spans/12/parsedOutput/publicEvents和committedEvents均将cast_spell列在speech前；最终旁白先呈现‘我现在就用指尖的小火苗，点这支蜡烛’，再写施法。记录中没有明确并行动作标记；未擅自把列表顺序差异隐去。"
+    ]
+  }
+]

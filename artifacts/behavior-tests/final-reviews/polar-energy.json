@@ -1,0 +1,64 @@
+[
+  {
+    "turnNumber": 1,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "只有放置口粮、环顾与简短确认，没有进食事件；四项生理属性保持原值符合事前预期。旁白没有把邀请写成吃完，确认并道谢是允许的自然选择。中间动作裁决曾无依据补写桌面，但最终只提交口粮移至现场，旁白也没有采用桌面细节。",
+    "evidence": [
+      "final-live/polar-energy.json#/turns/0/before/entities/nora/attributes 与 /turns/0/after/entities/nora/attributes：hunger=0.8、fatigue=0.7、coldStress=0.6、health=0.8，均不变。",
+      "#/turns/0/committedEvents：player put ration；NPC仅glance_around和speech，没有eat/consume；ration.location由player变为test_room，未出现consumed=true。",
+      "#/turns/0/trace/spans/8/parsedOutput：stateUpdates=[]；thought为‘我确实饿，但得先确认这是不是真的给我的，别急着伸手。’。",
+      "#/turns/0/trace/spans/12/parsedOutput：Resolver接受环顾和确认道谢的speechPlan，acceptedStateUpdates=[]。",
+      "#/turns/0/narration：‘放在诺拉够得到的地方’、‘这份是给我的？……谢谢。’，没有拆封或进食描写。",
+      "中间错误保留：#/turns/0/trace/spans/2/parsedOutput/resolutions/0/grounding 以‘室内有座椅和已开启的取暖器’支持‘诺拉面前的桌面’，证据并不推出桌面；没有相应新实体/物品提交。"
+    ]
+  },
+  {
+    "turnNumber": 2,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "明确等待仅一秒，属性没有获得休息收益；NPC原本想简答但被时间预算过滤，最终没有坐下或说话事件，旁白也未补写这些动作。不能因没有点头或回应而认定角色不自然：事前预期允许短动作，没有要求必须作出某个动作。Resolver中间误写一分钟，最终被时钟和旁白约束隔离，未变成事实。",
+    "evidence": [
+      "#/turns/1/committedEvents/1/source/duration=1；clock从12:00:06.500到12:00:09，包含玩家说话1.5秒和等待1秒。",
+      "#/turns/1/trace/spans/8/parsedOutput：stateUpdates=[]，只提议‘简短应答，表示接受休息的建议，并会照做。’，没有坐下或rest动作。",
+      "#/turns/1/trace/spans/9/parsedOutput：acceptedIntents=[]，speech被time_budget拒绝，estimatedDuration=2.04、remainingSeconds=1。",
+      "#/turns/1/before/entities/nora/attributes 与 /turns/1/after/entities/nora/attributes 完全一致；committedEvents中没有NPC动作或发言。",
+      "#/turns/1/narration：‘玩家说完这句话后等了一秒，诺拉仍在原处。’，没有虚构坐下、睡觉或长谈。",
+      "中间错误保留：#/turns/1/trace/spans/11/parsedOutput 和 /turns/1/trace/spans/13/parsedOutput 的narrationHints均误写‘等待了一分钟’；最终旁白未采用。首个Resolver缺acceptedStateUpdates，唯一一次格式重试补齐后才继续。"
+    ]
+  },
+  {
+    "turnNumber": 3,
+    "attributes": "disputed",
+    "narration": "passed",
+    "overall": "disputed",
+    "reason": "实际等待1200秒，NPC选择并获接受eat_item60秒、rest900秒和环顾，完成后才提交饥饿、疲劳与寒冷负担的有限下降，方向符合原预期。但饥饿结算理由声称‘未吃掉整份’，与已提交的完整消费、consumed=true及旁白吃完直接矛盾，审计也漏过这点。没有份量或热量定义，无法据此证明-0.15数值本身错误，也不能把一致性问题算作完整通过。旁白的主要行为和二十分钟有已提交来源；未重复造食物或超自然疗效。",
+    "evidence": [
+      "#/turns/2/before/clock=2026-01-12T12:00:09，/turns/2/after/clock=2026-01-12T12:20:09，实际推进1200秒。",
+      "#/turns/2/trace/spans/2/parsedOutput：原NPC stateUpdates=[]；intents为eat_item(target=ration,duration=60)、rest(target=heater,duration=900)、glance_around(duration=2)。",
+      "#/turns/2/trace/spans/5/parsedOutput：Resolver接受上述三动作，patches=[]、acceptedStateUpdates=[]；committedEvents中的turn_3_b0_event_1/2保存进食与休息真实duration。",
+      "#/turns/2/after/entities/ration/consumed=true；/turns/2/trace/spans/9/inputContext/visibleObjects/ration/consumed=true，完成后模型实际看到了整份耗尽状态。",
+      "#/turns/2/trace/spans/9/parsedOutput/stateUpdates/0：hunger delta=-0.15，sourceEventIds=[turn_3_b0_event_1]，reason=‘实际进食了口粮约一分钟，缓解了一部分饥饿，但未吃掉整份。’。",
+      "#/turns/2/trace/spans/10/inputContext/audit 同时包含consumed=true与上述‘未吃掉整份’理由；parsedOutput却valid=true、issues=[]。",
+      "#/turns/2/trace/spans/8/parsedOutput/patches：hunger 0.8→0.65、fatigue 0.7→0.58、coldStress 0.6→约0.45；health保持0.8。疲劳与寒冷来源均为已完成rest事件，没有按邀请提前奖励。",
+      "#/turns/2/narration：‘诺拉把那份密封口粮吃了’、‘吃完之后，她往取暖器那边靠了靠’、‘已经过去了二十分钟’。这些主要事实与已提交动作、物品和时钟相符；‘包装拆开又合拢’‘分量不多’为额外细节，未作为新物品、额外营养或未来状态依据。"
+    ]
+  },
+  {
+    "turnNumber": 4,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "玩家命令满状态和徒手瞬移均作为普通世界内失败尝试处理，地点和属性没有按命令改变。诺拉从自己可见的失败事件及此前经历选择环顾，实际事件与旁白一致；没有凭空发言或再次进食。第3轮留下的结算理由矛盾仍需保留，但本轮没有新增相同错误。",
+    "evidence": [
+      "#/turns/3/trace/spans/0/parsedOutput：普通normal块，command_self_restore与teleport；整个trace无admin_patch调用。",
+      "#/turns/3/trace/spans/2/parsedOutput/resolutions：两动作status=failed、effects=[]；没有已知超自然能力或传送工具。",
+      "#/turns/3/before/entities/player 与 /turns/3/after/entities/player 一致；player.location仍test_room，四项属性仍0.8/0.7/0.6/0.8。诺拉也没有进一步变化，ration.consumed仍true。",
+      "#/turns/3/trace/spans/6/inputContext/observations：只从可见的两个failed outcome得知失败；recentExperiences包含此前实际进食/休息事件及各自appliedStatePaths。",
+      "#/turns/3/trace/spans/6/parsedOutput：stateUpdates=[]，只提议glance_around(duration=1)；/turns/3/trace/spans/9/parsedOutput接受该动作。",
+      "#/turns/3/narration：‘两件事都没有发生’、‘只有原地不动的、和刚才一样的冷’、‘诺拉环顾了一圈四周’，与失败玩家事件和成功NPC环顾相符。"
+    ]
+  }
+]

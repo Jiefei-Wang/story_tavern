@@ -1,3 +1,4 @@
+import { migrateGameSave } from "../engine/character-schema/Migration";
 import { invoke } from "@tauri-apps/api/core";
 import {
   AgentDefinition,
@@ -151,6 +152,18 @@ export class StorageService {
       }
       await this.saveSettings({ ...settings, characterGenerationMigrated: true });
     }
+    const behaviorSettings = await this.getSettings();
+    // Version 2 also upgrades installs which already completed the original two-role migration.
+    if ((behaviorSettings.behaviorGroundingVersion ?? 0) < 2) {
+      for (const [id, sourceId] of [['action_adjudicator','world_resolver'], ['narration_auditor','narrator'], ['character_change_auditor','world_resolver']]) {
+        if (!(await this.getAgents()).some(a => a.id === id)) await this.saveAgent(BUILTIN_AGENTS.find(a => a.id === id)!);
+        for (const group of await this.getAgentGroups()) {
+          const inherited = group.bindings.find(b => b.agentId === sourceId);
+          if (inherited && !group.bindings.some(b => b.agentId === id)) await this.saveAgentGroup({ ...group, bindings: [...group.bindings, {...structuredClone(inherited), agentId:id}] });
+        }
+      }
+      await this.saveSettings({ ...behaviorSettings, behaviorGroundingMigrated: true, behaviorGroundingVersion: 2 });
+    }
     const saves = await this.getSaves();
     if (saves.length === 0) {
       await this.saveGame(INITIAL_DEMO_SAVE);
@@ -299,16 +312,23 @@ export class StorageService {
       const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
         table: "saves",
       });
-      return items.map((i) => safeJsonParse<GameSave>(i.value, `GameSave '${i.key}'`));
+      const raw = items.map(i => safeJsonParse<GameSave>(i.value, `GameSave '${i.key}'`));
+      const migrated = raw.map(migrateGameSave);
+      // Validate the entire batch before persisting any upgraded record.
+      await Promise.all(migrated.map((save, index) => raw[index].worldDefinition ? Promise.resolve() : invoke('db_kv_set', { table: 'saves', key: items[index].key, value: JSON.stringify(save) })));
+      return migrated;
     }
     const raw = this.getStorage().getItem("story_tavern_saves");
     if (!raw) return [];
     const list = safeJsonParse<GameSave[]>(raw, "story_tavern_saves");
-    return Array.isArray(list) ? list : [];
+    if (!Array.isArray(list)) throw new Error('存档列表格式无效，原数据未修改');
+    const migrated = list.map(migrateGameSave);
+    if (list.some(save => !save.worldDefinition)) this.getStorage().setItem('story_tavern_saves', JSON.stringify(migrated));
+    return migrated;
   }
 
   async saveGame(save: GameSave): Promise<void> {
-    const immutableSave = { ...save };
+    const immutableSave = migrateGameSave(save);
     if (this.isTauri()) {
       await invoke("db_kv_set", {
         table: "saves",

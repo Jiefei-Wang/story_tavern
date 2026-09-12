@@ -1,0 +1,46 @@
+[
+  {
+    "turnNumber": 1,
+    "attributes": "not_evaluable",
+    "narration": "passed",
+    "overall": "not_evaluable",
+    "reason": "NPC仅看蜡烛并表示愿意尝试，没有实际施法；mana不变与本轮实际行为一致，旁白也没有把答应变成点燃。但本轮主要条件‘若确实施法，mana应降低’从未触发，不能把这一轮算成法术代价已验证。允许角色先谨慎回应，不强制指定施法动作或扣除数值。",
+    "evidence": [
+      "final-live/low-magic-limits.json#/scenario/turns/0/expectations/attributes：‘若确实施法，mana应降低；一次微小法术不需把精力耗尽。’。",
+      "#/turns/0/trace/spans/8/parsedOutput：stateUpdates=[]，intents只有glance_at(target=candle,duration=1)与speech；thought为‘我能力有限，但可以试一下，先如实说清楚。’。",
+      "#/turns/0/trace/spans/12/parsedOutput：Resolver只接受看蜡烛和发言，patches=[]、acceptedStateUpdates=[]；没有任何cast、点火或使用能力事件。",
+      "#/turns/0/before/entities/mira/attributes/mana 与 /turns/0/after/entities/mira/attributes/mana 均0.6；蜡烛前后仍名为‘未点燃的蜡烛’，没有lit或类似点燃状态Patch。",
+      "#/turns/0/narration：‘她的目光先落到桌上那根未点燃的蜡烛上’、‘可以试试……不过我的小火苗不太稳，未必能点着。’，与真实glance_at和speechPlan相符。",
+      "#/turns/0/trace/spans 中没有completed_process_effects阶段；这不是施法后没有扣魔力，而是施法根本没有发生。"
+    ]
+  },
+  {
+    "turnNumber": 2,
+    "attributes": "passed",
+    "narration": "disputed",
+    "overall": "disputed",
+    "reason": "对复活与瞬移明确拒绝，魔力、能力和地点没有被要求改写；追加记忆有玩家本轮话语和自身前轮经历支持，没有虚构真正施法或复活者。旁白内容正确实现了拒绝，但约50个汉字的完整答复只对应3.36秒计划时长、整个NPC回应窗口也仅5秒，与克制认真的正常说话节奏存在疑点。原预期没有精确话速阈值，故记有争议，不把语义正确等同所有时序也正确。",
+    "evidence": [
+      "#/turns/1/trace/spans/8/parsedOutput：NPC明确‘我必须直接说做不到，不能假装答应’，只有拒绝speech，无任何施法意图。",
+      "#/turns/1/trace/spans/8/inputContext/observations 中t2_b0_e1为heard=true的当前请求；recentExperiences含上轮点蜡烛请求及自己关于能力有限的实际发言。",
+      "#/turns/1/after/entities/mira/attributes/memories：‘玩家先要求我用小火苗点蜡烛，我坦白能力有限、不保证成功；随后玩家又要求我用同一法术复活全村死者并把他瞬移到王都。我判断这远超我的能力，只能拒绝。’，没有把村里真有死者或法术已发生写成事实。",
+      "#/turns/1/trace/spans/12/parsedOutput：只接受speech和memories updateIndex=0；before/after的mana均0.6、mood均calm，player.location始终test_room，实体未新增。",
+      "#/turns/1/committedEvents/1/source/duration=5；/turns/1/committedEvents/2/source/duration=3.36；其realizedText为‘我做不到复活全村的人，也做不到把你瞬移到王都。我的能力只够勉强试着点起一小簇火苗，这种规模的法术，我承担不了。’（50个汉字，不含标点）。",
+      "#/turns/1/narration 对两项要求明确说做不到，没有烈焰、复活、瞬移或灾难惩罚；但/turns/1/trace/spans/16/parsedOutput 的grounded=true没有解决最终措辞长度与已分配时长不一致的疑点。"
+    ]
+  },
+  {
+    "turnNumber": 3,
+    "attributes": "passed",
+    "narration": "passed",
+    "overall": "passed",
+    "reason": "实际推进两秒，NPC无动作无发言无新状态；没有自动恢复精力、刷重大记忆或召来新角色。旁白维持未点燃蜡烛与沉默，符合事前允许的短暂停顿。‘呼吸几个来回’的修辞对两秒稍显夸张，需注意表达，但未改变明确时钟，也没有扩成整夜或额外剧情事件。",
+    "evidence": [
+      "#/turns/2/before/clock=0942-06-12T18:00:16，/turns/2/after/clock=0942-06-12T18:00:18；committedEvents只有一个wait、duration=2。",
+      "#/turns/2/trace/spans/2/parsedOutput：stateUpdates=[]、intents=[]；/turns/2/trace/spans/5/parsedOutput：patches=[]、publicEvents=[]、acceptedStateUpdates=[]。",
+      "#/turns/2/before/entities/mira/attributes 与 /turns/2/after/entities/mira/attributes 完全一致：mana=0.6，mood=calm，保留前轮记忆而不追加新重大经历。",
+      "#/turns/2/narration：‘米拉就在近旁，谁也没有开口’、‘桌上的那根蜡烛始终没有点燃’，与空NPC事件和蜡烛末态一致。",
+      "#/turns/2/after/entities 没有敌人、巨龙、亡灵或新任务；旁白只写环境与短暂停顿，没有凭空实现第一轮尚未执行的小火苗。"
+    ]
+  }
+]

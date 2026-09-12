@@ -1,0 +1,200 @@
+[
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "responses/narration_auditor_direction_miss.candidate.1.json#/result/evidenceSummary: [\"pistol 位于 test_room 且 loaded=false，玩家与何珂同在 test_room。\",\"turn_1_b0_event_0 成功：玩家从 table 取枪，pistol 位置被置为 test_room。\",\"turn_1_b0_event_1 成功：何珂在同一 blockId b1 内执行 observe。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "responses/narration_auditor_direction_miss.candidate.2.json#/result/evidenceSummary: [\"pistol 位于 test_room 且 loaded=false，本轮仅 location 被 replace 为 test_room。\",\"turn_1_b0_event_0 为 player 对 table 的 take 成功，pistol 从玩家移至 test_room。\",\"turn_1_b0_event_1 为 he 在 b1 的 observe 成功，无其他动作或发言。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_direction_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检物品流向反转：已提交从玩家移至现场，却写成从桌面拿到玩家手中。没有命中错误段落，不能因结构正确计通过。",
+    "evidence": [
+      "responses/narration_auditor_direction_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/modern-legal-item.json;turnNumber=1;role occurrence=0",
+      "原待审narration.segments[0]：玩家伸手将桌上的训练手枪取到手中。",
+      "turn_1_b0_event_0.outcome.summary明确从玩家移至现场；其patches为/entities/pistol/location=test_room，当前entities也为test_room。旧source.op=take不能推翻物理效果。",
+      "responses/narration_auditor_direction_miss.candidate.3.json#/result/evidenceSummary: [\"pistol 位于 test_room 且 loaded=false，本轮仅 location 被 replace 为 test_room。\",\"turn_1_b0_event_0 为 player 对 table 的 take 成功，pistol 移至 test_room；turn_1_b0_event_1 为何珂 observe 成功。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "passed",
+    "reason": "正确识别第1段‘低头看了一眼手边的记录’没有公开查看动作或记录物品来源；issue准确定位segmentIndex=1，最小修正只移除无来源动作，没有误伤有SpeechPlan依据的新旧约定对白。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.1.json#/result/data: {\"grounded\":false,\"issues\":[{\"segmentIndex\":1,\"kind\":\"invented_consequence\",\"evidence\":\"待审prose称“夏岚低头看了一眼手边的记录”，但公开事件中xia仅有npc_speech，无查看记录的动作或记录物品来源。\",\"correction\":\"删除“低头看了一眼手边的记录”或改为不涉及未记录动作的表述，如仅保留“夏岚语气平稳”。\",\"sourceEventIds\":[\"turn_7_b1_event_2\"]}]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "responses/narration_auditor_paper_record_miss.candidate.1.json#/result/evidenceSummary: [\"当前场景为test_room，player、xia、蓝皮诗集、摄影册、绿植均在此处，clock为2026-09-10T14:00:59.120。\",\"本轮唯一公开状态变化是replace /clock；事件含player提问、5秒inclusive_block_window等待及xia按记录回答。\",\"xia发言须与b1_xia_intent_0一致：最初周五/银杏，后更正周六/白桦，当前按周六/白桦执行。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "本次唯一issue准确指出目标错误，无额外误报。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检将抽象记忆或按记录回答扩写为手边纸质记录及查看动作。新旧约定对白正确，不能掩盖额外实体和动作没有来源。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "responses/narration_auditor_paper_record_miss.candidate.2.json#/result/evidenceSummary: [\"当前实体均在test_room，本轮公开状态变化仅时钟更新至14:00:59.120。\",\"事件turn_7_b1_event_2中夏岚成功发言，内容为最初周五/银杏、后改周六/白桦、当前按周六白桦执行。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_paper_record_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检将抽象记忆或按记录回答扩写为手边纸质记录及查看动作。新旧约定对白正确，不能掩盖额外实体和动作没有来源。",
+    "evidence": [
+      "responses/narration_auditor_paper_record_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/targeted-live/delayed-recall.json;turnNumber=7;role occurrence=0",
+      "原待审narration.segments[1]：夏岚低头看了一眼手边的记录，语气平稳。",
+      "原请求公开实体没有纸质记录或账册；NPC唯一公开事件为b1_xia_intent_0对应speech，没有查看、取出或书写记录的action。",
+      "responses/narration_auditor_paper_record_miss.candidate.3.json#/result/evidenceSummary: [\"当前实体均在test_room，本轮公开状态变化仅/clock更新为14:00:59.120。\",\"事件turn_7_b1_event_2中夏岚按记录回答最初周五/银杏、后更正周六/白桦，当前按更正执行。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.1.json#/result/evidenceSummary: [\"当前实体：player与nora均在test_room，ration已consumed=true，heater开启。\",\"本轮仅clock更新为12:20:11；事件0/1失败、事件2诺拉glance_around成功。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.2.json#/result/evidenceSummary: [\"当前实体：player与nora均在test_room，ration已consumed=true，heater开启。\",\"事件turn_4_b0_event_0与event_1均为failed，event_2为nora的glance_around成功。\",\"本轮公开状态变化仅/clock更新为2026-01-12T12:20:11。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_grounded_failure_prose_pass",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "passed",
+    "reason": "正确放行有来源的失败叙述：两次满状态/瞬移尝试均失败，文字也呈现失败；诺拉环顾有accepted action支持，没有新增能力、物品或NPC发言。",
+    "evidence": [
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/final-live/polar-energy.json;turnNumber=4;role occurrence=0",
+      "原待审narration.segments[1]：玩家试着让自己恢复过来，又试着把自己送到五公里外的山巅，但两件事都没有发生。",
+      "turn_4_b0_event_0和turn_4_b0_event_1的outcome.status均failed；turn_4_b0_event_2是成功glance_around，支持末段。",
+      "失败事件仍可作为失败描写的合法来源；普通环境温度修辞没有新增物理效果。grounded=true且issues=[]符合本次证据。",
+      "responses/narration_auditor_grounded_failure_prose_pass.candidate.3.json#/result/evidenceSummary: [\"玩家与诺拉均在test_room，health均为0.8；ration已consumed=true，heater为开启状态。\",\"本轮仅clock更新为12:20:11；player的restore与teleport均failed，nora的glance_around成功。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 1,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.1.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "responses/narration_auditor_receipt_scope_miss.candidate.1.json#/result/evidenceSummary: [\"雨衣当前位于沈苒处，玩家本轮give雨衣事件turn_5_b0_event_0结果为failed。\",\"沈苒在b2内glance_around成功，并发言指出玩家未递出东西、空话不加分。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 2,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.2.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "responses/narration_auditor_receipt_scope_miss.candidate.2.json#/result/evidenceSummary: [\"雨衣当前位于沈苒处（raincoat.location=shen），玩家不在可取范围内。\",\"玩家give雨衣事件turn_5_b0_event_0结果为failed，未成功递出。\",\"沈苒发言仅指本次未接到东西，未否认过去或全部时刻。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  },
+  {
+    "caseId": "narration_auditor_receipt_scope_miss",
+    "arm": "candidate",
+    "repeat": 3,
+    "status": "failed",
+    "reason": "漏检第3段speech的范围扩大：本次没有接到新增东西，被改成现在手里没有东西。当前实体与同篇前段仍说明雨衣在沈苒处；审查没有命中该对白或任何其他段落。",
+    "evidence": [
+      "responses/narration_auditor_receipt_scope_miss.candidate.3.json#/result/data: {\"grounded\":true,\"issues\":[]}",
+      "原请求来源=artifacts/behavior-tests/trajectory-live/promise-repair.json;turnNumber=5;role occurrence=1",
+      "原待审narration.segments[0]明确那件雨衣在沈苒那里；entities.raincoat.location=shen，当前没有放下、转交或丢失事件。",
+      "对应speechPlan的required含义是刚才递出动作没有成功、并没有接到任何东西，范围限于这次赠予。",
+      "原待审narration.segments[3]：你刚才什么都没递过来，我手里也没有东西。「又送一件」——这话不成立。",
+      "responses/narration_auditor_receipt_scope_miss.candidate.3.json#/result/evidenceSummary: [\"雨衣当前位于沈苒处（raincoat.location=shen），玩家尝试give失败（turn_5_b0_event_0）。\",\"玩家发言“看，我又送你一件。”与sourceIntentId t5_b0_e2一致。\",\"沈苒在b2内环顾四周并发言，指出未接到东西、空话不成立（turn_5_b1_event_3/4）。\"]",
+      "投影校对通过：scene/entities/publicPatches/narration逐字段相同；事件顺序、非source字段及source所有原始值均保留或可由完全相同顶层字段还原；system逐字同v2。",
+      "实际issues为空，未定位任何段落。"
+    ]
+  }
+]

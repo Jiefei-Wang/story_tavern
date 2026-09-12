@@ -1,0 +1,455 @@
+{
+  "scenario": "mystery",
+  "mode": "live",
+  "input": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+  "passed": true,
+  "isolated": true,
+  "created": [
+    [
+      "traveler_unknown_01",
+      {
+        "type": "character",
+        "name": "沈秋客",
+        "location": "tavern_room",
+        "attributes": {
+          "suspicion": 0.35,
+          "knownFacts": [
+            {
+              "text": "我本是江南织户之子，三年前家乡遭水患，田桑尽毁，只得离乡北上谋生。",
+              "importance": 0.8
+            },
+            {
+              "text": "我在运河码头做过两年脚夫，练就一副好眼力，能识人行李轻重、判断来路。",
+              "importance": 0.6
+            },
+            {
+              "text": "半月前我替一位客商押货至北地，途中遇劫，货物尽失，如今身无分文，只余随身的旧布包与一把短刀。",
+              "importance": 0.9
+            },
+            {
+              "text": "我听说这镇上有活计可接，便冒雨寻来，想先歇脚再作打算。",
+              "importance": 0.5
+            }
+          ],
+          "privateNote": "我押货失手一事羞于启齿，若有人问起来路，我只说自己是行商路过，绝不提丢货的丑事。"
+        },
+        "relationships": {}
+      }
+    ]
+  ],
+  "agents": [
+    {
+      "agent": "admin_patch",
+      "input": {
+        "command": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "world": {
+          "clock": "1342-06-12T08:16:00",
+          "scene": {
+            "location": "tavern_room",
+            "weather": "rainy",
+            "lighting": "morning",
+            "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "rules": {
+            "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+          },
+          "entities": {
+            "player": {
+              "type": "character",
+              "name": "玩家",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+              }
+            },
+            "erin": {
+              "type": "character",
+              "name": "艾琳",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.4,
+                "knownFacts": [],
+                "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+              },
+              "relationships": {
+                "player": {
+                  "trust": 0.4
+                }
+              }
+            }
+          }
+        },
+        "characterSchemaPrompt": "人物属性协议：只使用下列字段。sections 仅用于分组。自由内容仍须符合类型和结构。父级 private/immutable/setup_only 限制对全部子字段生效。\nstateUpdates 是提议，只能更新自己。path 使用点分字段路径；op=set/delta/append。禁止 RFC6902 路径、跨人物修改或未定义字段。\nimmutable/setup_only 仅在创建时赋值；append_only 只追加文本或单个列表项。delta 仅用于数值且不能用于 mode=set。额度按绝对变化累计，超额拒绝、不截断。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的列表项直接符合以下结构，不额外包装 item/entry 键。append.value 直接是单个列表项，不包含数组外壳。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\"\nrelationships.<现有人物ID>.trust（trust）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4; mode=delta; maxPerEvent=0.15; maxPerTurn=0.25; 指导：根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+      },
+      "output": {
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown_01",
+            "value": {
+              "type": "character",
+              "name": "陌生旅人",
+              "location": "tavern_room"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "agent": "character_generator",
+      "input": {
+        "environment": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "time": "1342-06-12T08:16:00"
+        },
+        "request": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "ordinal": 1,
+        "count": 1,
+        "characterSchema": {
+          "version": 1,
+          "sections": [
+            {
+              "id": "custom",
+              "label": "世界自定义属性",
+              "fields": [
+                {
+                  "id": "suspicion",
+                  "label": "suspicion",
+                  "type": "number",
+                  "min": 0,
+                  "max": 1,
+                  "default": 0.4,
+                  "visibility": "private",
+                  "updatePolicy": "dynamic",
+                  "freedom": "strict"
+                },
+                {
+                  "id": "knownFacts",
+                  "label": "knownFacts",
+                  "type": "list",
+                  "default": [],
+                  "visibility": "private",
+                  "updatePolicy": "append_only",
+                  "freedom": "free",
+                  "item": {
+                    "id": "entry",
+                    "label": "经历",
+                    "type": "object",
+                    "visibility": "private",
+                    "updatePolicy": "dynamic",
+                    "freedom": "free",
+                    "fields": [
+                      {
+                        "id": "text",
+                        "label": "text",
+                        "type": "text",
+                        "visibility": "private",
+                        "updatePolicy": "dynamic",
+                        "freedom": "free",
+                        "required": true
+                      },
+                      {
+                        "id": "importance",
+                        "label": "importance",
+                        "type": "number",
+                        "min": 0,
+                        "max": 1,
+                        "visibility": "private",
+                        "updatePolicy": "dynamic",
+                        "freedom": "strict",
+                        "required": true
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "privateNote",
+                  "label": "privateNote",
+                  "type": "text",
+                  "default": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。",
+                  "visibility": "private",
+                  "updatePolicy": "setup_only",
+                  "freedom": "guided"
+                }
+              ]
+            }
+          ],
+          "relationship": {
+            "label": "关系维度",
+            "fields": [
+              {
+                "id": "trust",
+                "label": "trust",
+                "type": "number",
+                "min": 0,
+                "max": 1,
+                "default": 0.4,
+                "visibility": "private",
+                "updatePolicy": "dynamic",
+                "freedom": "strict",
+                "changePolicy": {
+                  "mode": "delta",
+                  "maxPerEvent": 0.15,
+                  "maxPerTurn": 0.25
+                },
+                "llmGuidance": "根据此次经历小幅变化，普通帮助或威胁通常变化 0.03..0.1。"
+              }
+            ]
+          }
+        },
+        "characterSchemaPrompt": "人物创建协议：只输出 {\"name\":\"真实姓名\",\"attributes\":{}}。attributes 只能包含下列已定义字段，禁止额外外貌、性格、目标等未定义字段。\n创建时可初始化 immutable/setup_only/dynamic/append_only 字段。有 default 的字段可省略，由程序补齐；无 default 的 required 字段必须生成。\n不要输出 relationships 或 stateUpdates，不要在 attributes 内嵌 relationships。程序初始化关系。自由内容仍须符合字段类型及容器结构。\nattributes.suspicion（suspicion）: number; private; dynamic; strict; 可选; min=0; max=1; default=0.4\nattributes.knownFacts（knownFacts）: list; private; append_only; free; 可选; default=[]\nattributes.knownFacts 的列表项直接符合以下结构，不额外包装 item/entry 键。\nattributes.knownFacts[]（经历）: object; private; dynamic; free; 可选\nattributes.knownFacts[].text（text）: text; private; dynamic; free; 必填\nattributes.knownFacts[].importance（importance）: number; private; dynamic; strict; 必填; min=0; max=1\nattributes.privateNote（privateNote）: text; private; setup_only; guided; 可选; default=\"PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。\""
+      },
+      "output": {
+        "name": "沈秋客",
+        "attributes": {
+          "suspicion": 0.35,
+          "knownFacts": [
+            {
+              "text": "我本是江南织户之子，三年前家乡遭水患，田桑尽毁，只得离乡北上谋生。",
+              "importance": 0.8
+            },
+            {
+              "text": "我在运河码头做过两年脚夫，练就一副好眼力，能识人行李轻重、判断来路。",
+              "importance": 0.6
+            },
+            {
+              "text": "半月前我替一位客商押货至北地，途中遇劫，货物尽失，如今身无分文，只余随身的旧布包与一把短刀。",
+              "importance": 0.9
+            },
+            {
+              "text": "我听说这镇上有活计可接，便冒雨寻来，想先歇脚再作打算。",
+              "importance": 0.5
+            }
+          ],
+          "privateNote": "我押货失手一事羞于启齿，若有人问起来路，我只说自己是行商路过，绝不提丢货的丑事。"
+        }
+      }
+    },
+    {
+      "agent": "narrator",
+      "input": {
+        "playerInput": "admin:在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+        "committedEvents": [
+          {
+            "id": "turn_1_b0_event_0",
+            "type": "admin_change",
+            "blockId": "explicit_admin",
+            "source": "在当前房间新增一位此前从未认识的成年旅人，只创建人物，不改变其他人物，不编造对白。",
+            "public": true,
+            "patches": [
+              {
+                "op": "add",
+                "path": "/entities/traveler_unknown_01",
+                "value": {
+                  "id": "traveler_unknown_01",
+                  "type": "character",
+                  "name": "沈秋客",
+                  "location": "tavern_room"
+                }
+              }
+            ]
+          }
+        ],
+        "publicPatches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown_01",
+            "value": {
+              "id": "traveler_unknown_01",
+              "type": "character",
+              "name": "沈秋客",
+              "location": "tavern_room"
+            }
+          }
+        ],
+        "patches": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown_01",
+            "value": {
+              "id": "traveler_unknown_01",
+              "type": "character",
+              "name": "沈秋客",
+              "location": "tavern_room"
+            }
+          }
+        ],
+        "events": [],
+        "scene": {
+          "location": "tavern_room",
+          "weather": "rainy",
+          "lighting": "morning",
+          "description": "PRIVATE_MAIN_PLOT_ISOLATION"
+        },
+        "entities": {
+          "player": {
+            "id": "player",
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room"
+          },
+          "erin": {
+            "id": "erin",
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room"
+          },
+          "traveler_unknown_01": {
+            "id": "traveler_unknown_01",
+            "type": "character",
+            "name": "沈秋客",
+            "location": "tavern_room"
+          }
+        },
+        "rules": {
+          "plot": "PRIVATE_MAIN_PLOT_ISOLATION"
+        }
+      },
+      "output": {
+        "segments": [
+          {
+            "type": "prose",
+            "text": "雨声密密地贴在窗上。酒馆里光线昏沉，晨间的潮气混着旧木头的味道。门被推开又合上，一个成年男人走了进来——此前这里没人见过他。"
+          },
+          {
+            "type": "prose",
+            "text": "他穿着一身被雨水洇出深色水痕的旅行外衣，肩上搭着半旧的包袱，脚步不急不缓。他在门边略停了停，像是辨了辨屋里的方向，随后在空着的桌旁坐下。"
+          },
+          {
+            "type": "prose",
+            "text": "艾琳和玩家各自在原处。新来的旅人没有向谁开口，也没有谁向他开口。他只把湿透的帽檐往下压了压，安静地坐在那里，像一段还没被翻开的行程。"
+          }
+        ]
+      }
+    }
+  ],
+  "validation": [
+    {
+      "status": "success",
+      "output": {
+        "accepted": [
+          {
+            "op": "add",
+            "path": "/entities/traveler_unknown_01",
+            "value": {
+              "type": "character",
+              "name": "沈秋客",
+              "location": "tavern_room",
+              "attributes": {
+                "suspicion": 0.35,
+                "knownFacts": [
+                  {
+                    "text": "我本是江南织户之子，三年前家乡遭水患，田桑尽毁，只得离乡北上谋生。",
+                    "importance": 0.8
+                  },
+                  {
+                    "text": "我在运河码头做过两年脚夫，练就一副好眼力，能识人行李轻重、判断来路。",
+                    "importance": 0.6
+                  },
+                  {
+                    "text": "半月前我替一位客商押货至北地，途中遇劫，货物尽失，如今身无分文，只余随身的旧布包与一把短刀。",
+                    "importance": 0.9
+                  },
+                  {
+                    "text": "我听说这镇上有活计可接，便冒雨寻来，想先歇脚再作打算。",
+                    "importance": 0.5
+                  }
+                ],
+                "privateNote": "我押货失手一事羞于启齿，若有人问起来路，我只说自己是行商路过，绝不提丢货的丑事。"
+              },
+              "relationships": {}
+            }
+          }
+        ],
+        "rejected": [],
+        "schemaRule": "all constraints passed",
+        "before": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "suspicion": 0.4,
+              "knownFacts": [],
+              "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "suspicion": 0.4,
+              "knownFacts": [],
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            },
+            "relationships": {
+              "player": {
+                "trust": 0.4
+              }
+            }
+          }
+        },
+        "after": {
+          "player": {
+            "type": "character",
+            "name": "玩家",
+            "location": "tavern_room",
+            "attributes": {
+              "suspicion": 0.4,
+              "knownFacts": [],
+              "privateNote": "PRIVATE_CANARY_mystery：我私下怀疑钟表店老板，不向任何人透露。"
+            }
+          },
+          "erin": {
+            "type": "character",
+            "name": "艾琳",
+            "location": "tavern_room",
+            "attributes": {
+              "suspicion": 0.4,
+              "knownFacts": [],
+              "privateNote": "PRIVATE_EXISTING_NPC_ISOLATION"
+            },
+            "relationships": {
+              "player": {
+                "trust": 0.4
+              }
+            }
+          },
+          "traveler_unknown_01": {
+            "type": "character",
+            "name": "沈秋客",
+            "location": "tavern_room",
+            "attributes": {
+              "suspicion": 0.35,
+              "knownFacts": [
+                {
+                  "text": "我本是江南织户之子，三年前家乡遭水患，田桑尽毁，只得离乡北上谋生。",
+                  "importance": 0.8
+                },
+                {
+                  "text": "我在运河码头做过两年脚夫，练就一副好眼力，能识人行李轻重、判断来路。",
+                  "importance": 0.6
+                },
+                {
+                  "text": "半月前我替一位客商押货至北地，途中遇劫，货物尽失，如今身无分文，只余随身的旧布包与一把短刀。",
+                  "importance": 0.9
+                },
+                {
+                  "text": "我听说这镇上有活计可接，便冒雨寻来，想先歇脚再作打算。",
+                  "importance": 0.5
+                }
+              ],
+              "privateNote": "我押货失手一事羞于启齿，若有人问起来路，我只说自己是行商路过，绝不提丢货的丑事。"
+            },
+            "relationships": {}
+          }
+        }
+      }
+    }
+  ]
+}

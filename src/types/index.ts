@@ -49,7 +49,21 @@ export interface AgentDefinition {
   };
 }
 
+export const REASONING_EFFORT_OPTIONS = [
+  { value: "none", label: "无" },
+  { value: "minimal", label: "极低" },
+  { value: "low", label: "低" },
+  { value: "medium", label: "中" },
+  { value: "high", label: "高" },
+  { value: "xhigh", label: "极高" },
+  { value: "max", label: "最大" },
+  { value: "ultra", label: "最强" },
+] as const;
+
+export type ReasoningEffort = typeof REASONING_EFFORT_OPTIONS[number]["value"];
+
 export interface AgentBindingOverrides {
+  reasoningEffort?: ReasoningEffort;
   temperature?: number;
   maxTokens?: number;
   topP?: number;
@@ -83,13 +97,25 @@ export interface GameEvent {
   duration?: number;
   parallelWith?: string[];
   details?: Record<string, unknown>;
+  item?: string;
+  audibility?: "normal" | "whisper";
+  audience?: string[];
+  /** Source-anchored request to hear a present NPC respond; never player speech. */
+  responseRequest?: { target: string; sourceText: string };
+  outcome?: ActionOutcome;
 }
+
+export interface ActionOutcome { status: "success" | "failed"; summary: string; reason: string; }
+/** Private runtime evidence, saved with the turn rather than writable world configuration. */
+export interface NPCExperience { id: string; observation: NPCObservation; appliedStatePaths?: string[]; }
 
 export interface TemporalBlock {
   id: string;
   kind: "normal" | "wait" | "time_skip" | "admin";
   events?: GameEvent[];
   responseWindow?: boolean;
+  /** Scheduler-owned provenance; inferred from player input, never trusted from compiler output. */
+  waitOrigin?: "explicit_elapsed" | "implicit_response";
   duration?: number;
   to?: string;
   command?: string;
@@ -103,11 +129,47 @@ export interface NPCObservation {
   eventId: string;
   saw: boolean;
   heard: boolean;
+  /** Public event semantics are copied from the authoritative event by Perception. */
+  actor?: string;
+  type?: EventType;
+  op?: string;
+  target?: string;
   content?: string;
+  /** Observed duration in seconds. */
+  duration?: number;
+  outcome?: ActionOutcome;
+  audibility?: "normal" | "whisper";
+  audience?: string[];
 }
 
 export interface PerceptionResult {
   npcObservations: Record<string, NPCObservation[]>;
+}
+
+export interface SpeechBeat {
+  kind?: string;
+  meaning: string;
+  required?: boolean;
+}
+
+export interface SpeechPlan {
+  summary: string;
+  beats?: SpeechBeat[];
+  goal?: string;
+  stance?: string;
+  tone?: string;
+  verbosity?: "brief" | "normal" | "detailed" | "extended";
+  boundaries?: string[];
+}
+
+export interface NPCSpeechIntent {
+  id?: string;
+  type: "speech";
+  target?: string;
+  speechPlan: SpeechPlan;
+  /** @deprecated Accepted only at legacy integration boundaries; agents must emit speechPlan. */
+  content?: string;
+  duration?: number;
 }
 
 export interface NPCIntent {
@@ -116,15 +178,13 @@ export interface NPCIntent {
   op?: string;
   target?: string;
   content?: string;
+  speechPlan?: SpeechPlan;
   duration?: number;
 }
 
 export interface NPCReactionResult {
   thought: string | null;
-  mentalUpdates?: Array<{
-    aspect: string;
-    newValue: unknown;
-  }>;
+  stateUpdates?: CharacterStateUpdate[];
   intents: NPCIntent[];
 }
 
@@ -142,6 +202,7 @@ export interface PublicWorldEvent {
   op?: string;
   target?: string;
   content?: string;
+  speechPlan?: SpeechPlan;
   duration?: number;
   sourceIntentId?: string;
 }
@@ -162,28 +223,24 @@ export interface CommittedTurnEvent {
   source?: unknown;
   public?: boolean;
   content?: string;
+  sourceIntentId?: string;
+  speechPlan?: SpeechPlan;
+  /** Surface realizations emitted by Narrator for this semantic speech. */
+  realizedText?: string[];
   op?: string;
   target?: string;
   patches?: JsonPatchOperation[];
+  outcome?: ActionOutcome;
 }
 
 export type EntityType = "character" | "object" | "location" | "item";
 
 export interface WorldEntity {
-  appearance?: string;
-  occupation?: string;
-  background?: string;
-  personality?: string;
   type: EntityType;
   name?: string;
   location?: string;
-  mentalState?: {
-    mood?: string;
-    [key: string]: unknown;
-  };
-  relationships?: Record<string, number>;
-  goal?: string;
-  memory?: string;
+  attributes?: Record<string, unknown>;
+  relationships?: Record<string, Record<string, unknown>>;
   open?: boolean;
   locked?: boolean;
   [key: string]: unknown;
@@ -201,7 +258,12 @@ export interface InteractionContext {
   speechPermission: "direct" | "ambient" | "interrupt" | "none";
 }
 
-export type NarratorSegment = { type: "narration"; text: string } | { type: "event_ref"; eventId: string };
+export type NarratorSegment =
+  | { type: "prose"; text: string; sourceEventIds?: string[] }
+  | { type: "speech"; sourceIntentId: string; text: string }
+  /** @deprecated Legacy custom narrator shape; built-in agents use prose/speech. */
+  | { type: "narration"; text: string }
+  | { type: "event_ref"; eventId: string };
 export interface NarratorResult { segments: NarratorSegment[]; }
 
 export interface WorldState {
@@ -222,6 +284,7 @@ export interface WorldResolverResult {
   publicEvents?: PublicWorldEvent[];
   rejectedIntents?: Array<{ intent: NPCIntent; reason: string }>;
   narrationHints?: string[];
+  acceptedStateUpdates?: Array<{ npcId: string; updateIndex: number }>;
 }
 
 export interface TraceSpan {
@@ -270,6 +333,9 @@ export interface TurnTrace {
 }
 
 export interface GameTurn {
+  npcExperiences?: Record<string, NPCExperience[]>;
+  /** Original legacy patch log retained for audit after snapshot/diff migration. */
+  legacyPatches?: JsonPatchOperation[];
   id: string;
   turnIndex: number;
   timestamp: string;
@@ -280,6 +346,9 @@ export interface GameTurn {
   worldStateAfter: WorldState;
   patches: JsonPatchOperation[];
   activeAgentGroupId: string;
+  /** Authoritative public events plus semantic speech and Narrator realizations. */
+  committedEvents?: CommittedTurnEvent[];
+  rejectedIntents?: Array<{ intent: NPCIntent; reason: string }>;
   status?: "success" | "error";
   error?: string;
   narrationError?: string;
@@ -288,6 +357,7 @@ export interface GameTurn {
 }
 
 export interface GameSave {
+  worldDefinition: WorldDefinition;
   id: string;
   name: string;
   createdAt: string;
@@ -297,7 +367,46 @@ export interface GameSave {
   activeAgentGroupId: string;
 }
 
+export interface WorldDefinition {
+  version: number;
+  characterSchema: CharacterSchemaDefinition;
+}
+export interface CharacterSchemaDefinition {
+  version: number;
+  sections: CharacterSectionDefinition[];
+  relationship?: RelationshipSchemaDefinition;
+}
+export interface CharacterSectionDefinition { id: string; label: string; fields: CharacterFieldDefinition[] }
+export interface RelationshipSchemaDefinition { label?: string; fields: CharacterFieldDefinition[] }
+export interface CharacterFieldDefinition {
+  id: string;
+  label: string;
+  type: "text" | "number" | "integer" | "boolean" | "enum" | "list" | "object";
+  description?: string;
+  llmGuidance?: string;
+  default?: unknown;
+  visibility: "public" | "private";
+  updatePolicy: "immutable" | "setup_only" | "dynamic" | "append_only";
+  freedom: "strict" | "guided" | "free";
+  required?: boolean;
+  min?: number;
+  max?: number;
+  enumValues?: string[];
+  item?: CharacterFieldDefinition;
+  fields?: CharacterFieldDefinition[];
+  changePolicy?: { mode?: "set" | "delta"; maxPerEvent?: number; maxPerTurn?: number };
+}
+export interface CharacterStateUpdate {
+  path: string;
+  op: "set" | "delta" | "append";
+  value: unknown;
+  reason?: string;
+  sourceEventIds?: string[];
+}
+
 export interface AppSettings {
+  behaviorGroundingVersion?: number;
+  behaviorGroundingMigrated?: boolean;
   characterGenerationMigrated?: boolean;
   language: "zh-CN" | "en-US";
   theme: "light" | "system";

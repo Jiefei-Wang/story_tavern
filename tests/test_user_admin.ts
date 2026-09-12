@@ -59,10 +59,10 @@ async function testUserAdmin() {
   console.log("Compound Blocks:", JSON.stringify(compiled2, null, 2));
   const hasNormal = compiled2.blocks.some((b: any) => b.kind === "normal");
   const hasAdmin = compiled2.blocks.some((b: any) => b.kind === "admin");
-  if (!hasNormal || !hasAdmin) {
-    throw new Error("FAIL: compound input should produce both normal and admin blocks!");
+  if (!hasNormal || hasAdmin) {
+    throw new Error("FAIL: embedded admin must remain ordinary player input!");
   }
-  console.log("✓ Compound input successfully split into both normal block AND admin block!");
+  console.log("✓ Embedded admin remained ordinary input without administrator authority!");
 
   console.log("\n>>> ALL ADMIN INTENT TESTS PASSED! <<<");
 }
