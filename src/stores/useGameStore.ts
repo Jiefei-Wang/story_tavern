@@ -218,13 +218,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         activeVariationIndex: newActiveVariationIndex,
       };
 
-      const newTurns = [...activeSave.turns];
+      // Causal consistency: Truncate any turns after targetIndex, branching a new timeline!
+      const newTurns = activeSave.turns.slice(0, targetIndex + 1);
       newTurns[targetIndex] = updatedTurn;
 
-      const newWorldState =
-        targetIndex === activeSave.turns.length - 1
-          ? (result.success ? result.turn.worldStateAfter : activeSave.worldState)
-          : activeSave.worldState;
+      const newWorldState = result.success
+        ? result.turn.worldStateAfter
+        : targetTurn.worldStateAfter;
 
       const updatedSave: GameSave = {
         ...activeSave,
@@ -278,13 +278,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       activeVariationIndex: variationIndex,
     };
 
-    const newTurns = [...activeSave.turns];
+    // Causal consistency: Truncate any turns after turnIndex, establishing chosen variation as head of timeline!
+    const newTurns = activeSave.turns.slice(0, turnIndex + 1);
     newTurns[turnIndex] = updatedTurn;
 
-    const newWorldState =
-      turnIndex === activeSave.turns.length - 1
-        ? selectedVariation.worldStateAfter
-        : activeSave.worldState;
+    const newWorldState = selectedVariation.worldStateAfter;
 
     const updatedSave: GameSave = {
       ...activeSave,

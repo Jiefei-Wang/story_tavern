@@ -55,13 +55,53 @@ export function extractJsonPayload(text: string): any {
   }
 }
 
+const RESERVED_BODY_FIELDS = new Set([
+  "model",
+  "messages",
+  "temperature",
+  "max_tokens",
+  "top_p",
+  "stream",
+]);
+
+export function sanitizeExtraBody(extraBody?: Record<string, any>): Record<string, any> {
+  if (!extraBody || typeof extraBody !== "object") return {};
+  for (const key of Object.keys(extraBody)) {
+    if (RESERVED_BODY_FIELDS.has(key.toLowerCase())) {
+      throw new AgentRuntimeError(
+        `extraBody contains forbidden reserved field '${key}'. Overriding core parameters (model, messages, temperature, max_tokens, top_p) via extraBody is strictly prohibited.`,
+        "agent_runtime"
+      );
+    }
+  }
+  return { ...extraBody };
+}
+
+const FORBIDDEN_TRANSPORT_HEADERS = new Set([
+  "authorization",
+  "content-length",
+  "host",
+]);
+
+export function sanitizeCustomHeaders(headers?: Record<string, string>): Record<string, string> {
+  if (!headers || typeof headers !== "object") return {};
+  for (const key of Object.keys(headers)) {
+    if (FORBIDDEN_TRANSPORT_HEADERS.has(key.toLowerCase().trim())) {
+      throw new AgentRuntimeError(
+        `Custom header '${key}' is forbidden and cannot override protected transport headers.`,
+        "agent_runtime"
+      );
+    }
+  }
+  return { ...headers };
+}
+
 export class AgentRuntime {
   async runAgent<T = any>(options: RunAgentOptions): Promise<RunAgentResult<T>> {
     const {
       agentId,
       groupId,
       context,
-      traceId = `tr_${Date.now()}`,
       parentSpanId,
       blockId,
       blockIndex,
@@ -76,6 +116,7 @@ export class AgentRuntime {
         ? crypto.randomUUID()
         : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const spanId = `span_${agentId}_${uuid}`;
+    const traceId = options.traceId || `tr_${Date.now()}_${uuid}`;
 
     // 1. Resolve Agent Definition (Fail-Fast)
     const agentDef = agents.find((a) => a.id === agentId);
@@ -89,67 +130,8 @@ export class AgentRuntime {
       };
     }
 
-    // 2. Resolve Agent Group (Fail-Fast: NO silent fallback to groups[0])
-    const group = groups.find((g) => g.id === groupId);
-    if (!group) {
-      const errMsg = `Agent Group '${groupId}' not found`;
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errMsg,
-      };
-    }
-
-    // 3. Resolve Binding (Fail-Fast: NO silent fallback to backends[0])
-    const binding = group.bindings.find((b) => b.agentId === agentId);
-    if (!binding) {
-      const errMsg = `Agent '${agentId}' has no binding in group '${groupId}'`;
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errMsg,
-      };
-    }
-
-    // 4. Resolve Backend (Fail-Fast)
-    const backend = backends.find((b) => b.id === binding.backendId);
-    if (!backend) {
-      const errMsg = `Backend '${binding.backendId}' not found for agent '${agentId}'`;
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errMsg,
-      };
-    }
-
-    // 5. Backend Enabled Check (Fail-Fast)
-    if (!backend.enabled) {
-      const errMsg = `Backend '${backend.name}' is disabled`;
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errMsg,
-      };
-    }
-
-    // 6. Model Specification Check (Fail-Fast: NO silent fallback to "default-model")
-    const model = binding.model || backend.defaultModel;
-    if (!model || model.trim() === "") {
-      const errMsg = `No model specified for agent '${agentId}' in group '${groupId}'`;
-      return {
-        success: false,
-        data: null as any,
-        spanId,
-        error: errMsg,
-      };
-    }
-
-    // 7. Ensure Trace exists for standalone runs
-    const isStandaloneTrace = !globalTraceManager.getTrace(traceId);
+    // 2. Ensure Trace exists for standalone runs
+    const isStandaloneTrace = !globalTraceManager.isActiveTrace(traceId);
     if (isStandaloneTrace) {
       globalTraceManager.startTurnTrace(traceId, 0, `Standalone run: ${agentDef.name || agentId}`);
     }
@@ -166,51 +148,26 @@ export class AgentRuntime {
       blockIndex
     );
 
-    // Record initial immutable snapshot
-    globalTraceManager.updateSpan(traceId, spanId, {
-      backendId: backend.id,
-      model,
-      inputContext: structuredClone(context),
-      templateMessages: structuredClone(agentDef.messages),
-    });
-
-    // 8. Merge parameters
-    const temperature =
-      binding.overrides?.temperature ??
-      agentDef.defaults.temperature ??
-      0.7;
-    const maxTokens =
-      binding.overrides?.maxTokens ??
-      agentDef.defaults.maxTokens ??
-      1500;
-    const topP =
-      binding.overrides?.topP ??
-      agentDef.defaults.topP ??
-      1.0;
-    const extraBody = {
-      ...(agentDef.defaults.extraBody || {}),
-      ...(binding.overrides?.extraBody || {}),
-    };
-
-    const requestParams = {
-      model,
-      temperature,
-      max_tokens: maxTokens,
-      top_p: topP,
-      ...extraBody,
-    };
-
-    // 9. Render placeholders into messages
-    const resolvedMessages = renderMessages(agentDef.messages, context);
-    globalTraceManager.updateSpan(traceId, spanId, {
-      resolvedMessages: structuredClone(resolvedMessages),
-      requestParams: structuredClone(requestParams),
-    });
-
-    // 10. Execute Mock Mode
+    // 3. Mock Mode Branch: Truly does NOT require Backend, Binding, or Model!
     if (mockMode) {
-      await new Promise((r) => setTimeout(r, 20));
+      let mockSuccess = false;
       try {
+        const group = groups.find((g) => g.id === groupId);
+        const binding = group?.bindings?.find((b) => b.agentId === agentId);
+        const backend = backends.find((b) => b.id === binding?.backendId);
+        const model = binding?.model || backend?.defaultModel || "mock-model";
+
+        const resolvedMessages = renderMessages(agentDef.messages, context);
+        globalTraceManager.updateSpan(traceId, spanId, {
+          backendId: backend?.id || "mock",
+          model,
+          inputContext: structuredClone(context),
+          templateMessages: structuredClone(agentDef.messages),
+          resolvedMessages: structuredClone(resolvedMessages),
+          requestParams: { model, mockMode: true },
+        });
+
+        await new Promise((r) => setTimeout(r, 20));
         const mockResult = MockSimulator.simulate(agentId, context, agentDef);
 
         // Validate output schema if defined
@@ -234,6 +191,7 @@ export class AgentRuntime {
           },
         });
 
+        mockSuccess = true;
         return {
           success: true,
           data: mockResult,
@@ -251,11 +209,100 @@ export class AgentRuntime {
           spanId,
           error: errMsg,
         };
+      } finally {
+        if (isStandaloneTrace) {
+          globalTraceManager.endTurnTrace(traceId, mockSuccess ? "success" : "error");
+        }
       }
     }
 
-    // 11. Real LLM execution through Concurrency Limiter & Tauri/Browser HTTP
+    // 4. Real Mode: Strict Resolution of Group, Binding, Backend, Enabled, and Model
+    let runSuccess = false;
     try {
+      // Resolve Agent Group (Fail-Fast: NO silent fallback to groups[0])
+      const group = groups.find((g) => g.id === groupId);
+      if (!group) {
+        throw new AgentRuntimeError(`Agent Group '${groupId}' not found`, agentId);
+      }
+
+      // Resolve Binding (Fail-Fast: NO silent fallback to backends[0])
+      const binding = group.bindings.find((b) => b.agentId === agentId);
+      if (!binding) {
+        throw new AgentRuntimeError(
+          `Agent '${agentId}' has no binding in group '${groupId}'`,
+          agentId
+        );
+      }
+
+      // Resolve Backend (Fail-Fast)
+      const backend = backends.find((b) => b.id === binding.backendId);
+      if (!backend) {
+        throw new AgentRuntimeError(
+          `Backend '${binding.backendId}' not found for agent '${agentId}'`,
+          agentId
+        );
+      }
+
+      // Backend Enabled Check (Fail-Fast)
+      if (!backend.enabled) {
+        throw new AgentRuntimeError(`Backend '${backend.name}' is disabled`, agentId);
+      }
+
+      // Model Specification Check (Fail-Fast: NO silent fallback to "default-model")
+      const model = binding.model || backend.defaultModel;
+      if (!model || model.trim() === "") {
+        throw new AgentRuntimeError(
+          `No model specified for agent '${agentId}' in group '${groupId}'`,
+          agentId
+        );
+      }
+
+      // Merge & sanitize parameters
+      const temperature =
+        binding.overrides?.temperature ??
+        agentDef.defaults.temperature ??
+        0.7;
+      const maxTokens =
+        binding.overrides?.maxTokens ??
+        agentDef.defaults.maxTokens ??
+        1500;
+      const topP =
+        binding.overrides?.topP ??
+        agentDef.defaults.topP ??
+        1.0;
+
+      // Sanitize extraBody to forbid overriding reserved fields
+      const rawExtraBody = {
+        ...(agentDef.defaults.extraBody || {}),
+        ...(binding.overrides?.extraBody || {}),
+      };
+      const sanitizedExtraBody = sanitizeExtraBody(rawExtraBody);
+
+      // Sanitize customHeaders to forbid overriding transport headers
+      const sanitizedHeaders = sanitizeCustomHeaders(backend.customHeaders);
+
+      const requestParams = {
+        model,
+        temperature,
+        max_tokens: maxTokens,
+        top_p: topP,
+        ...sanitizedExtraBody,
+      };
+
+      // Render placeholders into messages
+      const resolvedMessages = renderMessages(agentDef.messages, context);
+
+      // Record immutable snapshot with exact request parameters
+      globalTraceManager.updateSpan(traceId, spanId, {
+        backendId: backend.id,
+        model,
+        inputContext: structuredClone(context),
+        templateMessages: structuredClone(agentDef.messages),
+        resolvedMessages: structuredClone(resolvedMessages),
+        requestParams: structuredClone(requestParams),
+      });
+
+      // Real LLM execution through Concurrency Limiter & Tauri/Browser HTTP
       const rawResponse = await globalConcurrencyLimiter.run(
         backend.id,
         backend.maxConcurrency || 1,
@@ -273,7 +320,7 @@ export class AgentRuntime {
               baseUrl: backend.baseUrl,
               authType: backend.authType || "bearer",
               secretRef: backend.secretRef || null,
-              headers: backend.customHeaders || {},
+              headers: sanitizedHeaders,
               timeoutMs: backend.timeoutMs || 60000,
               request: payload,
             });
@@ -285,30 +332,44 @@ export class AgentRuntime {
 
             try {
               let token = "";
-              const globalProc = (globalThis as any)?.process;
-              if (typeof globalProc !== "undefined" && globalProc?.env) {
-                token = globalProc.env.OPENROUTER_KEY || globalProc.env.openrouter_key || "";
-              }
-              if (!token && typeof localStorage !== "undefined" && backend.secretRef) {
-                token =
-                  localStorage.getItem(`secret_${backend.secretRef}`) ||
-                  localStorage.getItem("openrouter_key") ||
-                  "";
-              }
-              if (!token && (import.meta as any)?.env?.VITE_OPENROUTER_KEY) {
-                token = (import.meta as any).env.VITE_OPENROUTER_KEY;
+              const authType = backend.authType || "bearer";
+
+              if (authType === "bearer") {
+                const sRef = backend.secretRef ? backend.secretRef.trim() : "";
+                if (sRef === "backend_openrouter" || sRef === "secret_openrouter_default") {
+                  const globalProc = (globalThis as any)?.process;
+                  if (typeof globalProc !== "undefined" && globalProc?.env) {
+                    token = globalProc.env.OPENROUTER_KEY || globalProc.env.openrouter_key || "";
+                  }
+                  if (!token && typeof localStorage !== "undefined") {
+                    token =
+                      localStorage.getItem("openrouter_key") ||
+                      localStorage.getItem(`secret_${sRef}`) ||
+                      "";
+                  }
+                  if (!token && (import.meta as any)?.env?.VITE_OPENROUTER_KEY) {
+                    token = (import.meta as any).env.VITE_OPENROUTER_KEY;
+                  }
+                } else if (sRef) {
+                  // Only check specific secretRef; ZERO fallback to openrouter!
+                  if (typeof localStorage !== "undefined") {
+                    token = localStorage.getItem(`secret_${sRef}`) || "";
+                  }
+                }
+
+                if (!token || token.trim() === "") {
+                  throw new Error(
+                    `Missing Bearer credential for backend '${backend.name}' (secretRef: '${backend.secretRef || "none"}')`
+                  );
+                }
               }
 
               const headers: Record<string, string> = {
                 "Content-Type": "application/json",
-                ...(backend.customHeaders || {}),
+                ...sanitizedHeaders,
               };
 
-              const authType = backend.authType || "bearer";
               if (authType === "bearer") {
-                if (!token) {
-                  throw new Error(`Missing Bearer credential for backend '${backend.name}'`);
-                }
                 headers["Authorization"] = `Bearer ${token.trim()}`;
               }
 
@@ -360,6 +421,7 @@ export class AgentRuntime {
         tokenUsage,
       });
 
+      runSuccess = true;
       return {
         success: true,
         data: parsedData,
@@ -378,6 +440,10 @@ export class AgentRuntime {
         spanId,
         error: errMsg,
       };
+    } finally {
+      if (isStandaloneTrace) {
+        globalTraceManager.endTurnTrace(traceId, runSuccess ? "success" : "error");
+      }
     }
   }
 }

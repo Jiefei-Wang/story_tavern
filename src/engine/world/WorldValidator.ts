@@ -18,17 +18,34 @@ export function validateWorldState(world: unknown): asserts world is WorldState 
     throw new Error("WorldState invariant failed: clock must be a non-empty string");
   }
 
-  // Scene invariant
+  // Scene invariant: location, weather, lighting must all be non-empty strings
   if (typeof w.scene !== "object" || w.scene === null) {
     throw new Error("WorldState invariant failed: scene must be a non-null object");
   }
   if (typeof w.scene.location !== "string" || w.scene.location.trim() === "") {
     throw new Error("WorldState invariant failed: scene.location must be a non-empty string");
   }
+  if (typeof w.scene.weather !== "string" || w.scene.weather.trim() === "") {
+    throw new Error("WorldState invariant failed: scene.weather must be a non-empty string");
+  }
+  if (typeof w.scene.lighting !== "string" || w.scene.lighting.trim() === "") {
+    throw new Error("WorldState invariant failed: scene.lighting must be a non-empty string");
+  }
 
   // Entities invariant
   if (typeof w.entities !== "object" || w.entities === null || Array.isArray(w.entities)) {
     throw new Error("WorldState invariant failed: entities must be a dictionary object");
+  }
+
+  // Mandatory Player Invariant: /entities/player must exist and have type === "character"
+  const player = (w.entities as Record<string, any>)["player"];
+  if (!player || typeof player !== "object") {
+    throw new Error("WorldState invariant failed: /entities/player must exist and cannot be deleted");
+  }
+  if (player.type !== "character") {
+    throw new Error(
+      `WorldState invariant failed: /entities/player must have type 'character', got '${player.type}'`
+    );
   }
 
   // Entity items invariant

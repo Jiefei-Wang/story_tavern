@@ -37,6 +37,14 @@ export interface PipelineTurnResult {
   error?: string;
 }
 
+export function getSafeIntentDuration(intent: NPCIntent): number {
+  const d = intent.duration;
+  if (typeof d === "number" && Number.isFinite(d) && d > 0) {
+    return d;
+  }
+  return estimateIntentDuration({ ...intent, duration: undefined });
+}
+
 export class GamePipeline {
   async executeTurn(
     playerInput: string,
@@ -58,6 +66,11 @@ export class GamePipeline {
 
     const allEvents: GameEvent[] = [];
     const allCommittedPatches: JsonPatchOperation[] = [];
+    const allCommittedEvents: import("../../types").CommittedTurnEvent[] = [];
+
+    // Cache state from preceding normal block for wait block perspective inheritance
+    let lastNormalObservations: Record<string, import("../../types").NPCObservation[]> | null = null;
+    let lastAffectedNpcIds: string[] = [];
 
     const runtimeOpts = {
       groupId: execContext.activeGroupId,
@@ -111,317 +124,403 @@ export class GamePipeline {
           blockIndex,
         };
 
-        if (block.kind === "admin") {
-          // Admin Patch Block
-          const adminResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...blockRuntimeOpts,
-            agentId: "admin_patch",
-            context: {
-              command: block.command || playerInput,
-              world: workingWorld,
-            },
-          });
-
-          if (!adminResult.success) {
-            throw new PipelineStageError(
-              "admin_patch",
-              adminResult.error || "Admin Patch Agent execution failed"
-            );
-          }
-
-          const patches = adminResult.data?.patches || [];
-          if (patches.length > 0) {
-            const patchRes = applyPatches(workingWorld, patches);
-            if (!patchRes.success) {
-              throw new PipelineStageError(
-                "patch_application",
-                patchRes.error || "Failed to apply admin patches to working world"
-              );
-            }
-            workingWorld = patchRes.newWorld;
-            allCommittedPatches.push(...patchRes.appliedPatches);
-          }
-
-          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
-        } else if (block.kind === "time_skip") {
-          // Time Skip Block
-          const skipResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...blockRuntimeOpts,
-            agentId: "time_skip",
-            context: {
-              skipTarget:
-                block.to ||
-                (block as any).target ||
-                (block as any).duration ||
-                (block as any).command ||
-                playerInput,
-              world: workingWorld,
-            },
-          });
-
-          if (!skipResult.success) {
-            throw new PipelineStageError(
-              "time_skip",
-              skipResult.error || "Time Skip Agent execution failed"
-            );
-          }
-
-          const patches = skipResult.data?.patches || [];
-          if (patches.length > 0) {
-            const patchRes = applyPatches(workingWorld, patches);
-            if (!patchRes.success) {
-              throw new PipelineStageError(
-                "patch_application",
-                patchRes.error || "Failed to apply time skip patches to working world"
-              );
-            }
-            workingWorld = patchRes.newWorld;
-            allCommittedPatches.push(...patchRes.appliedPatches);
-          }
-
-          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
-        } else if (block.kind === "normal") {
-          // Normal Block: Events -> Perception -> NPC Reaction -> World Resolver
-          const events = block.events || [];
-          allEvents.push(...events);
-
-          // 2. Perception Agent (Strict Fail-Fast)
-          const perceptionResult = await agentRuntime.runAgent<PerceptionResult>({
-            ...blockRuntimeOpts,
-            agentId: "perception",
-            context: {
-              events,
-              scene: workingWorld.scene,
-              entities: workingWorld.entities,
-            },
-          });
-
-          if (!perceptionResult.success) {
-            throw new PipelineStageError(
-              "perception",
-              perceptionResult.error || "Perception Agent failed to execute"
-            );
-          }
-
-          if (
-            !perceptionResult.data ||
-            typeof perceptionResult.data.npcObservations !== "object" ||
-            perceptionResult.data.npcObservations === null
-          ) {
-            throw new PipelineStageError(
-              "perception",
-              "Perception Agent returned invalid or missing npcObservations structure"
-            );
-          }
-
-          const observations = perceptionResult.data.npcObservations;
-          const budget = calculateReactionBudget(block);
-
-          // Finite perspective: determine eligible scene characters
-          const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
-
-          // Only NPCs who are in scene AND perceived the event (saw === true || heard === true) can react
-          const targetNpcIds = sceneCharacters
-            .map((c) => c.id)
-            .filter((npcId) => {
-              const obsList = observations[npcId];
-              return (
-                Array.isArray(obsList) &&
-                obsList.some((obs) => obs.saw === true || obs.heard === true)
-              );
+        try {
+          if (block.kind === "admin") {
+            // Admin Patch Block
+            const adminResult = await agentRuntime.runAgent<WorldResolverResult>({
+              ...blockRuntimeOpts,
+              agentId: "admin_patch",
+              context: {
+                command: block.command || playerInput,
+                world: workingWorld,
+              },
             });
 
-          // Step 3: Parallel NPC Reactions
-          const npcReactions = await Promise.all(
-            targetNpcIds.map(async (npcId) => {
-              const npcEntity = workingWorld.entities[npcId];
-              const obsList = observations[npcId] || [];
-
-              const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
-                ...blockRuntimeOpts,
-                agentId: "npc_reaction",
-                context: {
-                  npc: { id: npcId, ...npcEntity },
-                  observations: obsList,
-                  scene: workingWorld.scene,
-                  reaction: budget,
-                },
-              });
-
-              if (!reactionRes.success || !reactionRes.data) {
-                throw new PipelineStageError(
-                  "npc_reaction",
-                  reactionRes.error || `NPC reaction failed for character '${npcId}'`
-                );
-              }
-
-              // Deterministic reaction budget enforcement
-              const validatedIntents: NPCIntent[] = [];
-              let currentSpent = 0;
-              for (const intent of reactionRes.data.intents || []) {
-                const duration = intent.duration ?? estimateIntentDuration(intent);
-                if (currentSpent + duration <= budget.available_time) {
-                  validatedIntents.push(intent);
-                  currentSpent += duration;
-                } else {
-                  // Intent exceeds budget: reject deterministically
-                }
-              }
-
-              return {
-                npcId,
-                reaction: {
-                  ...reactionRes.data,
-                  intents: validatedIntents,
-                },
-              };
-            })
-          );
-
-          // Step 4: World Resolver
-          const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...blockRuntimeOpts,
-            agentId: "world_resolver",
-            context: {
-              events,
-              npcReactions,
-              scene: workingWorld.scene,
-              entities: workingWorld.entities,
-              rules: workingWorld.rules,
-              reactionBudget: budget,
-            },
-          });
-
-          if (!resolverResult.success) {
-            throw new PipelineStageError(
-              "world_resolver",
-              resolverResult.error || "World Resolver failed to resolve state changes"
-            );
-          }
-
-          const patches = resolverResult.data?.patches || [];
-          if (patches.length > 0) {
-            const patchRes = applyPatches(workingWorld, patches);
-            if (!patchRes.success) {
+            if (!adminResult.success) {
               throw new PipelineStageError(
-                "patch_application",
-                patchRes.error || "Failed to apply resolver patches atomically"
+                "admin_patch",
+                adminResult.error || "Admin Patch Agent execution failed"
               );
             }
-            workingWorld = patchRes.newWorld;
-            allCommittedPatches.push(...patchRes.appliedPatches);
-          }
 
-          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
-        } else if (block.kind === "wait") {
-          // Wait Block: NPC Reaction window -> World Resolver
-          const waitDuration = block.duration || 5.0;
-          const waitBudget = {
-            available_time: waitDuration,
-            response_window: true,
-            trigger_event_ids: [block.id],
-          };
-
-          // Re-evaluate present scene characters in current workingWorld
-          const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
-
-          const npcReactions = await Promise.all(
-            sceneCharacters.map(async ({ id: npcId, entity: npcEntity }) => {
-              const waitObs = [
-                {
-                  eventId: block.id,
-                  saw: true,
-                  heard: true,
-                  content: "玩家停下动作，静候现场角色的回应。",
-                },
-              ];
-
-              const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
-                ...blockRuntimeOpts,
-                agentId: "npc_reaction",
-                context: {
-                  npc: { id: npcId, ...npcEntity },
-                  observations: waitObs,
-                  scene: workingWorld.scene,
-                  reaction: waitBudget,
-                },
-              });
-
-              if (!reactionRes.success || !reactionRes.data) {
+            const patches = adminResult.data?.patches || [];
+            let applied: JsonPatchOperation[] = [];
+            if (patches.length > 0) {
+              const patchRes = applyPatches(workingWorld, patches);
+              if (!patchRes.success) {
                 throw new PipelineStageError(
-                  "npc_reaction",
-                  reactionRes.error || `NPC wait reaction failed for '${npcId}'`
+                  "patch_application",
+                  patchRes.error || "Failed to apply admin patches to working world"
                 );
               }
+              workingWorld = patchRes.newWorld;
+              applied = patchRes.appliedPatches;
+              allCommittedPatches.push(...applied);
+            }
 
-              // Deterministic reaction budget enforcement
-              const validatedIntents: NPCIntent[] = [];
-              let currentSpent = 0;
-              for (const intent of reactionRes.data.intents || []) {
-                const duration = intent.duration ?? estimateIntentDuration(intent);
-                if (currentSpent + duration <= waitBudget.available_time) {
-                  validatedIntents.push(intent);
-                  currentSpent += duration;
-                }
-              }
+            allCommittedEvents.push({
+              type: "admin_change",
+              blockId: block.id,
+              source: block.command || playerInput,
+              patches: applied,
+            });
 
-              return {
-                npcId,
-                reaction: {
-                  ...reactionRes.data,
-                  intents: validatedIntents,
-                },
-              };
-            })
-          );
+            globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+          } else if (block.kind === "time_skip") {
+            // Time Skip Block
+            const skipTarget =
+              block.to ||
+              (block as any).target ||
+              (block as any).duration ||
+              (block as any).command ||
+              playerInput;
 
-          // Resolve reactions from wait window
-          const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
-            ...blockRuntimeOpts,
-            agentId: "world_resolver",
-            context: {
-              events: [
-                {
-                  id: block.id,
-                  type: "action",
-                  actor: "player",
-                  op: "wait",
-                  duration: waitDuration,
-                },
-              ],
-              npcReactions,
-              scene: workingWorld.scene,
-              entities: workingWorld.entities,
-              rules: workingWorld.rules,
-              reactionBudget: waitBudget,
-            },
-          });
+            const skipResult = await agentRuntime.runAgent<WorldResolverResult>({
+              ...blockRuntimeOpts,
+              agentId: "time_skip",
+              context: {
+                skipTarget,
+                world: workingWorld,
+              },
+            });
 
-          if (!resolverResult.success) {
-            throw new PipelineStageError(
-              "world_resolver",
-              resolverResult.error || "World Resolver failed during wait block"
-            );
-          }
-
-          const patches = resolverResult.data?.patches || [];
-          if (patches.length > 0) {
-            const patchRes = applyPatches(workingWorld, patches);
-            if (!patchRes.success) {
+            if (!skipResult.success) {
               throw new PipelineStageError(
-                "patch_application",
-                patchRes.error || "Failed to apply wait block patches atomically"
+                "time_skip",
+                skipResult.error || "Time Skip Agent execution failed"
               );
             }
-            workingWorld = patchRes.newWorld;
-            allCommittedPatches.push(...patchRes.appliedPatches);
-          }
 
-          globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+            const patches = skipResult.data?.patches || [];
+            let applied: JsonPatchOperation[] = [];
+            if (patches.length > 0) {
+              const patchRes = applyPatches(workingWorld, patches);
+              if (!patchRes.success) {
+                throw new PipelineStageError(
+                  "patch_application",
+                  patchRes.error || "Failed to apply time skip patches to working world"
+                );
+              }
+              workingWorld = patchRes.newWorld;
+              applied = patchRes.appliedPatches;
+              allCommittedPatches.push(...applied);
+            }
+
+            allCommittedEvents.push({
+              type: "time_skip",
+              blockId: block.id,
+              source: skipTarget,
+              patches: applied,
+            });
+
+            globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+          } else if (block.kind === "normal") {
+            // Normal Block: Events -> Perception -> NPC Reaction -> World Resolver
+            const events = block.events || [];
+            allEvents.push(...events);
+
+            // 2. Perception Agent (Strict Fail-Fast)
+            const perceptionResult = await agentRuntime.runAgent<PerceptionResult>({
+              ...blockRuntimeOpts,
+              agentId: "perception",
+              context: {
+                events,
+                scene: workingWorld.scene,
+                entities: workingWorld.entities,
+              },
+            });
+
+            if (!perceptionResult.success) {
+              throw new PipelineStageError(
+                "perception",
+                perceptionResult.error || "Perception Agent failed to execute"
+              );
+            }
+
+            if (
+              !perceptionResult.data ||
+              typeof perceptionResult.data.npcObservations !== "object" ||
+              perceptionResult.data.npcObservations === null
+            ) {
+              throw new PipelineStageError(
+                "perception",
+                "Perception Agent returned invalid or missing npcObservations structure"
+              );
+            }
+
+            const observations = perceptionResult.data.npcObservations;
+            const budget = calculateReactionBudget(block);
+
+            // Finite perspective: determine eligible scene characters
+            const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
+
+            // Only NPCs who are in scene AND perceived the event (saw === true || heard === true) can react
+            const targetNpcIds = sceneCharacters
+              .map((c) => c.id)
+              .filter((npcId) => {
+                const obsList = observations[npcId];
+                return (
+                  Array.isArray(obsList) &&
+                  obsList.some((obs) => obs.saw === true || obs.heard === true)
+                );
+              });
+
+            // Cache for subsequent wait block inheritance
+            lastNormalObservations = observations;
+            lastAffectedNpcIds = [...targetNpcIds];
+
+            // Step 3: Parallel NPC Reactions
+            const npcReactions = await Promise.all(
+              targetNpcIds.map(async (npcId) => {
+                const npcEntity = workingWorld.entities[npcId];
+                const obsList = observations[npcId] || [];
+
+                const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
+                  ...blockRuntimeOpts,
+                  agentId: "npc_reaction",
+                  context: {
+                    npc: { id: npcId, ...npcEntity },
+                    observations: obsList,
+                    scene: workingWorld.scene,
+                    reaction: budget,
+                  },
+                });
+
+                if (!reactionRes.success || !reactionRes.data) {
+                  throw new PipelineStageError(
+                    "npc_reaction",
+                    reactionRes.error || `NPC reaction failed for character '${npcId}'`
+                  );
+                }
+
+                // Deterministic reaction budget enforcement with getSafeIntentDuration
+                const validatedIntents: NPCIntent[] = [];
+                let currentSpent = 0;
+                for (const intent of reactionRes.data.intents || []) {
+                  const duration = getSafeIntentDuration(intent);
+                  if (currentSpent + duration <= budget.available_time) {
+                    validatedIntents.push({ ...intent, duration });
+                    currentSpent += duration;
+                  }
+                }
+
+                return {
+                  npcId,
+                  reaction: {
+                    ...reactionRes.data,
+                    intents: validatedIntents,
+                  },
+                };
+              })
+            );
+
+            // Step 4: World Resolver
+            const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
+              ...blockRuntimeOpts,
+              agentId: "world_resolver",
+              context: {
+                events,
+                npcReactions,
+                scene: workingWorld.scene,
+                entities: workingWorld.entities,
+                rules: workingWorld.rules,
+                reactionBudget: budget,
+              },
+            });
+
+            if (!resolverResult.success) {
+              throw new PipelineStageError(
+                "world_resolver",
+                resolverResult.error || "World Resolver failed to resolve state changes"
+              );
+            }
+
+            const patches = resolverResult.data?.patches || [];
+            let applied: JsonPatchOperation[] = [];
+            if (patches.length > 0) {
+              const patchRes = applyPatches(workingWorld, patches);
+              if (!patchRes.success) {
+                throw new PipelineStageError(
+                  "patch_application",
+                  patchRes.error || "Failed to apply resolver patches atomically"
+                );
+              }
+              workingWorld = patchRes.newWorld;
+              applied = patchRes.appliedPatches;
+              allCommittedPatches.push(...applied);
+            }
+
+            for (const ev of events) {
+              allCommittedEvents.push({
+                type: ev.type === "speech" ? "player_speech" : "player_action",
+                blockId: block.id,
+                source: ev,
+                patches: applied,
+              });
+            }
+
+            globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+          } else if (block.kind === "wait") {
+            // Wait Block: NPC Reaction window -> World Resolver
+            const waitDuration =
+              typeof block.duration === "number" &&
+              Number.isFinite(block.duration) &&
+              block.duration > 0
+                ? block.duration
+                : 5.0;
+
+            const waitBudget = {
+              available_time: waitDuration,
+              response_window: true,
+              trigger_event_ids: [block.id],
+            };
+
+            // Re-evaluate present scene characters in current workingWorld
+            const sceneCharacters = SpatialEngine.getSceneCharacters(workingWorld, false);
+            const targetNpcList: Array<{
+              id: string;
+              entity: any;
+              obsList: import("../../types").NPCObservation[];
+            }> = [];
+
+            if (lastNormalObservations && lastAffectedNpcIds.length > 0) {
+              // Method 1: Inherit from preceding normal block - only NPCs who saw/heard previous event get response window!
+              for (const sc of sceneCharacters) {
+                if (lastAffectedNpcIds.includes(sc.id)) {
+                  const prevObs = lastNormalObservations[sc.id] || [];
+                  const waitObs: import("../../types").NPCObservation[] = [
+                    ...prevObs,
+                    {
+                      eventId: block.id,
+                      saw: true,
+                      heard: false,
+                      content: "观察到之前的事件后，见玩家停下动作，静候现场角色的回应。",
+                    },
+                  ];
+                  targetNpcList.push({ id: sc.id, entity: sc.entity, obsList: waitObs });
+                }
+              }
+            } else {
+              // Standalone wait block: scene NPCs observe player waiting
+              for (const sc of sceneCharacters) {
+                if (SpatialEngine.isEntityInScene(sc.id, sc.entity, workingWorld)) {
+                  const waitObs: import("../../types").NPCObservation[] = [
+                    {
+                      eventId: block.id,
+                      saw: true,
+                      heard: false,
+                      content: "玩家在现场保持沉默，似乎在等待某种回应。",
+                    },
+                  ];
+                  targetNpcList.push({ id: sc.id, entity: sc.entity, obsList: waitObs });
+                }
+              }
+            }
+
+            const npcReactions = await Promise.all(
+              targetNpcList.map(async ({ id: npcId, entity: npcEntity, obsList }) => {
+                const reactionRes = await agentRuntime.runAgent<NPCReactionResult>({
+                  ...blockRuntimeOpts,
+                  agentId: "npc_reaction",
+                  context: {
+                    npc: { id: npcId, ...npcEntity },
+                    observations: obsList,
+                    scene: workingWorld.scene,
+                    reaction: waitBudget,
+                  },
+                });
+
+                if (!reactionRes.success || !reactionRes.data) {
+                  throw new PipelineStageError(
+                    "npc_reaction",
+                    reactionRes.error || `NPC wait reaction failed for '${npcId}'`
+                  );
+                }
+
+                // Deterministic reaction budget enforcement using unified getSafeIntentDuration
+                const validatedIntents: NPCIntent[] = [];
+                let currentSpent = 0;
+                for (const intent of reactionRes.data.intents || []) {
+                  const duration = getSafeIntentDuration(intent);
+                  if (currentSpent + duration <= waitBudget.available_time) {
+                    validatedIntents.push({ ...intent, duration });
+                    currentSpent += duration;
+                  }
+                }
+
+                return {
+                  npcId,
+                  reaction: {
+                    ...reactionRes.data,
+                    intents: validatedIntents,
+                  },
+                };
+              })
+            );
+
+            // Resolve reactions from wait window
+            const resolverResult = await agentRuntime.runAgent<WorldResolverResult>({
+              ...blockRuntimeOpts,
+              agentId: "world_resolver",
+              context: {
+                events: [
+                  {
+                    id: block.id,
+                    type: "action",
+                    actor: "player",
+                    op: "wait",
+                    duration: waitDuration,
+                  },
+                ],
+                npcReactions,
+                scene: workingWorld.scene,
+                entities: workingWorld.entities,
+                rules: workingWorld.rules,
+                reactionBudget: waitBudget,
+              },
+            });
+
+            if (!resolverResult.success) {
+              throw new PipelineStageError(
+                "world_resolver",
+                resolverResult.error || "World Resolver failed during wait block"
+              );
+            }
+
+            const patches = resolverResult.data?.patches || [];
+            let applied: JsonPatchOperation[] = [];
+            if (patches.length > 0) {
+              const patchRes = applyPatches(workingWorld, patches);
+              if (!patchRes.success) {
+                throw new PipelineStageError(
+                  "patch_application",
+                  patchRes.error || "Failed to apply wait block patches atomically"
+                );
+              }
+              workingWorld = patchRes.newWorld;
+              applied = patchRes.appliedPatches;
+              allCommittedPatches.push(...applied);
+            }
+
+            allCommittedEvents.push({
+              type: "wait",
+              blockId: block.id,
+              source: { duration: waitDuration },
+              patches: applied,
+            });
+
+            globalTraceManager.updateSpan(traceId, blockSpanId, { status: "success" });
+          }
+        } catch (blockErr: any) {
+          globalTraceManager.updateSpan(traceId, blockSpanId, {
+            status: "error",
+            error: blockErr?.message || String(blockErr),
+          });
+          throw blockErr;
         }
       }
 
-      // Step 5: Narrator (Only committed patches and final working state; NO NPC private thoughts)
+      // Step 5: Narrator (Committed events & patches, final working state; NO NPC private thoughts)
       let narrationText = "";
       let narrationError: string | undefined = undefined;
 
@@ -430,6 +529,7 @@ export class GamePipeline {
         agentId: "narrator",
         context: {
           playerInput,
+          committedEvents: allCommittedEvents,
           events: allEvents,
           patches: allCommittedPatches,
           scene: workingWorld.scene,

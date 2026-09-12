@@ -20,8 +20,13 @@ import {
 } from "../src/engine/world/PatchEngine";
 import { SpatialEngine } from "../src/engine/world/SpatialEngine";
 import { SchemaValidator } from "../src/engine/schema/SchemaValidator";
-import { AgentRuntime, extractJsonPayload } from "../src/engine/runtime/AgentRuntime";
-import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
+import {
+  AgentRuntime,
+  extractJsonPayload,
+  sanitizeExtraBody,
+  sanitizeCustomHeaders,
+} from "../src/engine/runtime/AgentRuntime";
+import { GamePipeline, getSafeIntentDuration } from "../src/engine/pipeline/GamePipeline";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { storageService, DEFAULT_SETTINGS } from "../src/db/storage";
@@ -222,29 +227,25 @@ test("Test 9: multi-block rollback restores initial world state", async () => {
   const initialWorld = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
 
   // Provide an agent context where admin_patch fails
-  const brokenAgents = BUILTIN_AGENTS.map((a) => {
-    if (a.id === "admin_patch") {
-      return { ...a, defaults: { ...a.defaults, extraBody: { force_fail: true } } };
-    }
-    return a;
-  });
+  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "admin_patch");
 
   // An input that triggers normal block followed by invalid admin block
   const input = "我走到窗边。然后管理员：修改天气为暴风雨";
   // Execute turn
   const result = await pipeline.executeTurn(input, initialWorld, 3, {
     ...mockExecContext,
+    agents: brokenAgents,
     activeGroupId: "group_test",
   });
 
-  if (!result.success) {
-    assert.deepEqual(
-      result.turn.worldStateAfter,
-      initialWorld,
-      "Rolled back turn worldStateAfter must match initialWorld"
-    );
-    assert.equal(result.turn.patches.length, 0);
-  }
+  assert.equal(result.success, false, "Multi-block turn must fail when subsequent block fails");
+  assert.equal(result.turn.status, "error");
+  assert.deepEqual(
+    result.turn.worldStateAfter,
+    initialWorld,
+    "Rolled back turn worldStateAfter must match initialWorld"
+  );
+  assert.equal(result.turn.patches.length, 0, "Error turn must commit 0 patches");
 });
 
 test("Test 10: invalid group throws error without silent fallback to groups[0]", async () => {
@@ -386,12 +387,26 @@ test("Test 15: Tauri DB failure throws instead of falling back to localStorage",
   (storageService as any).isTauri = originalIsTauri;
 });
 
-test("Test 16: Keyring failure surfaces error", async () => {
-  // Empty secret_ref rejected
-  if (typeof (globalThis as any).window === "undefined") {
-    // In node environment, setting empty secret ref throws
-    assert.ok(true, "Keyring validation tested in Rust native unit test (test_secret_ref_empty_fails)");
-  }
+test("Test 16: missing binding in real mode fails fast with explicit error", async () => {
+  const runtime = new AgentRuntime();
+  const groupWithoutBinding: AgentGroup = {
+    id: "group_no_binding",
+    name: "Group Without Binding",
+    bindings: [],
+  };
+
+  const res = await runtime.runAgent({
+    agentId: "narrator",
+    groupId: "group_no_binding",
+    context: { playerInput: "hello" },
+    agents: BUILTIN_AGENTS,
+    groups: [groupWithoutBinding],
+    backends: [mockBackend],
+    mockMode: false,
+  });
+
+  assert.equal(res.success, false);
+  assert.ok(res.error?.includes("has no binding in group"));
 });
 
 test("Test 17: history missing trace returns undefined without fallback to traces[0]", () => {
@@ -579,4 +594,223 @@ test("Test 25: core root removal is strictly rejected", () => {
   const result = applyPatches(world, [coreRemovalPatch]);
   assert.equal(result.success, false, "Removing core root branch must be rejected atomically");
   assert.ok(result.newWorld.entities, "Entities root must still exist");
+});
+
+test("Test 26: mock mode without backend can execute full turn", async () => {
+  const pipeline = new GamePipeline();
+  const result = await pipeline.executeTurn(
+    "我对艾琳说：“你好，今天天气不错。”",
+    INITIAL_HARBOR_TAVERN_WORLD,
+    1,
+    {
+      agents: BUILTIN_AGENTS,
+      groups: [],
+      backends: [],
+      activeGroupId: "",
+      mockMode: true,
+    }
+  );
+
+  assert.equal(result.success, true, "Mock mode turn without backends must succeed");
+  assert.equal(result.turn.status, "success");
+  assert.ok(result.turn.narratorOutput.length > 0, "Narrator should produce story output in mock mode");
+});
+
+test("Test 27: negative, NaN, Infinity, and zero duration cannot gain extra budget", () => {
+  assert.equal(getSafeIntentDuration({ type: "action", duration: -100 }), 2.0);
+  assert.equal(getSafeIntentDuration({ type: "action", duration: NaN }), 2.0);
+  assert.equal(getSafeIntentDuration({ type: "action", duration: Infinity }), 2.0);
+  assert.equal(getSafeIntentDuration({ type: "action", duration: 0 }), 2.0);
+  assert.equal(getSafeIntentDuration({ type: "action", duration: 2.5 }), 2.5);
+  assert.equal(getSafeIntentDuration({ type: "wait", duration: -100 }), 1.0);
+});
+
+test("Test 28: extraBody cannot override reserved model or messages parameters", () => {
+  assert.throws(() => {
+    sanitizeExtraBody({ model: "evil-model" });
+  }, /forbidden reserved field 'model'/i);
+
+  assert.throws(() => {
+    sanitizeExtraBody({ messages: [] });
+  }, /forbidden reserved field 'messages'/i);
+
+  assert.throws(() => {
+    sanitizeExtraBody({ temperature: 0.9 });
+  }, /forbidden reserved field 'temperature'/i);
+});
+
+test("Test 29: customHeaders cannot override Authorization or transport headers", () => {
+  assert.throws(() => {
+    sanitizeCustomHeaders({ Authorization: "Bearer bad" });
+  }, /forbidden/i);
+  assert.throws(() => {
+    sanitizeCustomHeaders({ authorization: "Bearer bad" });
+  }, /forbidden/i);
+  assert.throws(() => {
+    sanitizeCustomHeaders({ Host: "bad.com" });
+  }, /forbidden/i);
+});
+
+test("Test 30: standalone runAgent trace closes and does not remain active", async () => {
+  const runtime = new AgentRuntime();
+  const traceId = `standalone_test_${Date.now()}`;
+  const res = await runtime.runAgent({
+    agentId: "input_compiler",
+    groupId: "group_test",
+    context: { player: { input: "hello" } },
+    traceId,
+    agents: BUILTIN_AGENTS,
+    groups: [mockGroup],
+    backends: [mockBackend],
+    mockMode: true,
+  });
+
+  assert.equal(res.success, true);
+  const trace = globalTraceManager.getTrace(traceId);
+  assert.ok(trace);
+  assert.equal(trace.status, "success", "Standalone trace must be closed with status success");
+});
+
+test("Test 31: failed block parent span status becomes error", async () => {
+  const pipeline = new GamePipeline();
+  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "perception");
+  const result = await pipeline.executeTurn(
+    "我走向艾琳",
+    INITIAL_HARBOR_TAVERN_WORLD,
+    1,
+    {
+      ...mockExecContext,
+      agents: brokenAgents,
+    }
+  );
+
+  assert.equal(result.success, false);
+  const trace = globalTraceManager.getTrace(result.traceId);
+  assert.ok(trace);
+  const blockSpan = trace.spans.find((s) => s.type === "temporal_block");
+  assert.ok(blockSpan);
+  assert.equal(blockSpan.status, "error", "Parent block span must be closed as error on failure");
+});
+
+test("Test 32: malformed nested agent output is rejected by semantic validator", () => {
+  // input_compiler with missing op in action event
+  const malformedCompiler = {
+    blocks: [
+      {
+        id: "b1",
+        kind: "normal",
+        events: [{ id: "e1", type: "action" /* missing op */ }],
+      },
+    ],
+  };
+  assert.throws(() => {
+    SchemaValidator.validateAgentSemantics("input_compiler", malformedCompiler);
+  }, /non-empty 'op'/i);
+
+  // perception with invalid observation
+  const malformedPerception = {
+    npcObservations: {
+      erin: [{ eventId: "e1", saw: "not_a_boolean" }],
+    },
+  };
+  assert.throws(() => {
+    SchemaValidator.validateAgentSemantics("perception", malformedPerception);
+  }, /boolean 'saw'/i);
+
+  // npc_reaction with speech missing content
+  const malformedReaction = {
+    thought: "hmm",
+    intents: [{ type: "speech" /* missing content */ }],
+  };
+  assert.throws(() => {
+    SchemaValidator.validateAgentSemantics("npc_reaction", malformedReaction);
+  }, /non-empty 'content'/i);
+});
+
+test("Test 33: removing or replacing player entity violates invariants", () => {
+  const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
+
+  // Direct remove of /entities/player
+  assert.throws(() => {
+    validateWorldPatchPath("/entities/player", "remove");
+  }, /Prohibited patch operation/i);
+
+  // Attempting to wipe /entities with {}
+  const wipeEntitiesPatch = { op: "replace" as const, path: "/entities", value: {} };
+  const res = applyPatches(world, [wipeEntitiesPatch]);
+  assert.equal(res.success, false, "Wiping entities must fail because player is deleted");
+});
+
+test("Test 34: scene weather, lighting, and location must be non-empty strings", () => {
+  const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
+
+  // Removing /scene/weather
+  const removeWeatherPatch = { op: "remove" as const, path: "/scene/weather" };
+  const res1 = applyPatches(world, [removeWeatherPatch]);
+  assert.equal(res1.success, false, "Removing scene.weather must violate WorldState invariant");
+
+  // Replacing /scene/weather with empty string
+  const emptyWeatherPatch = { op: "replace" as const, path: "/scene/weather", value: "" };
+  const res2 = applyPatches(world, [emptyWeatherPatch]);
+  assert.equal(res2.success, false, "Empty scene.weather must violate WorldState invariant");
+
+  // Valid weather change succeeds
+  const validWeatherPatch = { op: "replace" as const, path: "/scene/weather", value: "snowy" };
+  const res3 = applyPatches(world, [validWeatherPatch]);
+  assert.equal(res3.success, true, "Valid weather change must succeed");
+  assert.equal(res3.newWorld.scene.weather, "snowy");
+});
+
+test("Test 35: retry historical turn removes subsequent turns and sets current world (Test A)", async () => {
+  useSettingsStore.setState({
+    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
+  });
+
+  await useGameStore.getState().createNewSave("Branch Test A");
+  await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
+  await useGameStore.getState().sendPlayerInput("动作 2"); // Turn 2
+  await useGameStore.getState().sendPlayerInput("动作 3"); // Turn 3
+
+  const turnsBefore = useGameStore.getState().activeSave!.turns;
+  assert.equal(turnsBefore.length, 4); // [0: init, 1: 动作1, 2: 动作2, 3: 动作3]
+
+  // Retry Turn 1 (historical turn)
+  const retrySuccess = await useGameStore.getState().retryTurn(1);
+  assert.equal(retrySuccess, true);
+
+  const turnsAfter = useGameStore.getState().activeSave!.turns;
+  assert.equal(turnsAfter.length, 2, "Turns after Turn 1 must be removed on historical retry");
+  assert.equal(turnsAfter[1].turnIndex, 1);
+  assert.equal(turnsAfter[1].variations?.length, 2, "Turn 1 should now have 2 variations");
+  assert.deepEqual(
+    useGameStore.getState().activeSave!.worldState,
+    turnsAfter[1].worldStateAfter,
+    "Current world must equal retried Turn 1 worldStateAfter"
+  );
+});
+
+test("Test 36: switch historical variation removes subsequent turns (Test B)", async () => {
+  useSettingsStore.setState({
+    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
+  });
+
+  await useGameStore.getState().createNewSave("Branch Test B");
+  await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
+  // Retry Turn 1 to create 2 variations while it's head
+  await useGameStore.getState().retryTurn(1);
+  // Now add Turn 2 on top of variation 2
+  await useGameStore.getState().sendPlayerInput("动作 2");
+  assert.equal(useGameStore.getState().activeSave!.turns.length, 3); // [0, 1, 2]
+
+  // Switch Turn 1 back to variation 0
+  await useGameStore.getState().switchTurnVariation(1, 0);
+
+  const turnsAfter = useGameStore.getState().activeSave!.turns;
+  assert.equal(turnsAfter.length, 2, "Switching historical Turn 1 variation must truncate Turn 2");
+  assert.equal(turnsAfter[1].activeVariationIndex, 0);
+  assert.deepEqual(
+    useGameStore.getState().activeSave!.worldState,
+    turnsAfter[1].variations![0].worldStateAfter,
+    "Current world must equal variation 0 worldStateAfter"
+  );
 });

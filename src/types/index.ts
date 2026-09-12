@@ -134,8 +134,17 @@ export interface JsonPatchOperation {
   from?: string;
 }
 
+export type EntityType = "character" | "object" | "location" | "item";
+
+export interface CommittedTurnEvent {
+  type: "player_action" | "player_speech" | "wait" | "time_skip" | "admin_change";
+  blockId: string;
+  source?: unknown;
+  patches?: JsonPatchOperation[];
+}
+
 export interface WorldEntity {
-  type: "character" | "object" | "location";
+  type: EntityType;
   name?: string;
   location?: string;
   mentalState?: {

@@ -1,7 +1,7 @@
 import { JsonPatchOperation } from "../../types";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "prototype", "constructor"]);
-const PROTECTED_ROOTS = new Set(["/clock", "/scene", "/entities", "/rules"]);
+const PROTECTED_PATHS = new Set(["/clock", "/scene", "/entities", "/rules", "/entities/player"]);
 
 /**
  * Decodes an RFC 6901 JSON pointer token.
@@ -40,9 +40,9 @@ export function validateWorldPatchPath(path: string, op?: string): void {
     throw new Error(`Prohibited patch path '${path}': root segment '${rootSegment}' is not a permitted WorldState branch`);
   }
 
-  // Disallow removing core root branches
-  if (op === "remove" && PROTECTED_ROOTS.has(path)) {
-    throw new Error(`Prohibited patch operation: cannot remove protected core branch '${path}'`);
+  // Disallow removing core root branches or the player entity
+  if (op === "remove" && PROTECTED_PATHS.has(path)) {
+    throw new Error(`Prohibited patch operation: cannot remove protected core branch or entity '${path}'`);
   }
 }
 

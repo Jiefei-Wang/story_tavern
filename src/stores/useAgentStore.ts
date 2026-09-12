@@ -14,7 +14,7 @@ interface AgentState {
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
-  agents: [],
+  agents: BUILTIN_AGENTS,
   isLoading: false,
 
   loadAgents: async () => {

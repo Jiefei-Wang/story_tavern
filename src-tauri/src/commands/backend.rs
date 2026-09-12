@@ -36,13 +36,14 @@ pub fn apply_auth_and_headers(
     let auth = auth_type.unwrap_or("bearer");
 
     if auth == "none" {
-        // Explicitly forbid adding Authorization header
+        // Explicitly forbid adding Authorization header in none mode
     } else if auth == "bearer" {
         let mut token_opt: Option<String> = None;
 
         if let Some(s_ref) = secret_ref {
-            if !s_ref.trim().is_empty() {
-                if let Ok(token) = get_secret_internal(s_ref) {
+            let trimmed_ref = s_ref.trim();
+            if !trimmed_ref.is_empty() {
+                if let Ok(token) = get_secret_internal(trimmed_ref) {
                     if !token.trim().is_empty() {
                         token_opt = Some(token.trim().to_string());
                     }
@@ -50,15 +51,7 @@ pub fn apply_auth_and_headers(
             }
         }
 
-        // Check default openrouter secret if not found
-        if token_opt.is_none() {
-            if let Ok(token) = get_secret_internal("backend_openrouter") {
-                if !token.trim().is_empty() {
-                    token_opt = Some(token.trim().to_string());
-                }
-            }
-        }
-
+        // STRICT: Zero fallback to other backends or openrouter!
         match token_opt {
             Some(token) => {
                 req = req.header("Authorization", format!("Bearer {}", token));
@@ -70,10 +63,19 @@ pub fn apply_auth_and_headers(
                 ));
             }
         }
+    } else {
+        return Err(format!("Unsupported auth_type: '{}'", auth));
     }
 
     if let Some(hdr_map) = headers {
         for (k, v) in hdr_map {
+            let lower = k.trim().to_lowercase();
+            if lower == "authorization" {
+                return Err("Custom headers cannot override Authorization header".to_string());
+            }
+            if lower == "content-length" || lower == "host" {
+                return Err(format!("Custom header '{}' is forbidden", k));
+            }
             req = req.header(k, v);
         }
     }
@@ -265,13 +267,58 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_auth_bearer_missing_secret_fails() {
+    fn test_apply_auth_none_never_adds_auth_header() {
+        let client = reqwest::Client::new();
+        let req = client.get("http://localhost:11434/models");
+        // Even if secret_ref points to openrouter or anything else, none mode must succeed without error
+        let result = apply_auth_and_headers(req, Some("none"), Some("backend_openrouter"), None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_apply_auth_bearer_missing_secret_fails_without_openrouter_fallback() {
         let client = reqwest::Client::new();
         let req = client.get("https://api.openai.com/v1/models");
-        let result = apply_auth_and_headers(req, Some("bearer"), Some("non_existent_ref_99999"), None);
-        // Unless env secret is present, this will fail with missing bearer credential
-        if super::super::secret::find_env_secret().is_none() {
-            assert!(result.is_err());
-        }
+        // Secret for backend A does not exist
+        let result = apply_auth_and_headers(req, Some("bearer"), Some("secret_backend_a_nonexistent"), None);
+        assert!(result.is_err(), "Must fail when secret_ref is not found; NO OpenRouter fallback allowed");
+        let err_msg = result.err().unwrap();
+        assert!(err_msg.contains("Missing Bearer credential"));
+    }
+
+    #[test]
+    fn test_apply_auth_bearer_empty_secret_ref_fails() {
+        let client = reqwest::Client::new();
+        let req = client.get("https://api.openai.com/v1/models");
+        let result = apply_auth_and_headers(req, Some("bearer"), None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_custom_headers_forbid_authorization_override() {
+        let client = reqwest::Client::new();
+        let req = client.get("http://localhost:11434/models");
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer malicious_override".to_string());
+        let result = apply_auth_and_headers(req, Some("none"), None, Some(&headers));
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("cannot override Authorization header"));
+
+        let req2 = client.get("http://localhost:11434/models");
+        let mut headers_lower = HashMap::new();
+        headers_lower.insert("authorization".to_string(), "Bearer test".to_string());
+        let result2 = apply_auth_and_headers(req2, Some("none"), None, Some(&headers_lower));
+        assert!(result2.is_err());
+    }
+
+    #[test]
+    fn test_custom_headers_forbid_transport_headers() {
+        let client = reqwest::Client::new();
+        let req = client.get("http://localhost:11434/models");
+        let mut headers = HashMap::new();
+        headers.insert("Host".to_string(), "evil.com".to_string());
+        let result = apply_auth_and_headers(req, Some("none"), None, Some(&headers));
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("is forbidden"));
     }
 }

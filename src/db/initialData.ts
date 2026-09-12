@@ -63,7 +63,38 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     outputSchema: {
       type: "object",
       properties: {
-        blocks: { type: "array" },
+        blocks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              kind: { type: "string", enum: ["normal", "wait", "time_skip", "admin"] },
+              events: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    type: { type: "string", enum: ["action", "speech"] },
+                    actor: { type: "string" },
+                    op: { type: "string" },
+                    target: { type: "string" },
+                    content: { type: "string" },
+                    duration: { type: "number", minimum: 0 },
+                    parallelWith: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["id", "type"],
+                },
+              },
+              responseWindow: { type: "boolean" },
+              duration: { type: "number", minimum: 0 },
+              to: { type: "string" },
+              command: { type: "string" },
+            },
+            required: ["id", "kind"],
+          },
+        },
       },
       required: ["blocks"],
     },
@@ -112,7 +143,22 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     outputSchema: {
       type: "object",
       properties: {
-        npcObservations: { type: "object" },
+        npcObservations: {
+          type: "object",
+          additionalProperties: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                eventId: { type: "string" },
+                saw: { type: "boolean" },
+                heard: { type: "boolean" },
+                content: { type: "string" },
+              },
+              required: ["eventId", "saw", "heard"],
+            },
+          },
+        },
       },
       required: ["npcObservations"],
     },
@@ -164,8 +210,31 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       type: "object",
       properties: {
         thought: { type: ["string", "null"] },
-        mentalUpdates: { type: "array" },
-        intents: { type: "array" },
+        mentalUpdates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              aspect: { type: "string" },
+              newValue: {},
+            },
+            required: ["aspect"],
+          },
+        },
+        intents: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["action", "speech", "wait"] },
+              op: { type: "string" },
+              target: { type: "string" },
+              content: { type: "string" },
+              duration: { type: "number", minimum: 0 },
+            },
+            required: ["type"],
+          },
+        },
       },
       required: ["thought", "intents"],
     },
@@ -217,7 +286,19 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     outputSchema: {
       type: "object",
       properties: {
-        patches: { type: "array" },
+        patches: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              op: { type: "string", enum: ["add", "remove", "replace", "move", "copy", "test"] },
+              path: { type: "string", pattern: "^/" },
+              value: {},
+              from: { type: "string", pattern: "^/" },
+            },
+            required: ["op", "path"],
+          },
+        },
       },
       required: ["patches"],
     },
@@ -271,7 +352,19 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     outputSchema: {
       type: "object",
       properties: {
-        patches: { type: "array" },
+        patches: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              op: { type: "string", enum: ["add", "remove", "replace", "move", "copy", "test"] },
+              path: { type: "string", pattern: "^/" },
+              value: {},
+              from: { type: "string", pattern: "^/" },
+            },
+            required: ["op", "path"],
+          },
+        },
       },
       required: ["patches"],
     },
@@ -316,7 +409,19 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     outputSchema: {
       type: "object",
       properties: {
-        patches: { type: "array" },
+        patches: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              op: { type: "string", enum: ["add", "remove", "replace", "move", "copy", "test"] },
+              path: { type: "string", pattern: "^/" },
+              value: {},
+              from: { type: "string", pattern: "^/" },
+            },
+            required: ["op", "path"],
+          },
+        },
       },
       required: ["patches"],
     },

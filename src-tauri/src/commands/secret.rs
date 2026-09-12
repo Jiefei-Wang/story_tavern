@@ -82,9 +82,9 @@ pub fn get_secret_internal(secret_ref: &str) -> Result<String, String> {
         }
     }
 
-    // Auto-fallback from .env / env variables
-    if let Some(key) = find_env_secret() {
-        if secret_ref.contains("openrouter") || secret_ref.contains("backend") {
+    // Auto-fallback from .env / env variables ONLY for explicitly bound OpenRouter refs
+    if secret_ref == "backend_openrouter" || secret_ref == "secret_openrouter_default" {
+        if let Some(key) = find_env_secret() {
             let _ = set_secret_internal(secret_ref, &key);
             return Ok(key);
         }

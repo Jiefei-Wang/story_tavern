@@ -30,6 +30,10 @@ export class TraceManager {
     return trace;
   }
 
+  isActiveTrace(traceId: string): boolean {
+    return this.activeTraces.has(traceId);
+  }
+
   createSpan(
     traceId: string,
     spanId: string,

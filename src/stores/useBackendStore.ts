@@ -68,6 +68,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
       const res = await invoke<TestConnectionResult>("backend_test_connection", {
         baseUrl: backend.baseUrl,
+        authType: backend.authType || "bearer",
         secretRef: secretRef || null,
         headers: backend.customHeaders || {},
         timeoutMs: backend.timeoutMs || 15000,
@@ -121,6 +122,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     try {
       const models = await invoke<string[]>("backend_list_models", {
         baseUrl: backend.baseUrl,
+        authType: backend.authType || "bearer",
         secretRef: backend.secretRef || null,
         headers: backend.customHeaders || {},
         timeoutMs: backend.timeoutMs || 20000,

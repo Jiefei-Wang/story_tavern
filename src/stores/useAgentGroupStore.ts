@@ -37,8 +37,10 @@ function normalizeOverrides(
   return Object.keys(cleaned).length > 0 ? (cleaned as any) : undefined;
 }
 
+import { DEFAULT_AGENT_GROUPS } from "../db/initialData";
+
 export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
-  groups: [],
+  groups: DEFAULT_AGENT_GROUPS,
   activeGroupId: "group_quality",
   isLoading: false,
 
