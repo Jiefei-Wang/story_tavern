@@ -217,6 +217,8 @@ export interface GameTurn {
   worldStateAfter: WorldState;
   patches: JsonPatchOperation[];
   activeAgentGroupId: string;
+  variations?: GameTurn[];
+  activeVariationIndex?: number;
 }
 
 export interface GameSave {

@@ -24,17 +24,87 @@ pub fn set_secret_internal(secret_ref: &str, secret_val: &str) -> Result<(), Str
     Ok(())
 }
 
+pub fn find_env_secret() -> Option<String> {
+    if let Ok(val) = std::env::var("OPENROUTER_KEY") {
+        if !val.trim().is_empty() {
+            return Some(val.trim().to_string());
+        }
+    }
+    if let Ok(val) = std::env::var("openrouter_key") {
+        if !val.trim().is_empty() {
+            return Some(val.trim().to_string());
+        }
+    }
+
+    let mut candidates = vec![
+        std::path::PathBuf::from(".env"),
+        std::path::PathBuf::from("../.env"),
+        std::path::PathBuf::from("../../.env"),
+    ];
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(p) = exe.parent() {
+            candidates.push(p.join(".env"));
+            if let Some(p2) = p.parent() {
+                candidates.push(p2.join(".env"));
+                if let Some(p3) = p2.parent() {
+                    candidates.push(p3.join(".env"));
+                }
+            }
+        }
+    }
+
+    for path in candidates {
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.starts_with('#') || line.is_empty() {
+                        continue;
+                    }
+                    if let Some((k, v)) = line.split_once('=') {
+                        let key = k.trim().to_lowercase();
+                        if key == "openrouter_key"
+                            || key == "vite_openrouter_key"
+                            || key == "openrouter_api_key"
+                        {
+                            let val = v.trim().trim_matches('"').trim_matches('\'').trim();
+                            if !val.is_empty() {
+                                return Some(val.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub fn get_secret_internal(secret_ref: &str) -> Result<String, String> {
     if let Ok(entry) = Entry::new(SERVICE_NAME, secret_ref) {
         if let Ok(password) = entry.get_password() {
-            return Ok(password);
+            if !password.trim().is_empty() {
+                return Ok(password);
+            }
         }
     }
 
     let fallback = FALLBACK.lock().map_err(|e| e.to_string())?;
     if let Some(map) = fallback.as_ref() {
         if let Some(val) = map.get(secret_ref) {
-            return Ok(val.clone());
+            if !val.trim().is_empty() {
+                return Ok(val.clone());
+            }
+        }
+    }
+
+    // Auto-fallback from .env / env variables
+    if let Some(key) = find_env_secret() {
+        if secret_ref.contains("openrouter") || secret_ref.contains("backend") {
+            let _ = set_secret_internal(secret_ref, &key);
+            return Ok(key);
         }
     }
 

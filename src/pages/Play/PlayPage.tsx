@@ -13,16 +13,29 @@ import {
   ShieldAlert,
   Loader2,
   ExternalLink,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
 export const PlayPage: React.FC = () => {
-  const { activeSave, isExecuting, executionError, sendPlayerInput, currentTraceId } =
-    useGameStore();
+  const {
+    activeSave,
+    isExecuting,
+    executionError,
+    sendPlayerInput,
+    currentTraceId,
+    retryTurn,
+    switchTurnVariation,
+  } = useGameStore();
   const { settings } = useSettingsStore();
   const [inputText, setInputText] = useState("");
-  const [activeChip, setActiveChip] = useState<"auto" | "action" | "speech" | "skip" | "admin">("auto");
+  const [isTimeMenuOpen, setIsTimeMenuOpen] = useState(false);
+  const timeMenuRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storyEndRef = useRef<HTMLDivElement>(null);
 
   const worldState = activeSave?.worldState;
@@ -33,31 +46,49 @@ export const PlayPage: React.FC = () => {
     storyEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns.length, isExecuting]);
 
+  // Close time menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (timeMenuRef.current && !timeMenuRef.current.contains(event.target as Node)) {
+        setIsTimeMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() || isExecuting) return;
 
-    let finalPrompt = inputText.trim();
-    if (activeChip === "action" && !finalPrompt.startsWith("动作：") && !finalPrompt.startsWith("/")) {
-      finalPrompt = `我动作：${finalPrompt}`;
-    } else if (activeChip === "speech" && !finalPrompt.startsWith("对白：") && !finalPrompt.startsWith("/")) {
-      finalPrompt = `我对艾琳说：“${finalPrompt}”`;
-    } else if (activeChip === "skip" && !finalPrompt.startsWith("快进")) {
-      finalPrompt = `快进：${finalPrompt}`;
-    } else if (activeChip === "admin" && !finalPrompt.startsWith("规则：")) {
-      finalPrompt = `管理员规则：${finalPrompt}`;
-    }
-
+    const finalPrompt = inputText.trim();
     setInputText("");
     await sendPlayerInput(finalPrompt);
   };
 
-  const handleChipClick = (chip: typeof activeChip) => {
-    setActiveChip(chip);
-    if (chip === "action" && !inputText) setInputText("走到窗边观察外面 ");
-    else if (chip === "speech" && !inputText) setInputText("对艾琳说：“今晚离开这里。”");
-    else if (chip === "skip" && !inputText) setInputText("快进到第二天早晨");
-    else if (chip === "admin" && !inputText) setInputText("从现在开始魔法不能复活死人");
+  const insertQuickCommand = (keyword: string) => {
+    setInputText((prev) => {
+      let next = "";
+      if (!prev || !prev.trim()) {
+        next = keyword;
+      } else if (prev.endsWith("\n\n")) {
+        next = prev + keyword;
+      } else if (prev.endsWith("\n")) {
+        next = prev + "\n" + keyword;
+      } else {
+        next = prev + "\n\n" + keyword;
+      }
+      return next;
+    });
+
+    setIsTimeMenuOpen(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.selectionStart = textareaRef.current.value.length;
+        textareaRef.current.selectionEnd = textareaRef.current.value.length;
+      }
+    }, 30);
   };
 
   return (
@@ -101,19 +132,70 @@ export const PlayPage: React.FC = () => {
           {turns.map((turn, idx) => (
             <div key={turn.id || idx} className="space-y-4 max-w-3xl mx-auto">
               {/* Turn divider or Player action */}
-              {turn.playerInput && turn.playerInput !== "(游戏开始)" && (
-                <div className="flex items-start gap-2.5 pl-2 border-l-2 border-blue-500/80 bg-blue-50/40 py-2 px-3 rounded-r-lg">
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                    P
+              {turn.playerInput &&
+                turn.playerInput !== "(游戏开始)" &&
+                turn.playerInput !== "(新游戏开始)" && (
+                  <div className="flex items-center justify-between pl-2 border-l-2 border-blue-500/80 bg-blue-50/40 py-2 px-3 rounded-r-lg group">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                        P
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] font-medium text-blue-600">你的行动</span>
+                        <p className="text-sm font-medium text-slate-800 leading-relaxed">
+                          {turn.playerInput}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Branching Navigator & Retry Button */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {turn.variations && turn.variations.length > 1 && (
+                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 text-xs text-slate-600 shadow-sm">
+                          <button
+                            type="button"
+                            disabled={(turn.activeVariationIndex ?? 0) <= 0 || isExecuting}
+                            onClick={() =>
+                              switchTurnVariation(idx, (turn.activeVariationIndex ?? 0) - 1)
+                            }
+                            className="p-0.5 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-slate-600 transition-colors"
+                            title="查看上一个分支"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-[11px] font-mono px-1">
+                            {(turn.activeVariationIndex ?? 0) + 1} / {turn.variations.length}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={
+                              (turn.activeVariationIndex ?? 0) >= turn.variations.length - 1 ||
+                              isExecuting
+                            }
+                            onClick={() =>
+                              switchTurnVariation(idx, (turn.activeVariationIndex ?? 0) + 1)
+                            }
+                            className="p-0.5 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-slate-600 transition-colors"
+                            title="查看下一个分支"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={isExecuting}
+                        onClick={() => retryTurn(idx)}
+                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 px-2 py-0.5 rounded-md transition-colors shadow-sm disabled:opacity-40"
+                        title="重试当前命令（生成新分支）"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>重试</span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] font-medium text-blue-600">你的行动</span>
-                    <p className="text-sm font-medium text-slate-800 leading-relaxed">
-                      {turn.playerInput}
-                    </p>
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Literary Prose Narration */}
               <div className="prose prose-slate max-w-none text-slate-700 text-sm leading-7 space-y-3 font-normal">
@@ -147,87 +229,144 @@ export const PlayPage: React.FC = () => {
             <div className="flex items-center gap-3 py-4 text-xs text-blue-600 bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-pulse">
               <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
               <span>
-                {settings.mockLlmMode ? "Mock 模拟管道推演中..." : "Agent 多模型分布式推演中..."} (Input Compiler → Perception → NPC Reaction → World Resolver → Narrator)
+                {settings.mockLlmMode
+                  ? "Mock 模拟管道推演中..."
+                  : "Agent 多模型分布式推演中..."}{" "}
+                (Input Compiler → Perception → NPC Reaction → World Resolver → Narrator)
               </span>
             </div>
           )}
 
-          {/* Execution error alert */}
+          {/* Execution error alert with retry button */}
           {executionError && (
-            <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-200 rounded-lg flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>推演失败: {executionError}</span>
+            <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-200 rounded-lg flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>推演失败: {executionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => retryTurn()}
+                disabled={isExecuting}
+                className="px-3 py-1 bg-white hover:bg-rose-100 text-rose-700 border border-rose-300 rounded font-medium flex items-center gap-1.5 transition-colors shadow-sm shrink-0"
+                title="重新尝试上一次的推演"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>重试当前命令</span>
+              </button>
             </div>
           )}
 
           <div ref={storyEndRef} />
         </div>
 
-        {/* Input Bar & Shortcut Chips */}
+        {/* Input Bar & Quick Commands */}
         <div className="border-t border-slate-200 p-4 bg-white space-y-3 shrink-0">
-          {/* Quick Intent Chips */}
+          {/* Quick Commands Toolbar */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-[11px] text-slate-400 font-medium">意图模式:</span>
+            <span className="text-[11px] text-slate-400 font-medium">快捷命令:</span>
+
             <button
               type="button"
-              onClick={() => handleChipClick("auto")}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                activeChip === "auto"
-                  ? "bg-blue-600 text-white font-medium shadow-sm shadow-blue-500/20"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-              }`}
+              onClick={() => insertQuickCommand("动作：")}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+              title="在对话框追加动作关键词（自动智能换行）"
             >
-              Auto (自动混合意图)
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <span>动作</span>
             </button>
+
             <button
               type="button"
-              onClick={() => handleChipClick("action")}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                activeChip === "action"
-                  ? "bg-blue-600 text-white font-medium"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-              }`}
+              onClick={() => insertQuickCommand("对白：")}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+              title="在对话框追加对白关键词（自动智能换行）"
             >
-              动作 (Action)
+              <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
+              <span>对白</span>
             </button>
+
             <button
               type="button"
-              onClick={() => handleChipClick("speech")}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                activeChip === "speech"
-                  ? "bg-blue-600 text-white font-medium"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-              }`}
+              onClick={() => insertQuickCommand("admin:")}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+              title="在对话框追加管理员法则/环境修改指令（自动智能换行）"
             >
-              对白 (Speech)
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+              <span>管理员</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleChipClick("skip")}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                activeChip === "skip"
-                  ? "bg-blue-600 text-white font-medium"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-              }`}
-            >
-              快进 (Fast Forward)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChipClick("admin")}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                activeChip === "admin"
-                  ? "bg-blue-600 text-white font-medium"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-              }`}
-            >
-              管理员 (Admin)
-            </button>
+
+            {/* Fast Forward Dropdown Menu */}
+            <div className="relative" ref={timeMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsTimeMenuOpen(!isTimeMenuOpen)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  isTimeMenuOpen
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                }`}
+                title="选择或自定义快进时间"
+              >
+                <FastForward className="w-3.5 h-3.5 text-indigo-500" />
+                <span>快进</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+
+              {isTimeMenuOpen && (
+                <div className="absolute left-0 bottom-full mb-1.5 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 text-xs text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：10分钟")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    10分钟
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：半小时")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    半小时
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：1小时")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    1小时
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：1天")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    1天
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：一周")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    一周
+                  </button>
+                  <div className="h-px bg-slate-100 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => insertQuickCommand("快进：")}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors text-slate-500 italic"
+                  >
+                    手动输入...
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSend} className="relative flex items-center">
             <textarea
+              ref={textareaRef}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {

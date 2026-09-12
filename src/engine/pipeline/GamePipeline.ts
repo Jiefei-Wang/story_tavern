@@ -97,7 +97,12 @@ export class GamePipeline {
             ...runtimeOpts,
             agentId: "time_skip",
             context: {
-              skipTarget: block.to || "next_morning",
+              skipTarget:
+                block.to ||
+                (block as any).target ||
+                (block as any).duration ||
+                (block as any).command ||
+                playerInput,
               world: currentWorld,
             },
           });

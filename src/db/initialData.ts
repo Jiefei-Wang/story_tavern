@@ -237,14 +237,31 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       {
         id: "m1",
         role: "system",
-        content: `你是时间流逝推演引擎。
-当玩家执行时间快进时，推演时钟前进、光照与天气变化、以及角色在时间跨度内的状态更新。
-输出 RFC 6902 JSON Patch。`,
+        content: `你是时间流逝与时空推演引擎。
+当玩家执行时间快进时，玩家可能会输入任意自然语言表达的时间跨度或目标（例如：“10分钟”、“半小时”、“1小时”、“1天”、“一周”、“吃完午饭后”、“等到夜幕降临”、“三天后”等）。
+你的任务是：
+1. 提取并理解玩家意图快进的自然语言时间量级，不要假设用户会遵循固定的时钟格式。
+2. 结合当前世界状态中的时钟 (world.clock) 及环境，计算推进后的新时钟。
+3. 推演随时间流逝发生的世界状态变化：
+   - 时钟更新：replace /clock (例如从 "Day 1, 08:30" 推进到 "Day 1, 09:00")
+   - 场景光照与环境自然演变：replace /scene/lighting (如 "morning" -> "noon" -> "dusk" -> "night")
+   - NPC 与环境实体的状态更新（如体力恢复、完成手中的事情等）
+4. 输出局部精准的 RFC 6902 JSON Patch 数组。
+
+示例：
+输入目标：“半小时”，当前 clock: "Day 1, 08:30"
+输出：
+{
+  "patches": [
+    { "op": "replace", "path": "/clock", "value": "Day 1, 09:00" },
+    { "op": "replace", "path": "/scene/lighting", "value": "bright_morning" }
+  ]
+}`,
       },
       {
         id: "m2",
         role: "user",
-        content: `快进目标: {{skipTarget}}\n当前时钟与世界: {{json world}}\n\n请输出时间快进的 RFC 6902 Patch:`,
+        content: `快进目标表达: {{skipTarget}}\n当前时钟与世界: {{json world}}\n\n请输出时间快进的 RFC 6902 Patch:`,
       },
     ],
     inputs: [

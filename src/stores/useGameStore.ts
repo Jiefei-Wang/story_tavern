@@ -18,6 +18,8 @@ interface GameState {
   selectSave: (saveId: string) => void;
   createNewSave: (name?: string) => Promise<GameSave>;
   sendPlayerInput: (input: string) => Promise<boolean>;
+  retryTurn: (turnIndex?: number) => Promise<boolean>;
+  switchTurnVariation: (turnIndex: number, variationIndex: number) => Promise<void>;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -126,5 +128,142 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
       return false;
     }
+  },
+
+  retryTurn: async (turnIndex?: number) => {
+    const { activeSave, isExecuting } = get();
+    if (!activeSave || isExecuting || activeSave.turns.length === 0) return false;
+
+    const targetIndex = turnIndex !== undefined ? turnIndex : activeSave.turns.length - 1;
+    if (targetIndex < 0 || targetIndex >= activeSave.turns.length) return false;
+
+    const targetTurn = activeSave.turns[targetIndex];
+    const playerInput = targetTurn.playerInput;
+    if (!playerInput || playerInput === "(游戏开始)" || playerInput === "(新游戏开始)") return false;
+
+    set({ isExecuting: true, executionError: null });
+
+    const agents = useAgentStore.getState().agents;
+    const groups = useAgentGroupStore.getState().groups;
+    const backends = useBackendStore.getState().backends;
+    const activeGroupId = useAgentGroupStore.getState().activeGroupId;
+    const mockMode = useSettingsStore.getState().settings.mockLlmMode;
+
+    const initialWorld = targetTurn.worldStateBefore;
+
+    try {
+      const result = await gamePipeline.executeTurn(
+        playerInput,
+        initialWorld,
+        targetTurn.turnIndex,
+        {
+          agents,
+          groups,
+          backends,
+          activeGroupId,
+          mockMode,
+        }
+      );
+
+      // Branching: Initialize or update variations
+      const existingVariations: GameTurn[] =
+        targetTurn.variations && targetTurn.variations.length > 0
+          ? [...targetTurn.variations]
+          : [{ ...targetTurn }];
+
+      const newVariation: GameTurn = {
+        ...result.turn,
+        id: `turn_${Date.now()}_var_${existingVariations.length}`,
+      };
+
+      const updatedVariations = [...existingVariations, newVariation];
+      const newActiveVariationIndex = updatedVariations.length - 1;
+
+      const updatedTurn: GameTurn = {
+        ...newVariation,
+        variations: updatedVariations,
+        activeVariationIndex: newActiveVariationIndex,
+      };
+
+      const newTurns = [...activeSave.turns];
+      newTurns[targetIndex] = updatedTurn;
+
+      const newWorldState =
+        targetIndex === activeSave.turns.length - 1
+          ? result.turn.worldStateAfter
+          : activeSave.worldState;
+
+      const updatedSave: GameSave = {
+        ...activeSave,
+        worldState: newWorldState,
+        turns: newTurns,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await storageService.saveGame(updatedSave);
+
+      const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
+      set({
+        activeSave: updatedSave,
+        saves,
+        isExecuting: false,
+        currentTraceId: result.traceId,
+        executionError: result.success ? null : result.error || "Retry failed",
+      });
+
+      return result.success;
+    } catch (err: any) {
+      set({
+        isExecuting: false,
+        executionError: err?.message || String(err),
+      });
+      return false;
+    }
+  },
+
+  switchTurnVariation: async (turnIndex: number, variationIndex: number) => {
+    const { activeSave } = get();
+    if (!activeSave || turnIndex < 0 || turnIndex >= activeSave.turns.length) return;
+
+    const targetTurn = activeSave.turns[turnIndex];
+    if (
+      !targetTurn.variations ||
+      variationIndex < 0 ||
+      variationIndex >= targetTurn.variations.length
+    ) {
+      return;
+    }
+
+    const selectedVariation = targetTurn.variations[variationIndex];
+
+    const updatedTurn: GameTurn = {
+      ...selectedVariation,
+      variations: targetTurn.variations,
+      activeVariationIndex: variationIndex,
+    };
+
+    const newTurns = [...activeSave.turns];
+    newTurns[turnIndex] = updatedTurn;
+
+    const newWorldState =
+      turnIndex === activeSave.turns.length - 1
+        ? selectedVariation.worldStateAfter
+        : activeSave.worldState;
+
+    const updatedSave: GameSave = {
+      ...activeSave,
+      worldState: newWorldState,
+      turns: newTurns,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await storageService.saveGame(updatedSave);
+
+    const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
+    set({
+      activeSave: updatedSave,
+      saves,
+      currentTraceId: selectedVariation.traceId,
+    });
   },
 }));

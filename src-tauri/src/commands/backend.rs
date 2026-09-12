@@ -32,12 +32,22 @@ fn apply_auth_and_headers(
     secret_ref: Option<&str>,
     headers: Option<&HashMap<String, String>>,
 ) -> reqwest::RequestBuilder {
+    let mut auth_added = false;
     if let Some(s_ref) = secret_ref {
         if !s_ref.trim().is_empty() {
             if let Ok(token) = get_secret_internal(s_ref) {
                 if !token.trim().is_empty() {
                     req = req.header("Authorization", format!("Bearer {}", token.trim()));
+                    auth_added = true;
                 }
+            }
+        }
+    }
+
+    if !auth_added {
+        if let Ok(token) = get_secret_internal("backend_openrouter") {
+            if !token.trim().is_empty() {
+                req = req.header("Authorization", format!("Bearer {}", token.trim()));
             }
         }
     }
