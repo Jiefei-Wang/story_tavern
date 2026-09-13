@@ -1,3 +1,5 @@
+import { stateDescription } from '../Text/stateDescription';
+import { visibleNarration } from '../../engine/text/History';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { History, Zap, Clock, ChevronRight, Layers, ArrowRight } from "lucide-react";
@@ -33,7 +35,7 @@ export const HistoryPage: React.FC = () => {
             <span>Turn 历史记录 (Game History)</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            查看历次回合的玩家指令、旁白生成、世界状态差异与当时的 Agent Group 配置。
+            查看历次回合的玩家输入、故事正文、人物状态与生成记录。
           </p>
         </div>
       </div>
@@ -116,12 +118,19 @@ export const HistoryPage: React.FC = () => {
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-700 block">生成的旁白正文:</span>
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed text-slate-800 whitespace-pre-wrap">
-                {selectedTurn.narratorOutput}
+                {visibleNarration(selectedTurn.narratorOutput)}
               </div>
             </div>
 
-            {/* Patches in this Turn */}
-            <div className="space-y-2">
+            {selectedTurn.textTurn?.pipeline === 'routed-v2' ? <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-700 block">人物回应与完毕状态:</span>
+              {!selectedTurn.textTurn.designs?.length && <p className="text-xs text-slate-400">本轮没有人物状态更新。</p>}
+              {selectedTurn.textTurn.designs?.map(design => <section key={design.character_id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <h3 className="font-semibold">{selectedTurn.textTurn!.after.documents[`characters/${design.character_id}/public.md`]?.text.split('\n')[0].replace(/^#+\s*/, '') || design.character_id}</h3>
+                <p>表达：{design.expression || '无'}</p><p>动作：{design.action || '无'}</p>
+                <p className="whitespace-pre-wrap text-slate-600">{stateDescription(design.end_state)}</p>
+              </section>)}
+            </div> : <div className="space-y-2">
               <span className="text-xs font-bold text-slate-700 block">
                 产生的 RFC 6902 世界补丁 ({selectedTurn.patches.length}):
               </span>
@@ -148,7 +157,7 @@ export const HistoryPage: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>

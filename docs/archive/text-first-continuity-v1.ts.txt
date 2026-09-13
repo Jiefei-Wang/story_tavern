@@ -1,0 +1,36 @@
+import type { GameTurn } from '../../types';
+import type { TextWorld } from './types';
+
+export interface InputUnderstanding {
+    background: string;
+    actions: string;
+    speech: string;
+    correction: string | null;
+    clarification: string | null;
+    new_people: { name: string; public: string }[];
+}
+
+export function validateUnderstanding(data: any): InputUnderstanding {
+    if (!data || ['background', 'actions', 'speech'].some(k => typeof data[k] !== 'string'))
+        throw new Error('输入整理字段无效');
+    for (const key of ['correction', 'clarification'])
+        if (data[key] !== null && (typeof data[key] !== 'string' || !data[key].trim()))
+            throw new Error(`${key} 应为非空字符串或 null`);
+    const people = data.new_people;
+    if (!Array.isArray(people) || people.length > 2 || people.some(p => !p || ['name', 'public'].some(k => typeof p[k] !== 'string' || !p[k].trim() || p[k].length > 2000)))
+        throw new Error('新遇人物须为至多两位、具有称呼和公开外观的列表');
+    return { ...data, correction: data.correction ?? null, clarification: data.clarification ?? null, new_people: people };
+}
+
+// Ignore archive documents and the storage revision, but protect all live data,
+// including unknown fields, from rollback over an intervening configuration edit.
+export function sameStory(a: TextWorld, b: TextWorld): boolean {
+    const canonical = (value: any): any => Array.isArray(value) ? value.map(canonical)
+        : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    const live = (world: TextWorld) => ({ ...world, revision: 0, documents: Object.fromEntries(Object.entries(world.documents).filter(([path]) => !path.startsWith('turns/'))) });
+    return JSON.stringify(canonical(live(a))) === JSON.stringify(canonical(live(b)));
+}
+
+export function latestStoryTurn(turns: GameTurn[]): GameTurn | undefined {
+    return [...turns].reverse().find(turn => !turn.textTurn?.supersededBy);
+}

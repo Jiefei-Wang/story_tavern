@@ -153,7 +153,7 @@ export const AgentGroupsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               {activeGroupId !== selectedGroup.id ? (
                 <button
-                  onClick={() => setActiveGroup(selectedGroup.id)}
+                  onClick={() => { void setActiveGroup(selectedGroup.id).catch(err => window.alert(String(err))); }}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />

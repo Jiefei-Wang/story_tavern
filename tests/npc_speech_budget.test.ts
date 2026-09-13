@@ -6,7 +6,7 @@ import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
 import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
-import { BUILTIN_AGENTS } from "../src/db/initialData";
+import { BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";
 import type { NPCIntent, NPCReactionResult } from "../src/types";
 

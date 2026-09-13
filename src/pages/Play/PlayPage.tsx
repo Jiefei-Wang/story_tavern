@@ -27,6 +27,7 @@ import { GameTurn } from "../../types";
 import { useGameStore } from "../../stores/useGameStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useTraceStore } from "../../stores/useTraceStore";
+import { visibleNarration } from '../../engine/text/History';
 import { SpatialEngine } from "../../engine/world/SpatialEngine";
 import { GenerationPanel } from "./GenerationPanel";
 import { GenerationTaskModal } from "./GenerationTaskModal";
@@ -40,7 +41,6 @@ export const PlayPage: React.FC = () => {
     currentTraceId,
     retryTurn,
     switchTurnVariation,
-    createNewSave,
     cancelGeneration,
   } = useGameStore();
   const { settings } = useSettingsStore();
@@ -55,7 +55,7 @@ export const PlayPage: React.FC = () => {
 
   const handleCopyText = async (text: string, idx: number) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(visibleNarration(text));
       setCopiedTurnIdx(idx);
       setTimeout(() => setCopiedTurnIdx(null), 1800);
     } catch {
@@ -63,13 +63,12 @@ export const PlayPage: React.FC = () => {
     }
   };
 
-  const handleNewGame = async () => {
-    if (window.confirm("确定要开启一局新游戏吗？当前进度已保存在存档中。")) {
-      await createNewSave("王城的黄昏 · 港口酒馆");
-    }
-  };
 
-  const worldState = activeSave?.worldState;
+  const textWorld = activeSave?.textWorld;
+  const traces = useTraceStore(s => s.traces);
+  const trace = traces.find(t => t.id === currentTraceId);
+  const draft = [...(trace?.spans || [])].reverse().find(s => ['text_narrator', 'text_storyteller'].includes(s.agentId || ''))?.liveContent;
+  const worldState = textWorld ? undefined : activeSave?.worldState;
   const turns = activeSave?.turns || [];
 
   // Auto scroll to bottom of story on new turn
@@ -130,11 +129,11 @@ export const PlayPage: React.FC = () => {
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isExecuting) return;
+    if (!inputText.trim() || isExecuting || (textWorld && settings.mockLlmMode)) return;
 
     const finalPrompt = inputText.trim();
     setInputText("");
-    await sendPlayerInput(finalPrompt);
+    if (!await sendPlayerInput(finalPrompt)) setInputText(current => current || finalPrompt);
   };
 
   const insertQuickCommand = (keyword: string) => {
@@ -156,8 +155,12 @@ export const PlayPage: React.FC = () => {
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
-        textareaRef.current.selectionStart = textareaRef.current.value.length;
-        textareaRef.current.selectionEnd = textareaRef.current.value.length;
+        const field = textareaRef.current;
+        const position = textWorld && keyword.startsWith('[')
+          ? field.value.lastIndexOf(keyword) + keyword.indexOf('\n') + 1
+          : field.value.length;
+        field.selectionStart = position;
+        field.selectionEnd = position;
       }
     }, 30);
   };
@@ -171,7 +174,7 @@ export const PlayPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Compass className="w-4 h-4 text-blue-600" />
             <span className="font-semibold text-sm text-slate-800">
-              {worldState?.scene?.location === "harbor_tavern"
+              {textWorld ? activeSave?.name : worldState?.scene?.location === "harbor_tavern"
                 ? "王城的黄昏 · 港口酒馆"
                 : worldState?.scene?.location || "冒险舞台"}
             </span>
@@ -190,14 +193,14 @@ export const PlayPage: React.FC = () => {
                 <ExternalLink className="w-3 h-3" />
               </Link>
             )}
-            <button
-              onClick={handleNewGame}
+            <Link
+              to="/"
               className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-md transition-colors shadow-sm"
-              title="重新开启一局新游戏（新建存档）"
+              title="返回首页选择并开始故事"
             >
               <Plus className="w-3.5 h-3.5 text-slate-500" />
-              <span>新建游戏</span>
-            </button>
+              <span>开始其他故事</span>
+            </Link>
 
             <Link
               to="/settings"
@@ -222,16 +225,17 @@ export const PlayPage: React.FC = () => {
                         P
                       </div>
                       <div className="space-y-0.5">
-                        <span className="text-[11px] font-medium text-blue-600">你的行动</span>
-                        <p className="text-sm font-medium text-slate-800 leading-relaxed">
+                        <span className="text-[11px] font-medium text-blue-600">{turn.textTurn?.correctionOf ? "纠正上一轮" : textWorld ? "你的输入" : "你的行动"}</span>
+                        <p className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
                           {turn.playerInput}
                         </p>
+                        {turn.textTurn?.correctionOf && <p className="text-xs text-slate-500">重新理解为：{turn.textTurn.effectiveInput}</p>}
                       </div>
                     </div>
 
                     {/* Branching Navigator & Retry Button */}
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {turn.variations && turn.variations.length > 1 && (
+                      {!textWorld && turn.variations && turn.variations.length > 1 && (
                         <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 text-xs text-slate-600 shadow-sm">
                           <button
                             type="button"
@@ -264,7 +268,7 @@ export const PlayPage: React.FC = () => {
                         </div>
                       )}
 
-                      <button
+                      {!textWorld && <button
                         type="button"
                         disabled={isExecuting}
                         onClick={() => retryTurn(idx)}
@@ -273,7 +277,7 @@ export const PlayPage: React.FC = () => {
                       >
                         <RotateCcw className="w-3 h-3" />
                         <span>重试</span>
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 )}
@@ -371,8 +375,9 @@ export const PlayPage: React.FC = () => {
                   </div>
                 </div>
 
+                {turn.textTurn?.supersededBy && <p className="text-xs text-amber-700">本轮已被后续纠正。以下是保留的旧记录，其剧情后果已撤回。</p>}
                 <div className="prose prose-slate max-w-none text-slate-700 text-sm leading-7 space-y-3 font-normal select-text">
-                  {turn.narratorOutput
+                  {visibleNarration(turn.narratorOutput)
                     .split("\n\n")
                     .filter(Boolean)
                     .map((paragraph, pIdx) => {
@@ -394,10 +399,12 @@ export const PlayPage: React.FC = () => {
                 </div>
               </div>
 
+              {turn.textTurn && <p className="text-[11px] text-slate-400 text-right">{turn.textTurn.commit === 'saved' ? '已保存' : '草稿，尚未提交'}</p>}
               {idx < turns.length - 1 && <div className="h-px bg-slate-100 my-6" />}
             </div>
           ))}
 
+          {textWorld && isExecuting && <div className="max-w-3xl mx-auto space-y-3"><p className="text-xs text-blue-600 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin"/>正在生成草稿，尚未提交保存</p>{draft && <p className="text-sm text-slate-700 leading-7 whitespace-pre-wrap">{visibleNarration(draft || '')}</p>}</div>}
           {/* Running indicator */}
           <GenerationPanel traceId={currentTraceId} running={isExecuting} onStop={handleStopGeneration} />
 
@@ -410,13 +417,13 @@ export const PlayPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => retryTurn()}
+                onClick={() => textWorld ? handleSend() : retryTurn()}
                 disabled={isExecuting}
                 className="px-3 py-1 bg-white hover:bg-rose-100 text-rose-700 border border-rose-300 rounded font-medium flex items-center gap-1.5 transition-colors shadow-sm shrink-0"
                 title="重新尝试上一次的推演"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>重试当前命令</span>
+                <span>{textWorld ? '重新发送输入' : '重试当前命令'}</span>
               </button>
             </div>
           )}
@@ -452,16 +459,16 @@ export const PlayPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => insertQuickCommand("admin:")}
+              onClick={() => insertQuickCommand(textWorld ? "场景调整：" : "admin:")}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
-              title="在对话框追加管理员法则/环境修改指令（自动智能换行）"
+              title={textWorld ? "输入场景调整或纠正要求" : "在对话框追加管理员法则/环境修改指令"}
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-              <span>管理员</span>
+              <span>{textWorld ? "场景" : "管理员"}</span>
             </button>
 
             {/* Fast Forward Dropdown Menu */}
-            <div className="relative" ref={timeMenuRef}>
+            {!textWorld && <div className="relative" ref={timeMenuRef}>
               <button
                 type="button"
                 onClick={() => setIsTimeMenuOpen(!isTimeMenuOpen)}
@@ -524,31 +531,35 @@ export const PlayPage: React.FC = () => {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
+            {textWorld && <button type="button" onClick={() => insertQuickCommand("呈现要求：")} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"><Sparkles className="w-3.5 h-3.5 text-indigo-500"/>文风</button>}
           </div>
+          {textWorld && settings.mockLlmMode && <p className="text-xs text-amber-700">文本故事需要真实 Backend。<button type="button" className="underline ml-1" onClick={() => useSettingsStore.getState().setMockMode(false)}>切换到已配置的真实模型</button></p>}
 
           {/* Form */}
           <form onSubmit={handleSend} className="relative flex items-center">
             <textarea
+              aria-label="你的言行"
               ref={textareaRef}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   handleSend();
                 }
               }}
               rows={2}
-              placeholder="输入你的动作、对白、快进或管理员命令……（Enter 发送，Shift+Enter 换行）"
+              placeholder={textWorld ? "输入动作、对白、纠正或场景要求……（Enter 发送，Shift+Enter 换行）" : "输入你的动作、对白、快进或管理员命令……（Enter 发送，Shift+Enter 换行）"}
               className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-20 outline-none focus:border-blue-500 focus:bg-white transition-all resize-none"
               disabled={isExecuting}
             />
 
             {isExecuting ? (
               <button
+                key="stop-generation"
                 type="button"
-                onClick={handleStopGeneration}
+                onClick={(event) => { event.preventDefault(); handleStopGeneration(); }}
                 className="absolute right-2.5 bottom-2.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm shadow-rose-500/20 transition-all cursor-pointer"
                 title="暂停生成并恢复输入内容（快捷键：Escape）"
               >
@@ -557,8 +568,9 @@ export const PlayPage: React.FC = () => {
               </button>
             ) : (
               <button
+                key="send-input"
                 type="submit"
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || !!textWorld && settings.mockLlmMode}
                 className="absolute right-2.5 bottom-2.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm shadow-blue-500/20 transition-all cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -571,6 +583,20 @@ export const PlayPage: React.FC = () => {
 
       {/* Right: Scene, Characters & World Status */}
       <div className="w-80 flex flex-col gap-4 overflow-y-auto shrink-0 select-none">
+        {textWorld ? <>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-slate-500"><span className="flex items-center gap-1.5 font-medium text-slate-700"><Clock className="w-3.5 h-3.5 text-blue-600"/>故事进度</span><span className="font-mono">已保存版本 {textWorld.revision}</span></div>
+            <p className="text-[11px] text-slate-500">{isExecuting ? '本轮生成中，完成后整体保存' : '正文与世界文档已同步保存'}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2.5 shadow-sm">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700"><Compass className="w-3.5 h-3.5 text-blue-600"/>当前故事</div>
+            <p className="text-sm font-semibold text-slate-800">{activeSave?.storyInfo?.title || '故事场景'}</p><Link to="/save-world" className="text-xs text-blue-600 hover:underline">本局世界设定</Link>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm flex-1">
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 font-medium text-slate-700"><Users className="w-3.5 h-3.5 text-blue-600"/>故事人物</span><Link to="/save-characters" className="text-blue-600 hover:underline text-[11px]">查看详情</Link></div>
+            <div className="space-y-2.5">{textWorld.characters.map(id => <Link to={`/save-characters?character=${encodeURIComponent(id)}`} aria-label={`查看人物：${textWorld.documents[`characters/${id}/public.md`]?.text.split("\n")[0].replace(/^#+\s*/, "") || id}`} key={id} className="block p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5 hover:border-blue-300 hover:bg-blue-50 transition-colors"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-800">{textWorld.documents[`characters/${id}/public.md`]?.text.split('\n')[0].replace(/^#+\s*/, '') || id}</span><span className="text-xs text-slate-500">{id === textWorld.playerId ? '玩家' : '人物'}</span></div></Link>)}</div>
+          </div>
+        </> : <>
         {/* World Time Card */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 shadow-sm">
           <div className="flex items-center justify-between text-xs text-slate-500">
@@ -615,7 +641,7 @@ export const PlayPage: React.FC = () => {
               <Users className="w-3.5 h-3.5 text-blue-600" />
               在场角色
             </span>
-            <Link to="/characters" className="text-blue-600 hover:underline text-[11px]">
+            <Link to="/save-characters" className="text-blue-600 hover:underline text-[11px]">
               查看详情
             </Link>
           </div>
@@ -646,6 +672,7 @@ export const PlayPage: React.FC = () => {
                 })}
           </div>
         </div>
+        </>}
       </div>
 
       {/* Generation Task Details Modal */}

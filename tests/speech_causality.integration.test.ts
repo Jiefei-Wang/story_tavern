@@ -5,7 +5,7 @@ import { agentRuntime } from '../src/engine/runtime/AgentRuntime';
 import { CHARACTER_CHANGE_AUDITOR } from '../src/engine/world/CharacterChangeAuditor';
 import { mockActionResolution } from '../src/engine/world/ActionResolution';
 import { globalTraceManager } from '../src/engine/tracing/TraceManager';
-import { DEFAULT_BACKENDS } from '../src/db/initialData';
+import { DEFAULT_BACKENDS } from './fixtures/legacyInitialData';
 import { definition, field, worldFor } from './fixtures/characterWorlds';
 import { eventsElapsedSeconds } from '../src/engine/scheduling/TurnTiming';
 import type { GameTurn } from '../src/types';

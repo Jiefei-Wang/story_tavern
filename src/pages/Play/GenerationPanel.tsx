@@ -4,6 +4,13 @@ import { useTraceStore } from "../../stores/useTraceStore";
 import { TurnTrace, TraceSpan } from "../../types";
 
 export const AGENT_LABELS: Record<string, string> = {
+  text_router: '命令路由 · 选择人物',
+  text_designer: 'Designer · 设计人物反应',
+  text_storyteller: 'Narrator · 整合故事',
+  text_organizer: '组织时间线与感知',
+  text_character: '人物自然回应',
+  text_editor: '暂存文档修改',
+  text_narrator: '撰写正文草稿',
   input_compiler: "理解你的行动",
   admin_patch: "执行管理员指令",
   perception: "观察场景",

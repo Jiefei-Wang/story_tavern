@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SchemaValidator } from "../src/engine/schema/SchemaValidator";
-import { BUILTIN_AGENTS } from "../src/db/initialData";
+import { BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 
 test("built-in schema validates admin blocks without generated code", () => {
   const schema = BUILTIN_AGENTS.find(a => a.id === "input_compiler")!.outputSchema!;

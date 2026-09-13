@@ -1,3 +1,4 @@
+import { readPreference, writePreference } from '../db/preferences';
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, X } from "lucide-react";
 
@@ -8,8 +9,8 @@ import { ChatMessage, requestAssistant } from "../engine/modelAssistant";
 export function AIAssistant() {
   const [open, setOpen] = useState(false);
   const backends = useBackendStore(s => s.backends);
-  const [backendId, setBackendId] = useState(() => localStorage.getItem("model_assistant_backend") || "");
-  const [model, setModel] = useState(() => localStorage.getItem("model_assistant_model") || "");
+  const [backendId, setBackendId] = useState(() => readPreference("model_assistant_backend") || "");
+  const [model, setModel] = useState(() => readPreference("model_assistant_model") || "");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,7 +19,7 @@ export function AIAssistant() {
   const end = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const backend = backends.find(b => b.id === backendId && b.enabled);
-  useEffect(() => { localStorage.setItem("model_assistant_backend", backendId); localStorage.setItem("model_assistant_model", model); }, [backendId, model]);
+  useEffect(() => { const timer = setTimeout(() => { void Promise.all([writePreference("model_assistant_backend", backendId), writePreference("model_assistant_model", model)]).catch(e => setError(String(e))); }, 300); return () => clearTimeout(timer); }, [backendId, model]);
   useEffect(() => { if (open) dialog.current?.showModal(); else dialog.current?.close(); }, [open]);
   useEffect(() => { end.current?.scrollIntoView({ block: "nearest" }); }, [messages, busy, open]);
   useEffect(() => () => { running.current?.abort(); }, []);
@@ -32,6 +33,8 @@ export function AIAssistant() {
     setMessages(history); setInput("");
     const outcomes: string[] = [];
     try {
+      await writePreference("model_assistant_backend", backendId);
+      await writePreference("model_assistant_model", model);
       const config = readAssistantConfiguration();
       const result = await requestAssistant(backend, model, history, config, controller.signal);
       await executeAssistantChanges(result, config, controller.signal, message => outcomes.push(message));
@@ -41,7 +44,7 @@ export function AIAssistant() {
       const content = [...outcomes, `执行结果：${detail}`, outcomes.length ? "后续操作未完成，以上已保存操作仍然有效。" : "没有完成任何配置保存。"].join("\n");
       setError(detail);
       setMessages([...history, { role: "assistant", content }]);
-    } finally { setBackendId(localStorage.getItem("model_assistant_backend") || ""); setModel(localStorage.getItem("model_assistant_model") || ""); running.current = null; setBusy(false); }
+    } finally { setBackendId(readPreference("model_assistant_backend") || ""); setModel(readPreference("model_assistant_model") || ""); running.current = null; setBusy(false); }
   };
 
   const field = "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50";
@@ -63,11 +66,11 @@ export function AIAssistant() {
             <label className="text-xs space-y-1">助手模型<input aria-label="助手模型" disabled={busy} className={`${field} w-full block`} list="assistant-models" value={model} onChange={e => setModel(e.target.value)} placeholder="选择或输入模型 ID" /></label>
             <datalist id="assistant-models">{backend?.models?.map(m => <option key={m} value={m} />)}</datalist>
           </div>
-          <p className="text-xs text-slate-500">助手可调整系统设置、模型服务、Agents、Agent 组、存档中的世界、角色、法则与角色字段定义。修改会直接保存。</p>
+          <p className="text-xs text-slate-500">助手可调整角色、世界、故事库、本局设定、系统设置和模型配置。修改保存到桌面与浏览器共用的本地数据库；凭证使用安全表单，历史回合不可编辑。</p>
           {!backend && <p className="text-xs text-amber-700">请先在 Backends 中保存并启用服务，再选择助手 Backend。</p>}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4" aria-live="polite">
-          {!messages.length && <p className="text-sm text-slate-500">例如：开启自动保存；把当前世界改成雨夜；调整角色属性；为 Agent 组更换模型。也可以先让我分析当前配置。</p>}
+          {!messages.length && <p className="text-sm text-slate-500">例如：开启自动保存；把当前场景改成雨夜；让艾琳说话更克制；创建一个新的故事；为 Agent 组更换模型。也可以先让我分析当前配置。</p>}
           {messages.map((m, i) => <div key={i} className={`p-3 rounded-xl text-sm whitespace-pre-wrap break-words ${m.role === "user" ? "bg-blue-50 ml-8" : "bg-slate-100 mr-8"}`}><div className="text-xs font-semibold mb-2">{m.role === "user" ? "你" : "AI 助手"}</div>{m.content}</div>)}
           {busy && <p className="text-sm text-blue-600">正在分析并执行配置指令…</p>}
           <div ref={end} />

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { useGameStore } from "../src/stores/useGameStore";
 import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { gamePipeline } from "../src/engine/pipeline/GamePipeline";
-import { INITIAL_DEMO_SAVE } from "../src/db/initialData";
+import { INITIAL_DEMO_SAVE } from "./fixtures/legacyInitialData";
 import type { GameTurn } from "../src/types";
 
 test("send and retry banners never display raw result.error or thrown world dumps, while diagnostic error data remains available", async t => {

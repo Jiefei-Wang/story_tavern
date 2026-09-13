@@ -219,6 +219,15 @@ pub async fn backend_chat_completion(
     timeout_ms: Option<u64>,
     request: Value,
     on_chunk: tauri::ipc::Channel<Vec<u8>>,
+ ) -> Result<Value, String> {
+    chat_completion_internal(base_url, auth_type, secret_ref, headers, timeout_ms, request,
+        move |bytes| on_chunk.send(bytes).map_err(|_| "Stream receiver unavailable".to_string())).await
+}
+
+pub async fn chat_completion_internal(
+    base_url: String, auth_type: Option<String>, secret_ref: Option<String>,
+    headers: Option<HashMap<String, String>>, timeout_ms: Option<u64>, request: Value,
+    on_chunk: impl Fn(Vec<u8>) -> Result<(), String>,
 ) -> Result<Value, String> {
     let client = build_client(timeout_ms);
     let url = normalize_url(&base_url, "chat/completions");
@@ -235,7 +244,7 @@ pub async fn backend_chat_completion(
     let status = resp.status();
     if status.is_success() && resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").contains("text/event-stream") {
         while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Stream interrupted: {}", e))? {
-            on_chunk.send(chunk.to_vec()).map_err(|e| format!("Stream receiver unavailable: {}", e))?;
+            on_chunk(chunk.to_vec())?;
         }
         return Ok(Value::Null);
     }

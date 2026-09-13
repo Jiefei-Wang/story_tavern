@@ -12,7 +12,7 @@ import {
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
   DEFAULT_BACKENDS,
-} from "../src/db/initialData";
+} from "./fixtures/legacyInitialData";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 
 function assert(condition: boolean, msg: string) {

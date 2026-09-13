@@ -1,3 +1,4 @@
+import { INITIAL_DEMO_SAVE } from './fixtures/legacyInitialData';
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -35,7 +36,8 @@ import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { useGameStore } from "../src/stores/useGameStore";
 import { useAgentGroupStore } from "../src/stores/useAgentGroupStore";
 import { useBackendStore } from "../src/stores/useBackendStore";
-import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "../src/db/initialData";
+import { useAgentStore } from "../src/stores/useAgentStore";
+import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 import {
   buildPerceptionView,
   buildNarratorEntityView,
@@ -376,7 +378,7 @@ test("Test 14: autosave=false updates memory store without saving to persistence
   };
 
   try {
-    const activeSave = await useGameStore.getState().createNewSave("Autosave Test");
+    const activeSave = await createLegacyFixture("Autosave Test");
     saveGameCalled = false; // Reset after creation
 
     await useGameStore.getState().sendPlayerInput("我看向窗外");
@@ -390,9 +392,9 @@ test("Test 14: autosave=false updates memory store without saving to persistence
 });
 
 test("Test 15: Tauri DB failure throws instead of falling back to localStorage", async () => {
-  // Simulate isTauri = true
-  const originalIsTauri = (storageService as any).isTauri;
-  (storageService as any).isTauri = () => true;
+  // Both desktop and browser must fail closed when the shared host fails.
+  const originalUsesLocalService = storageService.usesLocalService;
+  storageService.usesLocalService = () => true;
 
   // Under Node/test, invoke will fail
   await assert.rejects(
@@ -402,7 +404,7 @@ test("Test 15: Tauri DB failure throws instead of falling back to localStorage",
     "In Tauri mode, failing SQLite call must reject/throw rather than silently falling back to localStorage"
   );
 
-  (storageService as any).isTauri = originalIsTauri;
+  storageService.usesLocalService = originalUsesLocalService;
 });
 
 test("Test 16: missing binding in real mode fails fast with explicit error", async () => {
@@ -784,7 +786,9 @@ test("Test 35: retry historical turn removes subsequent turns and sets current w
     settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
   });
 
-  await useGameStore.getState().createNewSave("Branch Test A");
+  await createLegacyFixture("Branch Test A");
+  // Legacy variation compatibility: new saves now use the separate text transaction path.
+  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
   await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
   await useGameStore.getState().sendPlayerInput("动作 2"); // Turn 2
   await useGameStore.getState().sendPlayerInput("动作 3"); // Turn 3
@@ -812,7 +816,8 @@ test("Test 36: switch historical variation removes subsequent turns (Test B)", a
     settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
   });
 
-  await useGameStore.getState().createNewSave("Branch Test B");
+  await createLegacyFixture("Branch Test B");
+  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
   await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
   // Retry Turn 1 to create 2 variations while it's head
   await useGameStore.getState().retryTurn(1);
@@ -962,7 +967,8 @@ test("Test 41: Retry failure leaves turns, variations, and worldState completely
     settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
   });
 
-  await useGameStore.getState().createNewSave("Retry Fail Test");
+  await createLegacyFixture("Retry Fail Test");
+  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
   await useGameStore.getState().sendPlayerInput("动作 1");
   await useGameStore.getState().sendPlayerInput("动作 2");
   await useGameStore.getState().sendPlayerInput("动作 3");
@@ -1111,3 +1117,13 @@ test("Test 46: Public event validation enforces actor existence, valid type, and
     );
   });
 });
+
+// These tests exercise the retained numeric pipeline directly, not the new story launcher.
+async function createLegacyFixture(name: string) {
+  useAgentStore.setState({ agents: BUILTIN_AGENTS });
+  useAgentGroupStore.setState({ groups: DEFAULT_AGENT_GROUPS, activeGroupId: 'group_quality' });
+  const save = { ...structuredClone(INITIAL_DEMO_SAVE), id: `legacy_test_${crypto.randomUUID()}`, name };
+  await storageService.saveGame(save);
+  useGameStore.setState(s => ({ activeSave: save, saves: [...s.saves, save], isExecuting: false }));
+  return save;
+}

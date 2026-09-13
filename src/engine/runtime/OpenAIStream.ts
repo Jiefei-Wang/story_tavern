@@ -4,6 +4,7 @@ export class OpenAIStream {
   private data: string[] = [];
   private content = "";
   private usage: unknown;
+  private reasoning = "";
   private finished = false;
   private done = false;
   constructor(private onContent: (text: string) => void) {}
@@ -28,6 +29,8 @@ export class OpenAIStream {
     if (chunk.error) throw new Error(chunk.error.message || String(chunk.error));
     if (chunk.usage) this.usage = chunk.usage;
     const choice = chunk.choices?.find((c: any) => c.index === 0) ?? chunk.choices?.[0];
+    const reasoning = choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+    if (typeof reasoning === "string") this.reasoning += reasoning;
     if (typeof choice?.delta?.content === "string") {
       this.content += choice.delta.content;
       this.onContent(this.content);
@@ -43,6 +46,6 @@ export class OpenAIStream {
     this.push("\n\n");
     if (!this.done && !this.finished) throw new Error("模型流式响应意外中断，请重试");
     if (!this.content.trim()) throw new Error("模型未返回正文内容");
-    return { choices: [{ message: { content: this.content } }], usage: this.usage };
+    return { choices: [{ message: { content: this.content, ...(this.reasoning ? { reasoning_content: this.reasoning } : {}) } }], usage: this.usage };
   }
 }

@@ -29,6 +29,7 @@ import {
 import { TraceSpan, TurnTrace } from "../../types";
 import { useTraceStore } from "../../stores/useTraceStore";
 import { JsonViewer } from "../../components/Common/JsonViewer";
+import { groupRequests, validationLabel } from "./traceRequests";
 import { RawMessagesModal } from "./RawMessagesModal";
 
 // Custom React Flow Node Component
@@ -76,6 +77,7 @@ const AgentFlowNode: React.FC<any> = ({ data }) => {
         </div>
       </div>
 
+      {data.validations?.map((v: TraceSpan) => <div key={v.id} className={`text-[10px] mt-1 ${v.status === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>{validationLabel(v)}</div>)}
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-2 !h-2" />
     </div>
   );
@@ -100,11 +102,14 @@ export const DebugPage: React.FC = () => {
 
   const [inspectorTab, setInspectorTab] = useState<
     "overview" | "input" | "prompt" | "response" | "output" | "diff" | "error"
-  >("overview");
+  >("output");
   const [showRawMessages, setShowRawMessages] = useState(false);
 
   const currentTrace = getSelectedTrace();
-  const selectedSpan = getSelectedSpan();
+  const requestGroups = useMemo(() => groupRequests(currentTrace?.spans || []), [currentTrace]);
+  const selectedGroup = requestGroups.find(g => g.request.id === selectedSpanId || g.validations.some(v => v.id === selectedSpanId));
+  const selectedSpan = selectedGroup?.request || getSelectedSpan();
+  useEffect(() => setInspectorTab("output"), [selectedSpanId]);
 
   useEffect(() => {
     if (selectedTraceId === null && traces.length > 0) selectTrace(traces[0].id);
@@ -132,217 +137,14 @@ export const DebugPage: React.FC = () => {
       },
     });
 
-    const spans = currentTrace.spans;
-
-    let prevNodeId = "node_input";
-    let currentY = 110;
-
-    // 1. Input Compiler
-    const inputCompiler = spans.find((s) => s.agentId === "input_compiler");
-    if (inputCompiler) {
-      nList.push({
-        id: inputCompiler.id,
-        type: "agentNode",
-        position: { x: 350, y: currentY },
-        data: {
-          label: "Input Compiler",
-          span: inputCompiler,
-          isSelected: selectedSpanId === inputCompiler.id,
-          onClick: () => selectSpan(inputCompiler.id),
-        },
-      });
-      eList.push({
-        id: `e_input_${inputCompiler.id}`,
-        source: "node_input",
-        target: inputCompiler.id,
-        animated: inputCompiler.status === "running",
-      });
-      prevNodeId = inputCompiler.id;
-      currentY += 100;
+    for (const [index, { request: span, validations }] of requestGroups.entries()) {
+      nList.push({ id: span.id, type: 'agentNode', position: { x: 300, y: 110 + index * 110 }, data: {
+        label: span.displayLabel || span.name, span, validations, isSelected: selectedSpan?.id === span.id, onClick: () => selectSpan(span.id),
+      } });
+      eList.push({ id: `request_${index}`, source: index ? requestGroups[index - 1].request.id : 'node_input', target: span.id, label: '调用开始顺序（可重叠）' });
     }
-
-    // 2. Discover distinct TemporalBlocks from spans
-    const blockSpans = spans.filter(
-      (s) => s.agentId !== "input_compiler" && s.agentId !== "narrator"
-    );
-
-    // Group spans by blockId or sequential execution
-    const blockMap = new Map<string, TraceSpan[]>();
-    for (const s of blockSpans) {
-      const bKey = s.blockId || s.parentId || "default_block";
-      if (!blockMap.has(bKey)) {
-        blockMap.set(bKey, []);
-      }
-      blockMap.get(bKey)!.push(s);
-    }
-
-    // Render each block group
-    for (const [blockKey, bSpans] of blockMap.entries()) {
-      bSpans.sort((a, b) => a.startedAt - b.startedAt);
-
-      const adminSpan = bSpans.find((s) => s.agentId === "admin_patch");
-      const timeSkipSpan = bSpans.find((s) => s.agentId === "time_skip");
-      const perceptionSpan = bSpans.find((s) => s.agentId === "perception");
-      const npcSpans = bSpans.filter((s) => s.agentId === "npc_reaction");
-      const resolverSpan = bSpans.find((s) => s.agentId === "world_resolver");
-
-      if (adminSpan) {
-        nList.push({
-          id: adminSpan.id,
-          type: "agentNode",
-          position: { x: 350, y: currentY },
-          data: {
-            label: "Admin Patch",
-            span: adminSpan,
-            isSelected: selectedSpanId === adminSpan.id,
-            onClick: () => selectSpan(adminSpan.id),
-          },
-        });
-        eList.push({
-          id: `e_${prevNodeId}_${adminSpan.id}`,
-          source: prevNodeId,
-          target: adminSpan.id,
-        });
-        prevNodeId = adminSpan.id;
-        currentY += 100;
-      } else if (timeSkipSpan) {
-        nList.push({
-          id: timeSkipSpan.id,
-          type: "agentNode",
-          position: { x: 350, y: currentY },
-          data: {
-            label: "Time Skip",
-            span: timeSkipSpan,
-            isSelected: selectedSpanId === timeSkipSpan.id,
-            onClick: () => selectSpan(timeSkipSpan.id),
-          },
-        });
-        eList.push({
-          id: `e_${prevNodeId}_${timeSkipSpan.id}`,
-          source: prevNodeId,
-          target: timeSkipSpan.id,
-        });
-        prevNodeId = timeSkipSpan.id;
-        currentY += 100;
-      } else {
-        // Normal or Wait block
-        let blockEntryNodeId = prevNodeId;
-
-        if (perceptionSpan) {
-          nList.push({
-            id: perceptionSpan.id,
-            type: "agentNode",
-            position: { x: 350, y: currentY },
-            data: {
-              label: "Perception",
-              span: perceptionSpan,
-              isSelected: selectedSpanId === perceptionSpan.id,
-              onClick: () => selectSpan(perceptionSpan.id),
-            },
-          });
-          eList.push({
-            id: `e_${prevNodeId}_${perceptionSpan.id}`,
-            source: prevNodeId,
-            target: perceptionSpan.id,
-          });
-          blockEntryNodeId = perceptionSpan.id;
-          currentY += 100;
-        }
-
-        // Parallel NPC branches
-        if (npcSpans.length > 0) {
-          const npcCount = npcSpans.length;
-          const spacing = 190;
-          const startX = 350 - ((npcCount - 1) * spacing) / 2;
-
-          npcSpans.forEach((npcSpan, i) => {
-            const npcId =
-              (npcSpan.inputContext as any)?.npc?.id ||
-              (npcSpan.inputContext as any)?.npc?.name ||
-              `NPC ${i + 1}`;
-            const posX = startX + i * spacing;
-
-            nList.push({
-              id: npcSpan.id,
-              type: "agentNode",
-              position: { x: posX, y: currentY },
-              data: {
-                label: `NPC: ${npcId}`,
-                span: npcSpan,
-                isSelected: selectedSpanId === npcSpan.id,
-                onClick: () => selectSpan(npcSpan.id),
-              },
-            });
-
-            eList.push({
-              id: `e_${blockEntryNodeId}_${npcSpan.id}`,
-              source: blockEntryNodeId,
-              target: npcSpan.id,
-              animated: npcSpan.status === "running",
-            });
-          });
-
-          currentY += 100;
-        }
-
-        if (resolverSpan) {
-          nList.push({
-            id: resolverSpan.id,
-            type: "agentNode",
-            position: { x: 350, y: currentY },
-            data: {
-              label: "World Resolver",
-              span: resolverSpan,
-              isSelected: selectedSpanId === resolverSpan.id,
-              onClick: () => selectSpan(resolverSpan.id),
-            },
-          });
-
-          if (npcSpans.length > 0) {
-            npcSpans.forEach((npcSpan) => {
-              eList.push({
-                id: `e_${npcSpan.id}_${resolverSpan.id}`,
-                source: npcSpan.id,
-                target: resolverSpan.id,
-              });
-            });
-          } else {
-            eList.push({
-              id: `e_${blockEntryNodeId}_${resolverSpan.id}`,
-              source: blockEntryNodeId,
-              target: resolverSpan.id,
-            });
-          }
-
-          prevNodeId = resolverSpan.id;
-          currentY += 100;
-        }
-      }
-    }
-
-    // 3. Narrator
-    const narrator = spans.find((s) => s.agentId === "narrator");
-    if (narrator) {
-      nList.push({
-        id: narrator.id,
-        type: "agentNode",
-        position: { x: 350, y: currentY },
-        data: {
-          label: "Narrator",
-          span: narrator,
-          isSelected: selectedSpanId === narrator.id,
-          onClick: () => selectSpan(narrator.id),
-        },
-      });
-      eList.push({
-        id: `e_${prevNodeId}_${narrator.id}`,
-        source: prevNodeId,
-        target: narrator.id,
-      });
-    }
-
     return { nodes: nList, edges: eList };
-  }, [currentTrace, selectedSpanId, traces]);
+  }, [currentTrace, selectedSpanId, requestGroups, selectSpan]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -439,9 +241,14 @@ export const DebugPage: React.FC = () => {
       </div>
 
       {/* Main Debug Workspace */}
-      <div className="flex-1 flex gap-4 overflow-hidden">
+      {currentTrace?.status === 'error' && !currentTrace.spans.some(s => s.error) && <p role="alert" className="border border-amber-200 bg-amber-50 rounded-xl p-3 text-xs text-amber-800">这条旧 Trace 未记录具体失败原因。可查看各次模型输出与格式重试请求；后续失败会记录关联校验与错误详情。</p>}
+      {currentTrace && currentTrace.spans.some(s => s.error) && <div className="border border-rose-200 bg-rose-50 rounded-xl p-3 text-xs text-rose-800 space-y-2 max-h-36 overflow-y-auto shrink-0" role="alert">
+        <p className="font-semibold">{currentTrace.status === 'error' ? '本轮失败，以下步骤发生错误' : '以下步骤曾失败，请查看重试结果'}</p>
+        {currentTrace.spans.filter(s => s.error).map(s => <button key={s.id} className="block text-left hover:underline whitespace-pre-wrap" onClick={() => { selectSpan(s.id); setInspectorTab('overview'); }}>{s.name}：{s.error}</button>)}
+      </div>}
+      <div className="flex-1 flex gap-4 overflow-x-auto">
         {/* Left: React Flow Graph or Timeline View */}
-        <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden relative">
+        <div className="flex-1 min-w-[280px] bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden relative">
           {activeTab === "graph" ? (
             <ReactFlow
               nodes={nodes}
@@ -464,9 +271,9 @@ export const DebugPage: React.FC = () => {
               </div>
 
               <div className="space-y-3 pt-2">
-                {currentTrace?.spans.map((span) => {
-                  const traceStart = currentTrace.startedAt;
-                  const totalSpanDuration = Math.max(currentTrace.durationMs || 100, 100);
+                {requestGroups.map(({ request: span, validations }) => {
+                  const traceStart = currentTrace?.startedAt ?? span.startedAt;
+                  const totalSpanDuration = Math.max(currentTrace?.durationMs || 100, 100);
                   const offsetMs = Math.max(0, span.startedAt - traceStart);
                   const spanDur = Math.max(span.durationMs || 50, 40);
 
@@ -485,7 +292,7 @@ export const DebugPage: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                        <span className="text-slate-800">{span.name}</span>
+                        <span className="text-slate-800">{span.name}{validations.map(v => ` · ${validationLabel(v)}`).join('')}</span>
                         <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
                           <span>{span.model}</span>
                           <span>{span.durationMs || 0}ms</span>
@@ -512,7 +319,7 @@ export const DebugPage: React.FC = () => {
 
         {/* Right: Inspector Drawer */}
         {selectedSpan && (
-          <div className="w-96 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden shrink-0 animate-in slide-in-from-right-10 duration-150">
+          <div className="w-80 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden shrink-0 animate-in slide-in-from-right-10 duration-150">
             {/* Inspector Header */}
             <div className="h-12 px-4 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -561,7 +368,7 @@ export const DebugPage: React.FC = () => {
                     : "border-transparent text-slate-500"
                 }`}
               >
-                提示词
+                Request
               </button>
               <button
                 onClick={() => setInspectorTab("response")}
@@ -623,7 +430,7 @@ export const DebugPage: React.FC = () => {
                     <div className="space-y-2">
                       <span className="font-semibold">权限与事实校验</span>
                       <JsonViewer data={selectedSpan.inputContext} />
-                      <JsonViewer data={selectedSpan.parsedOutput} />
+                      <JsonViewer data={selectedSpan.parsedOutput ?? selectedSpan.liveContent ?? selectedSpan.rawResponse} />
                     </div>
                   )}
                   {selectedSpan.error && (
@@ -645,9 +452,9 @@ export const DebugPage: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <span className="font-semibold text-slate-700 block mb-1">
-                      解析后的 Messages (已注入变量):
+                      实际 Request:
                     </span>
-                    <JsonViewer data={selectedSpan.resolvedMessages} />
+                    <JsonViewer data={{ ...(selectedSpan.requestParams as object || {}), messages: selectedSpan.resolvedMessages }} />
                   </div>
                   <div>
                     <span className="font-semibold text-slate-700 block mb-1">
@@ -663,10 +470,20 @@ export const DebugPage: React.FC = () => {
               )}
 
               {inspectorTab === "output" && (
-                <JsonViewer data={selectedSpan.parsedOutput} />
+                <JsonViewer data={selectedSpan.parsedOutput ?? selectedSpan.liveContent ?? selectedSpan.rawResponse} />
               )}
             </div>
           </div>
+        )}
+        {selectedGroup && selectedGroup.validations.length > 0 && (
+          <aside className="w-80 shrink-0 bg-white border border-slate-200 rounded-2xl overflow-y-auto p-4 space-y-4">
+            {selectedGroup.validations.map(validation => <section key={validation.id} className="space-y-3 text-xs">
+              <h3 className={`font-mono font-bold ${validation.status === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>{validationLabel(validation)}</h3>
+              <p className="text-slate-500">{validation.name}</p>
+              {validation.error && <p className="whitespace-pre-wrap text-rose-700">{validation.error}</p>}
+              <JsonViewer data={validation.parsedOutput} />
+            </section>)}
+          </aside>
         )}
       </div>
 

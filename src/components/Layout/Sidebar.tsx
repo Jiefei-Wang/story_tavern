@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import {
   Home,
+  BookOpen,
   Gamepad2,
   Users,
   Globe2,
@@ -50,6 +51,10 @@ export const Sidebar: React.FC = () => {
             <NavLink to="/world" className={navItemClass}>
               <Globe2 className="w-4 h-4 text-slate-500" />
               <span>世界</span>
+            </NavLink>
+            <NavLink to="/stories" className={navItemClass}>
+              <BookOpen className="w-4 h-4 text-slate-500" />
+              <span>故事</span>
             </NavLink>
             <NavLink to="/history" className={navItemClass}>
               <History className="w-4 h-4 text-slate-500" />

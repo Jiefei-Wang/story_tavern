@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Sparkles,
@@ -17,6 +17,7 @@ import { useBackendStore } from "../../stores/useBackendStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
 export const TopBar: React.FC = () => {
+  const [groupError, setGroupError] = useState("");
   const { activeSave } = useGameStore();
   const { groups, activeGroupId, setActiveGroup } = useAgentGroupStore();
   const { backends } = useBackendStore();
@@ -69,7 +70,7 @@ export const TopBar: React.FC = () => {
           <span className="text-slate-400">Agent 组:</span>
           <select
             value={activeGroupId}
-            onChange={(e) => setActiveGroup(e.target.value)}
+            onChange={(e) => { setGroupError(""); void setActiveGroup(e.target.value).catch(err => setGroupError(String(err))); }}
             className="bg-transparent font-medium text-slate-700 outline-none cursor-pointer pr-1"
           >
             {groups.map((g) => (
@@ -80,6 +81,7 @@ export const TopBar: React.FC = () => {
           </select>
         </div>
 
+        {groupError && <span role="alert" className="text-xs text-red-600">{groupError}</span>}
         {/* Backend Status indicator */}
         <Link
           to="/backends"
@@ -102,7 +104,7 @@ export const TopBar: React.FC = () => {
                 isOnline ? "bg-emerald-500" : "bg-amber-500"
               }`}
             />
-            {isOnline ? `在线 (${onlineCount})` : "离线 / 未连接"}
+            {isOnline ? `在线 (${onlineCount})` : enabledBackends.some(b => b.status === "offline") ? "离线 / 未连接" : "未验证"}
           </span>
         </Link>
 

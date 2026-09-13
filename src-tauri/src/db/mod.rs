@@ -23,8 +23,13 @@ pub fn get_db_path() -> PathBuf {
 }
 
 pub fn init_db() -> Result<Database, String> {
-    let path = get_db_path();
+    init_db_at(get_db_path())
+}
+
+pub fn init_db_at(path: PathBuf) -> Result<Database, String> {
     let conn = Connection::open(&path).map_err(|e| format!("Failed to open SQLite DB: {}", e))?;
+
+    conn.busy_timeout(std::time::Duration::from_secs(30)).map_err(|e|e.to_string())?;
 
     // Create tables
     conn.execute_batch(

@@ -1,4 +1,5 @@
 export interface ParsedOpenAIResponse {
+  toolCalls?: Array<{id:string;type:'function';function:{name:string;arguments:string}}>;
   content: string;
   tokenUsage?: {
     prompt: number;
@@ -11,7 +12,7 @@ export interface ParsedOpenAIResponse {
  * Validates and extracts content and usage from an OpenAI-compatible completion response.
  * Fails fast on API errors, missing choices, or null content.
  */
-export function parseOpenAIResponse(rawResponse: unknown): ParsedOpenAIResponse {
+export function parseOpenAIResponse(rawResponse: unknown, toolName?: string): ParsedOpenAIResponse {
   if (typeof rawResponse !== "object" || rawResponse === null) {
     throw new Error("Invalid OpenAI response: body must be a non-null JSON object");
   }
@@ -42,11 +43,15 @@ export function parseOpenAIResponse(rawResponse: unknown): ParsedOpenAIResponse 
     throw new Error("OpenAI API response choices[0].message is missing or invalid");
   }
 
-  if (typeof message.content !== "string") {
+  let content=message.content;
+  if(toolName){
+    if(!Array.isArray(message.tool_calls)||!message.tool_calls.length||message.tool_calls.length>20||message.tool_calls.some((call:any)=>call?.function?.name!==toolName||typeof call?.function?.arguments!=='string'))throw new Error('模型未返回有效的已授权文档工具调用');
+    content=message.tool_calls.length===1?message.tool_calls[0].function.arguments:JSON.stringify({commands:message.tool_calls.map((call:any)=>JSON.parse(call.function.arguments))});
+  }
+  if (typeof content !== "string") {
     throw new Error("OpenAI API response choices[0].message.content is missing or null");
   }
 
-  const content = message.content;
 
   // 3. Extract usage if present, without fabricating 0-tokens when absent
   let tokenUsage: ParsedOpenAIResponse["tokenUsage"] = undefined;
@@ -61,5 +66,6 @@ export function parseOpenAIResponse(rawResponse: unknown): ParsedOpenAIResponse 
   return {
     content,
     tokenUsage,
+    ...(toolName?{toolCalls:message.tool_calls}:{}),
   };
 }

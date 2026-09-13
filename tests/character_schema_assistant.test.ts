@@ -17,7 +17,7 @@ import {
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
   DEFAULT_BACKENDS,
-} from "../src/db/initialData";
+} from "./fixtures/legacyInitialData";
 import { storageService, DEFAULT_SETTINGS } from "../src/db/storage";
 
 test("assistant exposes world field contract, validates domain rules and persists schema without changing history or other saves", async () => {

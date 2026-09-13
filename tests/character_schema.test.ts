@@ -38,7 +38,7 @@ import {
   INITIAL_DEMO_SAVE,
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
-} from "../src/db/initialData";
+} from "./fixtures/legacyInitialData";
 import {
   CharacterFieldDefinition,
   CharacterStateUpdate,

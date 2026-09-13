@@ -1,9 +1,9 @@
-import { HARBOR_WORLD_DEFINITION } from "../engine/character-schema/HarborSchema";
+import { createStorySave } from '../engine/library/Library';
+import { useLibraryStore } from './useLibraryStore';
 import { editSaveSchema } from "../engine/character-schema/EditSchema";
 import { CharacterSchemaDefinition } from "../types";
 import { create } from "zustand";
 import { GameSave, GameTurn, WorldState } from "../types";
-import { INITIAL_HARBOR_TAVERN_WORLD } from "../engine/world/WorldState";
 import { gamePipeline } from "../engine/pipeline/GamePipeline";
 import { safePipelineError } from '../engine/errors/PipelineStageError';
 import { storageService } from "../db/storage";
@@ -12,8 +12,11 @@ import { useAgentGroupStore } from "./useAgentGroupStore";
 import { useBackendStore } from "./useBackendStore";
 import { useSettingsStore } from "./useSettingsStore";
 import { globalTraceManager } from "../engine/tracing/TraceManager";
+import { migrateToText } from '../engine/text/Migration';
+import { textProcessor } from '../engine/text/Processor';
 
 interface GameState {
+  migrateActiveToText: () => Promise<void>;
   saveCharacterSchema: (schema: CharacterSchemaDefinition, newWorld?: boolean) => Promise<void>;
   activeSave: GameSave | null;
   saves: GameSave[];
@@ -33,8 +36,18 @@ interface GameState {
 }
 
 let activeAbortController: AbortController | null = null;
+let textCommitInProgress = false;
 
 export const useGameStore = create<GameState>((set, get) => ({
+  migrateActiveToText: async () => {
+    const {activeSave,isExecuting} = get(); if (!activeSave || isExecuting || activeSave.textWorld) return;
+    set({isExecuting:true});
+    try {
+      const candidate = migrateToText(activeSave);
+      await storageService.commitTextGame(candidate,null);
+      set(s=>({saves:s.saves.map(old=>old.id===candidate.id?candidate:old),activeSave:s.activeSave?.id===candidate.id?candidate:s.activeSave}));
+    } finally {set({isExecuting:false});}
+  },
   saveCharacterSchema: async (schema, newWorld = false) => {
     const { activeSave, isExecuting } = get();
     if (!activeSave || isExecuting) throw new Error('请等待当前回合完成再编辑 Schema');
@@ -66,38 +79,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  createNewSave: async (name: string = "新游戏") => {
-    const activeGroupId = useAgentGroupStore.getState().activeGroupId || "group_quality";
-    const newSave: GameSave = {
-      worldDefinition: structuredClone(HARBOR_WORLD_DEFINITION),
-      id: `save_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
-      name: `${name} · ${new Date().toLocaleTimeString("zh-CN")}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      worldState: JSON.parse(JSON.stringify(INITIAL_HARBOR_TAVERN_WORLD)),
-      activeAgentGroupId: activeGroupId,
-      turns: [
-        {
-          id: `turn_init_${Date.now()}`,
-          turnIndex: 0,
-          timestamp: new Date().toISOString(),
-          playerInput: "(新游戏开始)",
-          narratorOutput:
-            "晨光划破了港口上空的薄雾。咸涩的海潮伴随着木橹划水的声音缓缓荡开。你站在海港酒馆外的粗木栅栏前，微凉的海风扬起你的衣角。艾琳、酒馆老板与卫兵各自伫立在晨光中，一段新的旅程正在你的眼前展开。",
-          traceId: "trace_init",
-          worldStateBefore: INITIAL_HARBOR_TAVERN_WORLD,
-          worldStateAfter: INITIAL_HARBOR_TAVERN_WORLD,
-          patches: [],
-          activeAgentGroupId: activeGroupId,
-          status: "success",
-        },
-      ],
-    };
-
-    await storageService.saveGame(newSave);
-    const saves = [...get().saves, newSave];
-    set({ saves, activeSave: newSave, executionError: null, currentTraceId: null });
-    return newSave;
+  createNewSave: async (storyId?: string) => {
+    if (get().isExecuting) throw new Error('请等待当前操作完成');
+    const { record } = useLibraryStore.getState();
+    const id = storyId || record.data.selectedStoryId;
+    if (!id) throw new Error('请先选择故事');
+    const activeGroupId = useAgentGroupStore.getState().activeGroupId || 'group_quality';
+    const newSave = createStorySave(record.data, id, activeGroupId);
+    set({ isExecuting: true });
+    try {
+      await storageService.commitTextGame(newSave, null);
+      set(s => ({ saves: [newSave, ...s.saves], activeSave: newSave, executionError: null, currentTraceId: null }));
+      return newSave;
+    } finally { set({ isExecuting: false }); }
   },
 
   deleteSave: async (saveId: string) => {
@@ -134,8 +128,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     const currentWorld = activeSave.worldState;
     const nextTurnIndex = activeSave.turns.length;
     const previousTraceId = activeSave.turns[activeSave.turns.length - 1]?.traceId ?? null;
+    let runningTextTraceId: string | null = null;
 
     try {
+      if (activeSave.textWorld) {
+        const candidate = await textProcessor.execute(activeSave,input,{recentTurns:activeSave.turns,agents,groups,backends,activeGroupId,mockMode,signal:abortController.signal,onTraceStarted:traceId=>{
+          runningTextTraceId = traceId;
+          if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) set({currentTraceId:traceId});
+        }});
+        abortController.signal.throwIfAborted();
+        if (!get().saves.some(s=>s.id===activeSave.id)) throw new Error('存档已被移除');
+        textCommitInProgress = true;
+        try { await storageService.commitTextGame(candidate,activeSave.textWorld.revision); }
+        finally {textCommitInProgress=false;}
+        const traceId = candidate.turns[candidate.turns.length-1].traceId;
+        for (const span of globalTraceManager.getTrace(traceId)?.spans || []) {
+          if (span.type === 'text_commit') globalTraceManager.updateSpan(traceId, span.id, { name: '正文与人物状态 · 已保存', parsedOutput: { ...(span.parsedOutput as object), committed: true } });
+        }
+        globalTraceManager.endTurnTrace(traceId,'success');
+        const trace = globalTraceManager.getTrace(traceId); if (trace) await storageService.saveTrace(trace).catch(()=>{});
+        set(s=>({saves:s.saves.map(old=>old.id===candidate.id?candidate:old),activeSave:s.activeSave?.id===candidate.id?candidate:s.activeSave,isExecuting:false,pendingPlayerInput:null,executionError:null}));
+        return true;
+      }
       const result = await gamePipeline.executeTurn(
         input,
         currentWorld,
@@ -210,6 +224,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       return result.success;
     } catch (err: any) {
+      if (runningTextTraceId) {
+        if (!abortController.signal.aborted && globalTraceManager.isActiveTrace(runningTextTraceId)) {
+          const failureId = `failure_${crypto.randomUUID()}`;
+          globalTraceManager.createSpan(runningTextTraceId, failureId, '回合失败 · 未提交保存', 'text_failure');
+          globalTraceManager.updateSpan(runningTextTraceId, failureId, { status: 'error', error: err instanceof Error ? err.message : String(err) });
+        }
+        globalTraceManager.endTurnTrace(runningTextTraceId,abortController.signal.aborted?'cancelled':'error');
+        const failedTrace = globalTraceManager.getTrace(runningTextTraceId);
+        if (failedTrace) await storageService.saveTrace(failedTrace).catch(() => {});
+      }
       const isAbort = err?.name === "AbortError" || abortController.signal.aborted;
       if (activeAbortController === abortController) {
         activeAbortController = null;
@@ -230,6 +254,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   retryTurn: async (turnIndex?: number) => {
     const { activeSave, isExecuting } = get();
+    if (activeSave?.textWorld) { set({executionError:'文本回合已原子提交；请继续输入，或在独立存档中比较其他回应。'}); return false; }
     if (!activeSave || isExecuting || activeSave.turns.length === 0) return false;
 
     const targetIndex = turnIndex !== undefined ? turnIndex : activeSave.turns.length - 1;
@@ -383,7 +408,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   cancelGeneration: () => {
     const { pendingPlayerInput, activeSave } = get();
+    if (textCommitInProgress) return null; // The atomic storage operation has already begun.
     const savedInput = pendingPlayerInput;
+    if (activeSave?.textWorld && activeAbortController) {activeAbortController.abort();return savedInput;}
 
     if (activeAbortController) {
       activeAbortController.abort();
@@ -404,6 +431,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   switchTurnVariation: async (turnIndex: number, variationIndex: number) => {
     const { activeSave, isExecuting } = get();
+    if (activeSave?.textWorld) return;
     if (isExecuting || !Number.isInteger(turnIndex) || !activeSave || turnIndex < 0 || turnIndex >= activeSave.turns.length) return;
 
     const targetTurn = activeSave.turns[turnIndex];

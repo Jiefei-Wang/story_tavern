@@ -1,7 +1,9 @@
+import { defaultLibrary } from '../src/engine/library/Library';
+import { useLibraryStore } from '../src/stores/useLibraryStore';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { StorageService, DEFAULT_SETTINGS } from "../src/db/storage";
-import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS } from "../src/db/initialData";
+import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 import { useGameStore } from "../src/stores/useGameStore";
 import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { useAgentStore } from "../src/stores/useAgentStore";
@@ -33,10 +35,11 @@ test("concurrent browser saves and deletion preserve unrelated records", async (
 
 test("save management preserves unsaved progress in other saves", async () => {
   useGameStore.setState({ saves: [], activeSave: null, isExecuting: false });
-  const a = await useGameStore.getState().createNewSave("A");
+  useLibraryStore.setState({ record: { revision: 0, data: defaultLibrary() }, loaded: true });
+  const a = await useGameStore.getState().createNewSave();
   const dirty = { ...a, name: "unsaved progress" };
   useGameStore.setState({ activeSave: dirty, saves: [dirty] });
-  const b = await useGameStore.getState().createNewSave("B");
+  const b = await useGameStore.getState().createNewSave();
   assert.equal(useGameStore.getState().saves.find(s => s.id === a.id), dirty);
   await useGameStore.getState().manualSaveGame();
   assert.equal(useGameStore.getState().saves.find(s => s.id === a.id), dirty);

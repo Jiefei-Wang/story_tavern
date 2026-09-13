@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "characters": [
+    "player",
+    "erin",
+    "guard",
+    "tavern_owner"
+  ],
+  "playerId": "player",
+  "scene": "scenes/current.md",
+  "characterMode": "three",
+  "documents": [
+    "world/common.md",
+    "world/private.md",
+    "scenes/current.md",
+    "characters/player/public.md",
+    "characters/player/profile.md",
+    "characters/player/memory.md",
+    "characters/erin/public.md",
+    "characters/erin/profile.md",
+    "characters/erin/memory.md",
+    "characters/guard/public.md",
+    "characters/guard/profile.md",
+    "characters/guard/memory.md",
+    "characters/tavern_owner/public.md",
+    "characters/tavern_owner/profile.md",
+    "characters/tavern_owner/memory.md"
+  ]
+}

@@ -1,0 +1,62 @@
+async (page) => {
+  let delayed = false;
+  let releaseCancelledRequest;
+  const cancellationGate = new Promise(resolve => { releaseCancelledRequest = resolve; });
+  await page.route('**/test/v1/chat/completions', async route => {
+    const body = route.request().postDataJSON();
+    const content = body.messages[1].content;
+    const split = content.indexOf('\n\n');
+    const task = content.slice(0, split), material = JSON.parse(content.slice(split + 2));
+    let output;
+    if (delayed) await cancellationGate;
+    if (task.startsWith('为玩家')) output = {background:'清晨的酒馆。',actions:material.input,speech:'',correction:null,clarification:null,new_people:[]};
+    else if (task.startsWith('输入整理')) output = {before:material.instructions.filter(i=>i.kind==='admin').map(i=>i.id),after:[],interpretation:'前置指令',scope:Object.fromEntries(material.instructions.filter(i=>i.kind==='admin').map(i=>[i.id,['scenes/current.md']]))};
+    else if (task.startsWith('感知')) output = {deliveries:[]};
+    else if (task.startsWith('仅描述')) output = {text:null};
+    else if (task.includes('工具：')) {
+      const path = material.paths.find(p=>p.startsWith('scenes/')) || material.paths[0];
+      if (body.messages.length === 2) output={op:'read',path};
+      else if (body.messages.length === 4) {
+        const doc=JSON.parse(body.messages.at(-1).content.replace('工具结果：',''));
+        output={op:'replace',path,expected_revision:doc.revision,old_text:doc.text,new_text:doc.text+'\n'+(task.startsWith('记录玩家')?material.material.player:'天气：细雨。')};
+      } else output={op:'done'};
+    } else output='你把一枚蓝色玻璃珠放在桌上。';
+    await route.fulfill({contentType:'application/json',body:JSON.stringify({choices:[{message:body.tools?{content:null,tool_calls:[{id:'controlled',type:'function',function:{name:'document_command',arguments:JSON.stringify(output)}}]}:{content:typeof output==='string'?output:JSON.stringify(output)}}],usage:{prompt_tokens:20,completion_tokens:10,total_tokens:30}})});
+  });
+  const input=page.getByRole('textbox',{name:'你的言行'});
+  await page.getByRole('button',{name:'管理员',exact:true}).click();
+  await page.waitForFunction(()=>{const field=document.querySelector('textarea[aria-label="你的言行"]');return field?.selectionStart===8;});
+  await input.pressSequentially('将天气改为细雨。');
+  if((await input.inputValue())!=='[admin]\n将天气改为细雨。\n[/admin]')throw new Error('Admin command cursor must be inside the authorized block');
+  await input.fill('我把一枚蓝色玻璃珠放在桌上。');
+  await page.getByRole('button',{name:'发送',exact:true}).click();
+  await page.getByText('已保存版本 1',{exact:true}).waitFor();
+  await input.fill('[admin]\n将天气改为细雨。\n[/admin]');
+  await page.getByRole('button',{name:'发送',exact:true}).click();
+  await page.getByText('已保存版本 2',{exact:true}).waitFor();
+  delayed=true;
+  await input.fill('我环顾四周。');
+  await page.getByRole('button',{name:'发送',exact:true}).click();
+  await page.getByRole('button',{name:'暂停生成',exact:true}).last().click();
+  releaseCancelledRequest();
+  await input.waitFor({state:'visible'});
+  await page.waitForFunction(()=>!document.querySelector('textarea[aria-label="你的言行"]')?.disabled);
+  if(!(await page.getByText('已保存版本 2',{exact:true}).count())) throw new Error('Cancellation changed revision');
+  if((await input.inputValue())!=='我环顾四周。')throw new Error('Cancellation did not restore input');
+  delayed=false;
+  await page.reload();
+  await page.getByText('已保存版本 2',{exact:true}).waitFor();
+  await page.getByRole('textbox',{name:'你的言行'}).fill('我看着桌上的蓝色玻璃珠。');
+  await page.getByRole('button',{name:'发送',exact:true}).click();
+  await page.getByText('已保存版本 3',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'回合操作菜单'}).last().click();
+  await page.getByRole('button',{name:'查看生成任务',exact:true}).click();
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  if(await page.getByRole('button',{name:'重试',exact:true}).count())throw new Error('Text saves must not expose legacy branch retry');
+  await page.getByRole('link',{name:'查看世界文档'}).click();
+  await page.getByRole('button',{name:'scenes/current.md',exact:true}).click();
+  const document=await page.getByRole('textbox',{name:'文档正文'}).inputValue();
+  if(!document.includes('玻璃珠')||!document.includes('细雨'))throw new Error('Persisted scene continuity failed');
+  return {status:'passed',mode:'browser UI with controlled HTTP model transport',checks:['send','admin block cursor','admin','cancel preserves revision and restores input','reload','continue','original turn task menu','text document view'],scene:document};
+}

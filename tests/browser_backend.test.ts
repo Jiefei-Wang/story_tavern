@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { useBackendStore } from "../src/stores/useBackendStore";
-import { DEFAULT_BACKENDS } from "../src/db/initialData";
+import { DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 
 test("browser connection and model refresh use HTTP without native IPC", async (t) => {
   const backend = { ...DEFAULT_BACKENDS[0], authType: "none" as const, baseUrl: "https://example.test/v1/" };

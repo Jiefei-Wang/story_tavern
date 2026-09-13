@@ -1,0 +1,400 @@
+import type { GameSave, GameTurn } from '../../types';
+import type { ExecutionContext } from '../pipeline/GamePipeline';
+import { agentRuntime, extractJsonPayload, RunAgentOptions, RunAgentResult, RuntimeMessage } from '../runtime/AgentRuntime';
+import { globalTraceManager } from '../tracing/TraceManager';
+import { DocumentWorkspace, validateTextWorld, EDITOR_TOOL_SCHEMA } from './Documents';
+import { parseTextInput, validateInstructionOrder } from './Input';
+import { latestStoryTurn, sameStory, validateUnderstanding } from './Continuity';
+import type { Delivery, TextEvent, TextWorld } from './types';
+type Runner = (options: RunAgentOptions) => Promise<RunAgentResult>;
+type Message = RuntimeMessage;
+const plain = (value: unknown): string => { if (typeof value !== 'string' || !value.trim())
+    throw new Error('模型未返回非空文本'); return value; };
+const uniqueIds = (value: unknown, allowed: string[]): string[] => {
+    if (!Array.isArray(value) || value.some(id => typeof id !== 'string' || !allowed.includes(id)) || new Set(value).size !== value.length)
+        throw new Error('Organizer 人物 ID 无效或重复');
+    return value;
+};
+export class TextProcessor {
+    constructor(private readonly runner: Runner = options => agentRuntime.runAgent(options)) { }
+    async execute(save: GameSave, input: string, context: ExecutionContext): Promise<GameSave> {
+        if (!save.textWorld)
+            throw new Error('请先显式迁移旧存档');
+        validateTextWorld(save.textWorld);
+        if (context.mockMode)
+            throw new Error('文本流程需要已配置的 Backend；测试适配器仅供离线测试，不自动回退 Mock');
+        let world = structuredClone(save.textWorld);
+        const before = structuredClone(world), parsed = parseTextInput(input);
+        const turnId = `text_${crypto.randomUUID()}`, traceId = `trace_${turnId}`;
+        const events: TextEvent[] = [], deliveries: Delivery[] = [];
+        const characters: Record<string, {
+            cognition: string;
+            speech: string;
+            action: string;
+        }> = {};
+        const histories: Record<string, Message[]> = {};
+        const experiences: Record<string, string[]> = {};
+        let adminModified = false;
+        const check = () => context.signal?.throwIfAborted();
+        globalTraceManager.startTurnTrace(traceId, save.turns.length, input);
+        context.onTraceStarted?.(traceId);
+        let calls = 0;
+        const call = async (agentId: string, task: string, material: unknown, conversation?: Message[], onTools?: (calls: RunAgentResult['toolCalls']) => void) => {
+            check();
+            if (++calls > 100)
+                throw new Error('本轮超过 100 次调用预算');
+            const result = await this.runner({ agentId, groupId: context.activeGroupId, agents: context.agents, groups: context.groups, backends: context.backends, context: { task, material }, conversation, signal: context.signal, traceId, mockMode: false, jsonObject: agentId === 'text_organizer', toolSchema: agentId === 'text_editor' ? EDITOR_TOOL_SCHEMA : undefined });
+            check();
+            if (!result.success)
+                throw new Error(result.error || '模型调用失败');
+            onTools?.(result.toolCalls);
+            return plain(result.data);
+        };
+        const json = async <T>(agentId: string, task: string, material: unknown, validate: (data: any) => T, conversation?: Message[]): Promise<T> => {
+            let error = '';
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const output = await call(agentId, task + (error ? `\n唯一一次格式重试：${error}` : ''), material, conversation);
+                const validationId = `validation_${crypto.randomUUID()}`;
+                globalTraceManager.createSpan(traceId, validationId, `${task.split('。')[0]} · 输出校验 ${attempt + 1}/2`, 'text_validation');
+                globalTraceManager.updateSpan(traceId, validationId, { inputContext: { task, attempt: attempt + 1 }, rawResponse: output });
+                try {
+                    const validated = validate(extractJsonPayload(output));
+                    globalTraceManager.updateSpan(traceId, validationId, { status: 'success', parsedOutput: validated });
+                    return validated;
+                }
+                catch (e) {
+                    error = e instanceof Error ? e.message : '格式无效';
+                    globalTraceManager.updateSpan(traceId, validationId, { status: 'error', error, parsedOutput: { retryScheduled: attempt === 0, committed: false } });
+                }
+            }
+            throw new Error(`小型结构校验失败：${error}`);
+        };
+        const log = (source: string, text: string, visible = true) => events.push({ order: events.length, source, text, public: visible });
+        const editor = async (task: string, admin: boolean, memoryId?: string, material?: unknown, authorizedPaths?: string[]) => {
+            const paths = memoryId ? [`characters/${memoryId}/memory.md`] : admin ? [...(authorizedPaths || [])] : [world.scene];
+            const workspace = new DocumentWorkspace(world, new Set(paths), new Set(paths));
+            const conversation: Message[] = [];
+            const read = new Set<string>();
+            let failures = 0;
+            for (let step = 0; step < 20; step++) {
+                let toolCalls: RunAgentResult['toolCalls'];
+                const output = await call('text_editor', `${task}\n${admin ? "" : "本次仅更新一个文档：read 后用一次 replace 完成全部所需记录，替换成功由程序结束，无需再调用 done；无需修改则直接 done。"}必须调用 document_command 原生工具。每次 arguments 都必须包含 op；完成或无需修改时调用 {"op":"done"}，空对象 {} 不是完成信号。\n权限：${admin ? '显式 admin' : memoryId ? '仅此人物的个人经历记录' : '普通已发生事件记录'}。工具：{"op":"read","path":"..."}；{"op":"replace","path":"...","expected_revision":0,"old_text":"唯一旧文本","new_text":"新文本"}；{"op":"done"}。admin 可用 {"op":"create_character","name":"...","profile":"...","public":"...","memory":"..."} 或 {"op":"create_scene","text":"..."}，ID 由程序生成。最多20次操作，工具失败最多重试一次。`, { paths, material }, conversation, calls => { toolCalls = calls; });
+                conversation.push(toolCalls ? { role: 'assistant', content: '', tool_calls: toolCalls } : { role: 'assistant', content: output });
+                const toolSpan = `tool_${crypto.randomUUID()}`;
+                globalTraceManager.createSpan(traceId, toolSpan, '文档工具与权限检查', 'text_tool');
+                globalTraceManager.updateSpan(traceId, toolSpan, { inputContext: { permission: admin ? 'admin' : memoryId ? 'personal_memory' : 'ordinary_record', readable: paths, command: output } });
+                const checkpoint = structuredClone(workspace.world), readBefore = new Set(read), pathsBefore = [...paths];
+                let reply: unknown;
+                let toolReplies: unknown[] = [];
+                try {
+                    const parsedCommand = extractJsonPayload(output);
+                    const commands = parsedCommand.commands || [parsedCommand];
+                    if (!Array.isArray(commands) || !commands.length || commands.length > 20 - step)
+                        throw new Error('工具批次超出剩余操作预算');
+                    if (!admin && commands.filter(command => command.op === 'replace').length > 1)
+                        throw new Error('单文档记录须在一次 replace 中完成全部更新');
+                    if (commands.slice(0, -1).some(command => command.op === 'done'))
+                        throw new Error('done 必须是最后一个工具操作');
+                    step += commands.length - 1;
+                    const results: unknown[] = [];
+                    for (const command of commands) {
+                        if (command.op === 'done') {
+                            const changed = workspace.world.scene !== world.scene || Object.entries(workspace.world.documents).some(([path, doc]) => world.documents[path]?.text !== doc.text);
+                            world = workspace.world;
+                            validateTextWorld(world);
+                            globalTraceManager.updateSpan(traceId, toolSpan, { status: 'success', parsedOutput: { staged: changed } });
+                            return changed;
+                        }
+                        if (command.op === 'read') {
+                            reply = workspace.read(command.path);
+                            read.add(command.path);
+                        }
+                        else if (command.op === 'replace') {
+                            if (!read.has(command.path))
+                                throw new Error('必须先读取文档');
+                            const previous = workspace.world.documents[command.path].text;
+                            workspace.replace(command.path, command.expected_revision, command.old_text, command.new_text);
+                            globalTraceManager.updateSpan(traceId, toolSpan, { statePatch: { path: command.path, before: previous, after: workspace.world.documents[command.path].text } });
+                            read.delete(command.path);
+                            reply = { ok: true };
+                        }
+                        else if (command.op === 'create_character' && admin) {
+                            const id = `person_${crypto.randomUUID().replace(/-/g, '')}`;
+                            for (const kind of ['profile', 'public', 'memory']) {
+                                const text = plain(command[kind]);
+                                const path = `characters/${id}/${kind}.md`;
+                                workspace.world.documents[path] = { text: `# ${plain(command.name)}\n${text}`, revision: 0 };
+                                workspace.readable.add(path);
+                                workspace.writable.add(path);
+                                paths.push(path);
+                            }
+                            workspace.world.characters.push(id);
+                            reply = { ok: true, character_id: id };
+                        }
+                        else if (command.op === 'create_scene' && admin) {
+                            const path = `scenes/scene_${crypto.randomUUID().replace(/-/g, '')}.md`;
+                            workspace.world.documents[path] = { text: plain(command.text), revision: 0 };
+                            workspace.readable.add(path);
+                            workspace.writable.add(path);
+                            paths.push(path);
+                            reply = { ok: true, path };
+                        }
+                        else if (command.op === 'select_scene' && admin) {
+                            if (typeof command.path !== 'string' || !command.path.startsWith('scenes/') || !read.has(command.path))
+                                throw new Error('切换场景前必须读取授权场景文档');
+                            workspace.read(command.path);
+                            workspace.world.scene = command.path;
+                            reply = { ok: true, scene: command.path };
+                        }
+                        else
+                            throw new Error('未授权的工具或操作');
+                        results.push(reply);
+                    }
+                    reply = results.length === 1 ? results[0] : { results };
+                    toolReplies = results;
+                    globalTraceManager.updateSpan(traceId, toolSpan, { status: 'success', parsedOutput: reply });
+                    // Ordinary scene/memory updates are one complete replacement.
+                    // The verified write is the completion boundary, so the model
+                    // need not make an extra tool call merely to signal completion.
+                    if (!admin && commands.some(command => command.op === 'replace')) {
+                        const changed = paths.some(path => workspace.world.documents[path].text !== world.documents[path].text);
+                        validateTextWorld(workspace.world);
+                        world = workspace.world;
+                        globalTraceManager.updateSpan(traceId, toolSpan, { parsedOutput: { staged: changed, completed: true } });
+                        return changed;
+                    }
+                }
+                catch (error) {
+                    Object.assign(workspace.world, checkpoint);
+                    read.clear();
+                    for (const path of readBefore)
+                        read.add(path);
+                    paths.splice(0, paths.length, ...pathsBefore);
+                    workspace.readable.clear();
+                    workspace.writable.clear();
+                    for (const path of paths) {
+                        workspace.readable.add(path);
+                        workspace.writable.add(path);
+                    }
+                    globalTraceManager.updateSpan(traceId, toolSpan, { status: 'error', error: error instanceof Error ? error.message : '工具失败', parsedOutput: { batchRolledBack: true } });
+                    if (++failures > 1)
+                        throw error;
+                    reply = { batchRolledBack: true, error: error instanceof Error ? error.message : '工具失败' };
+                }
+                if (toolCalls)
+                    toolCalls.forEach((tc, index) => conversation.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolReplies[index] ?? reply) }));
+                else
+                    conversation.push({ role: 'user', content: `工具结果：${JSON.stringify(reply)}` });
+            }
+            throw new Error('文本编辑超过有限操作预算');
+        };
+        const publicMaterial = () => ({ scene: world.documents[world.scene].text, common: world.documents['world/common.md'].text, people: Object.fromEntries(world.characters.map(id => [id, world.documents[`characters/${id}/public.md`].text])) });
+        const perceive = async (event: string, material = publicMaterial()): Promise<Delivery[]> => {
+            const ids = world.characters.filter(id => id !== world.playerId);
+            const result = await json('text_organizer', '感知投递。收件人只从 recipients 选择；没有感知可省略。只投递本次 event，不重播场景记录中的旧事件。seen 只描述外观和实际动作，不沿用后台物品名称（例如不认识手机的人只看见陌生物件）；heard 只含实际听清内容；felt 只含直接身体感受。common 只给此人物可能知道的常识，environment 只给其可感知环境。返回 {"deliveries":[{"character_id":"ID","seen":null,"heard":null,"felt":null,"environment":"","common":""}]}。', { event, recipients: ids, ...material }, data => {
+                if (!Array.isArray(data.deliveries))
+                    throw new Error('缺少感知信封');
+                uniqueIds(data.deliveries.map((d: Delivery) => d.character_id), ids);
+                for (const [index, d] of data.deliveries.entries()) {
+                    for (const key of ['seen', 'heard', 'felt', 'environment', 'common']) {
+                        if (typeof d[key] !== 'string' && !(key !== 'environment' && key !== 'common' && d[key] === null))
+                            throw new Error(`感知字段无效：deliveries[${index}]（${d.character_id}）.${key} 应为${['seen', 'heard', 'felt'].includes(key) ? '字符串或 null' : '字符串'}，实际为 ${d[key] === undefined ? '缺失' : d[key] === null ? 'null' : Array.isArray(d[key]) ? '数组' : typeof d[key]}`);
+                    }
+                }
+                return data.deliveries as Delivery[];
+            });
+            const active = result.filter(d => d.seen?.trim() || d.heard?.trim() || d.felt?.trim());
+            deliveries.push(...active);
+            for (const d of active)
+                (experiences[d.character_id] ??= []).push(JSON.stringify(d));
+            return active;
+        };
+        const react = async (id: string, observations: Delivery[], continuation = false) => {
+            const history = histories[id] ??= [];
+            const material = { profile: world.documents[`characters/${id}/profile.md`].text, memory: world.documents[`characters/${id}/memory.md`].text, observations, boundary: '缺失通道表示没有获得该通道内容，不表示事件没有发生。' };
+            if (continuation)
+                history.push({ role: 'user', content: `接续实际新经历；旧回复草稿尚未执行，替换它，勿重复已发生行为：${JSON.stringify(observations)}` });
+            const step = async (task: string) => {
+                const text = await call('text_character', '只依据此人物材料完成当前轮次。', material, [...history, { role: 'user', content: task }]);
+                history.push({ role: 'user', content: task }, { role: 'assistant', content: text });
+                return text;
+            };
+            const cognition = await step('第一轮：简短描述人物如何理解局面、疑虑与回应倾向。只给认知与动机摘要。');
+            const speech = await step(world.characterMode === 'combined' ? '第二轮：给出准备说什么、做什么的言行概要，也可沉默或无动作。' : '第二轮：准备说什么，或保持沉默。给出非文学性概要。');
+            const action = world.characterMode === 'combined' ? '' : await step('第三轮：准备做什么，或没有新的动作。给出非文学性概要。');
+            characters[id] = { cognition, speech, action };
+        };
+        try {
+            const last = latestStoryTurn(save.turns);
+            let correctionOf: string | undefined;
+            let storyBefore = structuredClone(world);
+            let previous = last?.narratorOutput || '';
+            const priorWorld = last?.textTurn?.storyBefore || last?.textTurn?.before;
+            let organized = parsed.player ? await json('text_organizer', '为玩家理解本次输入，结合 recent 的上一轮玩家输入与正文，区分故事言行和对上次理解的纠正。“不是这个，是另一个”等未带说话动作/引号的反馈，若是在纠正上一轮对象，不能当角色对白。correction 填纠正后的完整上一轮玩家言行（只消除误解，不添加后台权限或替玩家决定成功），普通输入为 null；指代不足以确定时 clarification 填一个简短问题并停止，不能猜测。纠正时以 recent.sceneBefore 和 recent.peopleBefore 为开始背景与已有名单，否则以 scene 和 people 为准。background 只写玩家可感知空间与外观。actions/speech 保留有效言行原顺序。new_people 仅登记本次玩家明确遇见且 people 中没有的独立人物：只给公开称呼和外观，不编造秘密/关系/经历，不把“另一位女孩”强行指为已有艾琳；已登记者不得重复。最多两位，人数更多时请求澄清。返回 {"background":"简短背景","actions":"动作或空串","speech":"语言或空串","correction":null,"clarification":null,"new_people":[{"name":"未具名女孩","public":"玩家已经提到的公开外观"}]}。', {
+                scene: world.documents[world.scene].text, player: world.playerId, input: parsed.player, people: publicMaterial().people,
+                recent: last ? { input: last.textTurn?.effectiveInput || last.playerInput, narration: last.narratorOutput, sceneBefore: priorWorld?.documents[priorWorld.scene]?.text, peopleBefore: priorWorld ? Object.fromEntries(priorWorld.characters.map(id => [id, priorWorld.documents[`characters/${id}/public.md`].text])) : null } : null,
+            }, validateUnderstanding) : validateUnderstanding({ background: '', actions: '', speech: '', correction: null, clarification: null, new_people: [] });
+            if (organized.clarification)
+                throw new Error(`需要澄清（未推进剧情）：${organized.clarification}`);
+            if (organized.correction) {
+                if (parsed.instructions.length || !last?.textTurn || parseTextInput(last.playerInput).instructions.length)
+                    throw new Error('需要澄清（未推进剧情）：目前只能纠正最近一轮普通玩家言行；包含后台指令的回合请明确指定修改内容。');
+                if (!sameStory(world, last.textTurn.after))
+                    throw new Error('无法直接重演：上一轮后设定已被修改，请明确要纠正的内容；当前修改已保留。');
+                const corrected = parseTextInput(organized.correction);
+                if (corrected.instructions.length || !corrected.player)
+                    throw new Error('纠正只能重新解释玩家言行，不能产生后台或叙事指令。');
+                world = structuredClone(last.textTurn.storyBefore || last.textTurn.before);
+                for (const [path, doc] of Object.entries(before.documents))
+                    if (path.startsWith('turns/')) world.documents[path] = structuredClone(doc);
+                storyBefore = structuredClone(world);
+                correctionOf = last.id;
+                parsed.player = corrected.player;
+                previous = latestStoryTurn(save.turns.filter(turn => turn.id !== last.id))?.narratorOutput || '';
+                // Recompute against the restored roster. Never reuse a background
+                // or encounter list derived from the superseded outcome.
+                organized = await json('text_organizer', '为玩家重演已经确定的纠正后言行。只依据本次给出的开始场景和人物名单生成公开背景、整理动作与语言；不得沿用被撤回回合的人物反应。登记 input 明确遇见但 people 中没有的独立人物，最多两位，只写已提供的公开称呼与外观。不能因为人物还未登记而忽略玩家明确提到的对象。返回 {"background":"简短可感知背景","actions":"动作或空串","speech":"语言或空串","correction":null,"clarification":null,"new_people":[{"name":"公开称呼","public":"公开外观"}]}。', { scene: world.documents[world.scene].text, player: world.playerId, input: parsed.player, people: publicMaterial().people }, data => {
+                    const result = validateUnderstanding(data);
+                    if (result.correction || result.clarification) throw new Error('重演准备只能整理已经确定的言行，不能再次发起纠正');
+                    return result;
+                });
+                const id = `correction_${crypto.randomUUID()}`;
+                globalTraceManager.createSpan(traceId, id, '纠正上一轮理解 · 从原始场景重新推演', 'text_correction');
+                globalTraceManager.updateSpan(traceId, id, { status: 'success', inputContext: { correction: input, originalInput: last.playerInput }, parsedOutput: { correctionOf, effectiveInput: parsed.player, committed: false } });
+            }
+            for (const person of organized.new_people) {
+                const id = `person_${crypto.randomUUID().replace(/-/g, '')}`;
+                world.characters.push(id);
+                world.documents[`characters/${id}/public.md`] = { text: `# ${person.name}\n${person.public}`, revision: 0 };
+                world.documents[`characters/${id}/profile.md`] = { text: `# ${person.name}\n${person.public}\n这是新遇见的独立人物。未说明的身份、关系和过往经历尚未确定。`, revision: 0 };
+                world.documents[`characters/${id}/memory.md`] = { text: '# 个人记忆\n尚无已记录经历。', revision: 0 };
+                const span = `encounter_${crypto.randomUUID()}`;
+                globalTraceManager.createSpan(traceId, span, '登记新遇人物', 'text_encounter');
+                globalTraceManager.updateSpan(traceId, span, { status: 'success', parsedOutput: { character_id: id, ...person, committed: false } });
+            }
+            validateTextWorld(world);
+            const initialPublic = organized.background;
+            const admin = parsed.instructions.filter(i => i.kind === 'admin');
+            const narrator = parsed.instructions.filter(i => i.kind === 'narrator').map(i => i.text).join('\n');
+            const available = Object.keys(world.documents).filter(path => !path.startsWith('turns/'));
+            const routing = admin.length ? await json('text_organizer', '输入整理：只安排授权 admin ID。明确“行动之前/之后”优先，否则使用 defaultPosition，同组保留原顺序，玩家言行不可拆分。scope 为每条指令选择直接需要编辑的最小文档路径集合：关门/天气只改场景，不编辑个人记忆；只有明确修改人物记忆/设定才选择个人文件。返回 {"before":[],"after":[],"interpretation":"简短时序说明","scope":{"指令ID":["文档路径"]}}。', { ...parsed, documents: available, people: publicMaterial().people }, data => {
+                const order = validateInstructionOrder(parsed, data.before, data.after);
+                if (!data.scope || typeof data.scope !== 'object' || Object.keys(data.scope).length !== admin.length)
+                    throw new Error('指令文档范围缺失');
+                for (const instruction of admin)
+                    uniqueIds(data.scope[instruction.id], available);
+                return { ...order, interpretation: plain(data.interpretation), scope: data.scope as Record<string, string[]> };
+            }) : { before: [], after: [], interpretation: parsed.interpretation, scope: {} as Record<string, string[]> };
+            const inbox: Record<string, Delivery[]> = {};
+            const enqueue = (ds: Delivery[]) => ds.forEach(d => (inbox[d.character_id] ??= []).push(d));
+            const executeAdmin = async (ids: string[]) => {
+                for (const id of ids) {
+                    const instruction = admin.find(i => i.id === id)!;
+                    const sceneBefore = world.documents[world.scene].text;
+                    const memoriesBefore = Object.fromEntries(world.characters.map(characterId => [characterId, world.documents[`characters/${characterId}/memory.md`].text]));
+                    const changed = await editor(instruction.text, true, undefined, undefined, routing.scope[id]);
+                    adminModified ||= changed;
+                    log(id, changed ? '授权文本编辑已暂存' : '本条指令未产生文档变更', false);
+                    // Only an actually edited personal memory can alter that person's staged experience.
+                    for (const characterId of world.characters) {
+                        if (!inbox[characterId]?.length || memoriesBefore[characterId] === world.documents[`characters/${characterId}/memory.md`].text)
+                            continue;
+                        const corrected = await json('text_organizer', '按本条已执行的记忆修改调整指定人物的本轮经历。只修改用户明确要求改写的内容；无关经历原样保留，单纯增加背景记忆不抹除感知。返回 {"deliveries":[原感知信封或授权修改后的信封]}，character_id 必须为指定人物。', { instruction: instruction.text, character_id: characterId, deliveries: inbox[characterId] }, data => {
+                            if (!Array.isArray(data.deliveries) || data.deliveries.some((d: any) => d.character_id !== characterId || ['environment', 'common'].some(k => typeof d[k] !== 'string') || ['seen', 'heard', 'felt'].some(k => d[k] !== null && typeof d[k] !== 'string')))
+                                throw new Error('授权记忆投影无效');
+                            return data.deliveries as Delivery[];
+                        });
+                        inbox[characterId] = corrected.filter(d => d.seen || d.heard || d.felt);
+                        experiences[characterId] = inbox[characterId].map(d => JSON.stringify(d));
+                        if (!inbox[characterId].length) {
+                            delete inbox[characterId];
+                            delete experiences[characterId];
+                        }
+                    }
+                    const sceneAfter = world.documents[world.scene].text;
+                    if (sceneBefore !== sceneAfter) {
+                        const publicChange = await json('text_organizer', '仅描述授权修改实际构成的可感知事件。结合用户指令区分后台记录修订与故事中发生的变化；只改后台或要求保持人物/记忆时，不另造场景事件，返回 null。返回 {"text":"简短事件或null"}。', { instruction: instruction.text, before: sceneBefore, after: sceneAfter }, data => { if (data.text !== null && typeof data.text !== 'string')
+                            throw new Error('公开事件文本无效'); return data.text as string | null; });
+                        if (publicChange?.trim()) {
+                            log(id, publicChange);
+                            enqueue(await perceive(publicChange));
+                        }
+                    }
+                }
+            };
+            await executeAdmin(routing.before);
+            if (parsed.player) {
+                const atEvent = publicMaterial();
+                log('player', parsed.player);
+                enqueue(await perceive(parsed.player, atEvent));
+                await editor('记录玩家言行已经造成的场景变化。更新相关当前状态，不复制整段历史对白。已陈述的普通自身行动默认发生；意愿和尝试仍保持未确定；自称身份只记录发言，不改变真实身份。', false, undefined, { player: parsed.player });
+            }
+            await executeAdmin(routing.after);
+            await Promise.all(Object.entries(inbox).map(([id, ds]) => react(id, ds)));
+            const pending = Object.keys(characters);
+            let continuationUsed = false;
+            while (pending.length) {
+                // Only public drafts leave character isolation. Organizer selects a single next performer.
+                const selected = await json('text_organizer', '局部先后：从 pending 选择下一位可执行的回应。提问者先执行，互斥动作只安排一人先做。未解决依赖时 next=null。performance 摘出其本次实际要说/做的公开语义，不文学化、不新增决定；未触发的条件句、未来计划不算发生，保持沉默且无动作则为 null。返回 {"next":"ID或null","performance":"实际公开言行或null"}。', { pending: pending.map(id => ({ id, speech: characters[id].speech, action: characters[id].action })), scene: world.documents[world.scene].text, occurred: events.filter(e => e.public) }, data => {
+                    if (data.next !== null && !pending.includes(data.next))
+                        throw new Error('接续人物无效');
+                    if (data.performance !== null && typeof data.performance !== 'string')
+                        throw new Error('实际言行文本无效');
+                    return data as {
+                        next: string | null;
+                        performance: string | null;
+                    };
+                });
+                if (!selected.next)
+                    break;
+                pending.splice(pending.indexOf(selected.next), 1);
+                if (!selected.performance?.trim())
+                    continue;
+                const event = `${world.documents[`characters/${selected.next}/public.md`].text}\n实际公开言行：${selected.performance}`;
+                log(selected.next, event);
+                await editor('记录此人物已执行的言行及相关场景变化。只更新相关当前状态，不复制整段历史对白；沉默/无动作不创造事件，未来条件与意愿不写成成功。', false, undefined, { event });
+                const observed = (await perceive(event)).filter(d => d.character_id !== selected.next);
+                const dependent = observed.length ? await json('text_organizer', '只找必须直接接续回答或因互斥动作需要改写尚未执行草稿的人物。旁听者仅记录经历，不需再次回应。返回 {"continue": ["ID"]}。', { event, observations: observed, pending }, data => uniqueIds(data.continue, observed.map(d => d.character_id))) : [];
+                if (dependent.length && !continuationUsed) {
+                    continuationUsed = true;
+                    await Promise.all(dependent.map(id => react(id, observed.filter(d => d.character_id === id), true)));
+                    for (const id of dependent)
+                        if (!pending.includes(id))
+                            pending.push(id);
+                }
+                else if (dependent.length) {
+                    // An unresolved dependency must not execute a stale competing draft.
+                    for (const id of dependent) {
+                        const at = pending.indexOf(id);
+                        if (at >= 0)
+                            pending.splice(at, 1);
+                    }
+                    break;
+                }
+            }
+            for (const [id, observed] of Object.entries(experiences)) {
+                await editor('将此人物实际获得的经历及其个人理解记入个人记忆；区分所见、听闻、猜测，不能把尚未执行的提议记为事实。保留原有经历。', false, id, { experiences: observed, cognition: characters[id]?.cognition || null, ownOccurred: events.filter(e => e.source === id).map(e => e.text) });
+            }
+            const publicEvents = events.filter(e => e.public);
+            const output = !parsed.player && !admin.length && !previous ? '本次呈现指令已接收；尚无正文可重新呈现。' : publicEvents.length || narrator ? await call('text_narrator', !publicEvents.length ? '仅按本次文风指令重新呈现最近正文，不推进故事。' : '根据已生效时间线生成正文，内部回执不是故事事实。', { background: initialPublic, events: publicEvents, previous, narrator }) : adminModified ? '后台设定已修改。' : '本次指令没有产生文档修改。';
+            check();
+            // A narrator-only request has no world/memory mutation; presentation is saved in turn history.
+            world.revision = before.revision + 1;
+            world.documents[`turns/${turnId}.md`] = { text: `# 本轮记录\n${events.map(e => `${e.order + 1}. ${e.source}：${e.text}`).join('\n')}\n\n# 正文\n${output}`, revision: 0 };
+            validateTextWorld(world);
+            const turn: GameTurn = { id: turnId, turnIndex: save.turns.length, timestamp: new Date().toISOString(), playerInput: input, narratorOutput: output, traceId, worldStateBefore: save.worldState, worldStateAfter: save.worldState, patches: [], activeAgentGroupId: context.activeGroupId, status: 'success', textTurn: { before, storyBefore, effectiveInput: parsed.player, correctionOf, after: structuredClone(world), events, deliveries, characters, instructions: { ...parsed, routing, organized }, commit: 'draft' } };
+            // Keep trace running until the storage owner confirms the atomic commit.
+            return { ...save, textWorld: world, turns: [...save.turns.map(old => old.id === correctionOf && old.textTurn ? { ...old, textTurn: { ...old.textTurn, supersededBy: turnId } } : old), turn], updatedAt: new Date().toISOString(), activeAgentGroupId: context.activeGroupId };
+        }
+        catch (error) {
+            if (!context.signal?.aborted && !globalTraceManager.getTrace(traceId)?.spans.some(span => span.error)) {
+                const failureId = `failure_${crypto.randomUUID()}`;
+                globalTraceManager.createSpan(traceId, failureId, '文本流程失败 · 未提交保存', 'text_failure');
+                globalTraceManager.updateSpan(traceId, failureId, { status: 'error', error: error instanceof Error ? error.message : '文本流程失败', parsedOutput: { committed: false } });
+            }
+            globalTraceManager.endTurnTrace(traceId, context.signal?.aborted ? 'cancelled' : 'error');
+            throw error;
+        }
+    }
+}
+export const textProcessor = new TextProcessor();

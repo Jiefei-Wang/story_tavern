@@ -6,7 +6,7 @@ import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
 import { explicitAdminCommand, withInputAuthorityContract } from "../src/engine/runtime/InputAuthority";
-import { BUILTIN_AGENTS } from "../src/db/initialData";
+import { BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 import { SchemaValidator } from "../src/engine/schema/SchemaValidator";
 
 const context = { agents: [], groups: [], backends: [], activeGroupId: "test", mockMode: false };

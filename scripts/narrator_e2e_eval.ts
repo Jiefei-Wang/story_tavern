@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "../src/db/initialData";
+import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "../tests/fixtures/legacyInitialData";
 import { gamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";

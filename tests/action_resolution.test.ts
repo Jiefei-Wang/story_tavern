@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ACTION_ADJUDICATOR, buildActionProtocolInstructions, mockActionResolution, preflightPlayerActions, resolvePlayerActions, validateActionResolutions, type ActionDecision, type ActionEffect } from "../src/engine/world/ActionResolution";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
-import { DEFAULT_BACKENDS } from "../src/db/initialData";
+import { DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 import type { GameEvent, WorldState } from "../src/types";
 
 function world(): WorldState {

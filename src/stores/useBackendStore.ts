@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../db/host";
 import { Backend } from "../types";
 import { storageService } from "../db/storage";
 import { sanitizeCustomHeaders } from "../engine/runtime/AgentRuntime";
@@ -59,7 +59,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   loadBackends: async () => {
     set({ isLoading: true });
     const backends = await storageService.getBackends();
-    set({ backends, isLoading: false });
+    set({ backends: backends.map(b => ({ ...b, status: "unknown" })), isLoading: false });
   },
 
   saveBackend: async (backend: Backend, apiKey?: string) => {
@@ -110,7 +110,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       }
 
       const started = Date.now();
-      const res: TestConnectionResult = storageService.isTauri() ? await invoke<TestConnectionResult>("backend_test_connection", {
+      const res: TestConnectionResult = storageService.usesLocalService() ? await invoke<TestConnectionResult>("backend_test_connection", {
         baseUrl: backend.baseUrl,
         authType: backend.authType || "bearer",
         secretRef: effectiveSecretRef || null,
@@ -193,7 +193,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
         }
       }
 
-      const models = storageService.isTauri() ? await invoke<string[]>("backend_list_models", {
+      const models = storageService.usesLocalService() ? await invoke<string[]>("backend_list_models", {
         baseUrl: backend.baseUrl,
         authType: backend.authType || "bearer",
         secretRef: effectiveSecretRef || null,

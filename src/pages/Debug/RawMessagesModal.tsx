@@ -1,10 +1,13 @@
 ﻿import React, { useMemo, useState } from "react";
 import { X, Copy, Check, MessageSquare } from "lucide-react";
-import { TurnTrace, TraceSpan } from "../../types";
+import { TurnTrace } from "../../types";
+
+import { groupRequests, messageText, validationLabel } from "./traceRequests";
 
 interface RawMessage {
   role: string;
   content: string;
+  history?: RawMessage[];
 }
 
 interface SpanMessages {
@@ -12,7 +15,6 @@ interface SpanMessages {
   spanName: string;
   agentId?: string;
   model?: string;
-  startedAt: number;
   messages: RawMessage[];
 }
 
@@ -21,40 +23,68 @@ interface RawMessagesModalProps {
   onClose: () => void;
 }
 
-function formatMessagesAsText(groups: SpanMessages[]): string {
-  return groups
-    .map((g) => {
-      const header = `=== ${g.spanName}${g.model ? ` [${g.model}]` : ""} ===`;
-      const msgs = g.messages
-        .map((m) => `[${m.role.toUpperCase()}]\n${m.content}`)
-        .join("\n\n---\n\n");
-      return `${header}\n\n${msgs}`;
-    })
-    .join("\n\n" + "=".repeat(60) + "\n\n");
+const collapsedHistory = '(previous message skipped, click to expand).';
+const expandedHistory = '(previous message expanded, click to collapse)';
+const messageLabel = (role: string) => role.startsWith('VALIDATION_OUTPUT(') ? role : role.toUpperCase();
+const historyKey = (spanId: string, index: number) => `${spanId}:${index}`;
+
+export function formatMessagesAsText(groups: SpanMessages[], expanded: ReadonlySet<string>): string {
+  const format = (m: RawMessage): string => `[${messageLabel(m.role)}]\n${m.content}`;
+  return groups.map(g => {
+    const header = `=== ${g.spanName}${g.model ? ` [${g.model}]` : ''} ===`;
+    const messages = g.messages.map((m, index) => m.history
+      ? `[HISTORY]\n${expanded.has(historyKey(g.spanId, index)) ? expandedHistory + '\n' + m.history.map(format).join('\n\n') : collapsedHistory}`
+      : format(m));
+    return `${header}\n\n${messages.join('\n\n---\n\n')}`;
+  }).join('\n\n' + '='.repeat(60) + '\n\n');
+}
+
+export function buildRawMessageGroups(trace: TurnTrace): SpanMessages[] {
+  const seen = new Set<string>();
+  return groupRequests(trace.spans).map(({ request: s, validations }) => {
+    const currentKeys: string[] = [];
+    const messages: RawMessage[] = [];
+    for (const m of s.resolvedMessages as Array<Record<string, unknown>>) {
+      const key = JSON.stringify(m);
+      currentKeys.push(key);
+      const message = { role: String(m.role), content: messageText(m.content) };
+      if (seen.has(key)) {
+        const previous = messages.at(-1);
+        if (previous?.history) previous.history.push(message);
+        else messages.push({ role: 'history', content: '', history: [message] });
+      } else messages.push(message);
+    }
+    currentKeys.forEach(key => seen.add(key));
+    const raw = s.rawResponse as any;
+    const response = raw?.choices?.[0]?.message;
+    const reasoning = response?.reasoning_content ?? response?.reasoning;
+    // Never dump the transport envelope (IDs, usage, choices, etc.) into output.
+    const content = response ? response.content : typeof raw === 'string' ? raw : s.liveContent ?? s.parsedOutput;
+    return {
+      spanId: s.id, spanName: s.displayLabel || s.name, agentId: s.agentId, model: s.model,
+      messages: [
+        ...messages,
+        ...(reasoning ? [{ role: 'reasoning', content: messageText(reasoning) }] : []),
+        ...(content != null ? [{ role: 'output', content: messageText(content) }] : []),
+        ...(s.error ? [{ role: 'error', content: s.error }] : []),
+        ...validations.map(v => ({ role: validationLabel(v), content: [v.error, messageText(v.parsedOutput)].filter(Boolean).join('\n') })),
+      ],
+    };
+  });
 }
 
 export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
   const [copied, setCopied] = useState(false);
-
-  const spanGroups = useMemo<SpanMessages[]>(() => {
-    return trace.spans
-      .filter((s: TraceSpan) => {
-        const msgs = s.resolvedMessages as RawMessage[] | null | undefined;
-        return Array.isArray(msgs) && msgs.length > 0;
-      })
-      .sort((a, b) => a.startedAt - b.startedAt)
-      .map((s: TraceSpan) => ({
-        spanId: s.id,
-        spanName: s.displayLabel || s.name,
-        agentId: s.agentId,
-        model: s.model,
-        startedAt: s.startedAt,
-        messages: s.resolvedMessages as RawMessage[],
-      }));
-  }, [trace]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const spanGroups = useMemo(() => buildRawMessageGroups(trace), [trace]);
+  const toggleHistory = (key: string) => setExpanded(previous => {
+    const next = new Set(previous);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const handleCopy = async () => {
-    const text = formatMessagesAsText(spanGroups);
+    const text = formatMessagesAsText(spanGroups, expanded);
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -64,6 +94,7 @@ export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
     system: "bg-violet-50 border-violet-200 text-violet-800",
     user: "bg-blue-50 border-blue-200 text-blue-800",
     assistant: "bg-emerald-50 border-emerald-200 text-emerald-800",
+    error: "bg-rose-50 border-rose-200 text-rose-800",
   };
 
   const roleLabels: Record<string, string> = {
@@ -90,7 +121,7 @@ export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
               Raw Messages — Turn #{trace.turnNumber}
             </h2>
             <span className="text-xs text-slate-400 font-mono">
-              {spanGroups.length} 个 Agent 调用
+              {spanGroups.length} 个 Request
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -157,7 +188,7 @@ export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
                       "bg-slate-50 border-slate-200 text-slate-700";
                     const colorParts = colorClass.split(" ");
                     const label =
-                      roleLabels[msg.role] || msg.role.toUpperCase();
+                      roleLabels[msg.role] || (msg.role.startsWith('VALIDATION_OUTPUT(') ? msg.role : msg.role.toUpperCase());
                     return (
                       <div
                         key={msgIdx}
@@ -168,9 +199,17 @@ export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
                         >
                           {label}
                         </div>
-                        <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-sans leading-relaxed select-text">
-                          {msg.content}
-                        </pre>
+                        {msg.history ? <div>
+                          <button type="button" aria-expanded={expanded.has(historyKey(group.spanId, msgIdx))} onClick={() => toggleHistory(historyKey(group.spanId, msgIdx))} className="text-xs text-slate-500 hover:text-blue-600 text-left w-full">
+                            {expanded.has(historyKey(group.spanId, msgIdx)) ? expandedHistory : collapsedHistory}
+                          </button>
+                          {expanded.has(historyKey(group.spanId, msgIdx)) && <div className="space-y-3 mt-3">
+                            {msg.history.map((item, index) => <div key={index} className="border border-slate-200 rounded p-3">
+                              <div className="text-[10px] font-bold mb-1.5">{messageLabel(item.role)}</div>
+                              <MessageContent content={item.content} />
+                            </div>)}
+                          </div>}
+                        </div> : <MessageContent content={msg.content} />}
                       </div>
                     );
                   })}
@@ -187,4 +226,8 @@ export function RawMessagesModal({ trace, onClose }: RawMessagesModalProps) {
       </div>
     </div>
   );
+}
+
+function MessageContent({ content }: { content: string }) {
+  return <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-sans leading-relaxed select-text">{content}</pre>;
 }

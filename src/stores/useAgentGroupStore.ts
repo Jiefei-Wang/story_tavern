@@ -1,3 +1,4 @@
+import { readPreference, writePreference } from '../db/preferences';
 import { create } from "zustand";
 import { AgentBinding, AgentGroup } from "../types";
 import { storageService } from "../db/storage";
@@ -7,7 +8,7 @@ interface AgentGroupState {
   activeGroupId: string;
   isLoading: boolean;
   loadGroups: () => Promise<void>;
-  setActiveGroup: (id: string) => void;
+  setActiveGroup: (id: string) => Promise<void>;
   saveGroup: (group: AgentGroup) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
   duplicateGroup: (id: string) => Promise<AgentGroup | null>;
@@ -41,27 +42,27 @@ import { DEFAULT_AGENT_GROUPS } from "../db/initialData";
 
 export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
   groups: DEFAULT_AGENT_GROUPS,
-  activeGroupId: "group_quality",
+  activeGroupId: "group_fast",
   isLoading: false,
 
   loadGroups: async () => {
     set({ isLoading: true });
     const groups = await storageService.getAgentGroups();
 
-    let storedId = localStorage.getItem("story_tavern_active_group");
+    let storedId = readPreference("story_tavern_active_group");
     // Verify storedId actually exists in loaded groups
     if (!storedId || !groups.some((g) => g.id === storedId)) {
-      storedId = groups.length > 0 ? groups[0].id : "group_quality";
-      localStorage.setItem("story_tavern_active_group", storedId);
+      storedId = groups.some(g => g.id === 'group_fast') ? 'group_fast' : groups[0]?.id || 'group_fast';
+      await writePreference("story_tavern_active_group", storedId);
     }
 
     set({ groups, activeGroupId: storedId, isLoading: false });
   },
 
-  setActiveGroup: (id: string) => {
+  setActiveGroup: async (id: string) => {
     const { groups } = get();
     if (groups.some((g) => g.id === id)) {
-      localStorage.setItem("story_tavern_active_group", id);
+      await writePreference("story_tavern_active_group", id);
       set({ activeGroupId: id });
     }
   },
@@ -83,7 +84,7 @@ export const useAgentGroupStore = create<AgentGroupState>((set, get) => ({
 
     if (active === id) {
       active = groups.length > 0 ? groups[0].id : "group_quality";
-      localStorage.setItem("story_tavern_active_group", active);
+      await writePreference("story_tavern_active_group", active);
     }
 
     set({ groups, activeGroupId: active });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { invoke, createChannel } from "../db/host";
 import { AgentDefinition, AgentGroup, Backend, REASONING_EFFORT_OPTIONS } from "../types";
 import { storageService } from "../db/storage";
 import { sanitizeCustomHeaders, extractJsonPayload } from "./runtime/AgentRuntime";
@@ -75,8 +75,8 @@ export async function requestAssistant(backend: Backend, model: string, history:
   const headers = sanitizeCustomHeaders(backend.customHeaders);
   let raw: unknown;
   signal.throwIfAborted();
-  if (storageService.isTauri()) {
-    raw = await invoke("backend_chat_completion", { baseUrl: backend.baseUrl, authType: backend.authType, secretRef: backend.secretRef || null, headers, timeoutMs: backend.timeoutMs || 60000, request, onChunk: new Channel<number[]>() });
+  if (storageService.usesLocalService()) {
+    raw = await invoke("backend_chat_completion", { baseUrl: backend.baseUrl, authType: backend.authType, secretRef: backend.secretRef || null, headers, timeoutMs: backend.timeoutMs || 60000, request, onChunk: createChannel<number[]>() }, signal);
   } else {
     if (backend.authType === "bearer") {
       const key = backend.secretRef ? localStorage.getItem(`secret_${backend.secretRef}`) : null;

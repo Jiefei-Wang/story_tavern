@@ -5,7 +5,7 @@ import {
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
   DEFAULT_BACKENDS,
-} from "../src/db/initialData";
+} from "./fixtures/legacyInitialData";
 
 async function testUserAdmin() {
   console.log("=== 测试用户案例 1: admin:改变天气为下雪天 ===");

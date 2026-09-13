@@ -4,7 +4,7 @@ import { useGameStore } from "../src/stores/useGameStore";
 import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { useAgentStore } from "../src/stores/useAgentStore";
 import { useAgentGroupStore } from "../src/stores/useAgentGroupStore";
-import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS } from "../src/db/initialData";
+import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS } from "./fixtures/legacyInitialData";
 import { globalConcurrencyLimiter } from "../src/engine/scheduling/ConcurrencyLimiter";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";

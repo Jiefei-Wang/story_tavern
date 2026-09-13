@@ -1,0 +1,73 @@
+export interface Instruction {
+    id: string;
+    kind: 'admin' | 'narrator';
+    text: string;
+    start: number;
+    end: number;
+    defaultPosition: 'before' | 'after';
+}
+export interface ParsedInput {
+    raw: string;
+    player: string;
+    instructions: Instruction[];
+    interpretation: string;
+}
+/** Only whole-line blocks outside quoted/fenced literals grant authority. Prefix syntax remains compatible. */
+export function parseTextInput(raw: string): ParsedInput {
+    const prefix = /^(?:admin:|管理员:|管理员：)\s*([\s\S]*)$/i.exec(raw.trimStart());
+    if (prefix)
+        return { raw, player: '', instructions: [{ id: 'instruction_0', kind: 'admin', text: prefix[1], start: 0, end: raw.length, defaultPosition: 'before' }], interpretation: '兼容整条管理员输入' };
+    const lines = raw.match(/.*(?:\r?\n|$)/g)?.filter(Boolean) || [];
+    const instructions: Instruction[] = [];
+    let player = '', offset = 0, fence = '', quote = '';
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i], trimmed = line.trim();
+        const marker = /^(?:```|~~~)/.exec(trimmed)?.[0];
+        if (marker && !quote) {
+            fence = fence === marker ? '' : fence || marker;
+            player += line;
+            offset += line.length;
+            continue;
+        }
+        const open = !fence && !quote && /^\[(admin|narrator)\]$/.exec(trimmed);
+        if (open) {
+            const start = offset;
+            let text = '', consumed = line.length, j = i + 1;
+            for (; j < lines.length && lines[j].trim() !== `[/${open[1]}]`; j++) {
+                text += lines[j];
+                consumed += lines[j].length;
+            }
+            if (j === lines.length)
+                throw new Error(`未闭合的 ${open[1]} 指令块；字面量请使用反斜杠转义或代码块`);
+            consumed += lines[j].length;
+            instructions.push({ id: `instruction_${instructions.length}`, kind: open[1] as Instruction['kind'], text: text.trim(), start, end: start + consumed, defaultPosition: player.trim() ? 'after' : 'before' });
+            offset += consumed;
+            i = j;
+            continue;
+        }
+        player += line.replace(/^(\s*)\\(\[\/?(?:admin|narrator)\])/, '$1$2');
+        if (!fence && !/^\s*>/.test(line))
+            for (let p = 0; p < line.length; p++) {
+                const c = line[p];
+                if (p && line[p - 1] === '\\')
+                    continue;
+                if (quote && c === quote)
+                    quote = '';
+                else if (!quote && ['“', '「', '"'].includes(c))
+                    quote = c === '“' ? '”' : c === '「' ? '」' : '"';
+            }
+        offset += line.length;
+    }
+    return { raw, player: player.trim(), instructions, interpretation: '玩家言行保持一个完整单位；中间指令默认后置；明确前后要求由 Organizer 安排并记录' };
+}
+export function validateInstructionOrder(parsed: ParsedInput, before: unknown, after: unknown): {
+    before: string[];
+    after: string[];
+} {
+    if (!Array.isArray(before) || !Array.isArray(after))
+        throw new Error('Organizer 指令顺序无效');
+    const ids = parsed.instructions.filter(i => i.kind === 'admin').map(i => i.id), actual = [...before, ...after];
+    if (actual.length !== ids.length || new Set(actual).size !== actual.length || actual.some(id => !ids.includes(id)))
+        throw new Error('Organizer 新增、遗漏或重复了授权指令 ID');
+    return { before, after };
+}

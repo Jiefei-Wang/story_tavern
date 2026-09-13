@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BUILTIN_AGENTS, DEFAULT_BACKENDS, DEFAULT_AGENT_GROUPS } from "../src/db/initialData";
+import { BUILTIN_AGENTS, DEFAULT_BACKENDS, DEFAULT_AGENT_GROUPS } from "./fixtures/legacyInitialData";
 import { REFUSAL_DETECTOR, detectModelRefusal, effectiveBehaviorVerdict, scoreRefusalDetection, type RefusalClassification, type RefusalDetection } from "../src/engine/evaluation/RefusalDetector";
 import { renderMessages } from "../src/engine/template/PlaceholderEngine";
 import { SchemaValidator } from "../src/engine/schema/SchemaValidator";

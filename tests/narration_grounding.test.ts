@@ -5,7 +5,7 @@ import { renderNarratorSegments } from "../src/engine/narration/NarratorComposit
 import { NARRATION_AUDITOR, NARRATION_AUDIT_OUTPUT_INSTRUCTIONS, auditNarration } from "../src/engine/narration/NarrationAuditor";
 import { withConversationContract } from "../src/engine/runtime/ConversationContracts";
 import { withCharacterContract } from "../src/engine/character-schema/AgentContract";
-import { BUILTIN_AGENTS, INITIAL_DEMO_SAVE } from "../src/db/initialData";
+import { BUILTIN_AGENTS, INITIAL_DEMO_SAVE } from "./fixtures/legacyInitialData";
 import type { CommittedTurnEvent } from "../src/types";
 import { SchemaValidator } from "../src/engine/schema/SchemaValidator";
 import { NARRATION_FACT_PRIORITY_POLICY } from "../src/engine/narration/NarrationGroundingPolicy";

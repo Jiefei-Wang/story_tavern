@@ -6,7 +6,7 @@ import { agentRuntime } from '../src/engine/runtime/AgentRuntime';
 import { mockActionResolution } from '../src/engine/world/ActionResolution';
 import { definition, field, worldFor } from './fixtures/characterWorlds';
 import { withCharacterContract } from '../src/engine/character-schema/AgentContract';
-import { BUILTIN_AGENTS } from '../src/db/initialData';
+import { BUILTIN_AGENTS } from './fixtures/legacyInitialData';
 
 const schema = definition([field('reliability', { default: 0.4, description: '履约可靠性；没有兑现的承诺不应该提高可靠性。' })]);
 function initial(): WorldState {

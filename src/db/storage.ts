@@ -1,5 +1,8 @@
 import { migrateGameSave } from "../engine/character-schema/Migration";
-import { invoke } from "@tauri-apps/api/core";
+import { reconcileAgentCatalog } from './agentCatalog';
+import { validateTextWorld } from '../engine/text/Documents';
+import { defaultLibrary, validateLibrary, type LibraryRecord } from '../engine/library/Library';
+import { invoke, hasLocalHost, isNative, clearBrowserDatabase } from './host';
 import {
   AgentDefinition,
   AgentGroup,
@@ -12,7 +15,6 @@ import {
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
   DEFAULT_BACKENDS,
-  INITIAL_DEMO_SAVE,
 } from "./initialData";
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -55,8 +57,13 @@ class MemoryStorage {
 const memoryStorage = new MemoryStorage();
 
 export class StorageService {
+  private initialization: Promise<void> | undefined;
   isTauri(): boolean {
-    return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+    return isNative();
+  }
+
+  usesLocalService(): boolean {
+    return hasLocalHost();
   }
 
   private getStorage(): {
@@ -83,31 +90,15 @@ export class StorageService {
   }
 
   async initDatabase(): Promise<void> {
-    const defaultOpenRouterKey =
-      (import.meta as any)?.env?.VITE_OPENROUTER_KEY ||
-      (globalThis as any)?.process?.env?.OPENROUTER_KEY ||
-      (globalThis as any)?.process?.env?.openrouter_key ||
-      "";
+    if (this.initialization) return this.initialization;
+    this.initialization = this.initializeDatabase();
+    try {await this.initialization;} finally {this.initialization=undefined;}
+  }
 
-    if (defaultOpenRouterKey) {
-      if (this.isTauri()) {
-        try {
-          await invoke("secret_set", {
-            secretRef: "backend_openrouter",
-            secretVal: defaultOpenRouterKey,
-          });
-          await invoke("secret_set", {
-            secretRef: "secret_openrouter_default",
-            secretVal: defaultOpenRouterKey,
-          });
-        } catch (e) {
-          console.warn("Failed to seed default secret via Tauri:", e);
-        }
-      } else {
-        const storage = this.getStorage();
-        storage.setItem("secret_backend_openrouter", defaultOpenRouterKey);
-        storage.setItem("openrouter_key", defaultOpenRouterKey);
-      }
+  private async initializeDatabase(): Promise<void> {
+    if (this.usesLocalService()) {
+      await invoke('db_get_path'); // Fail closed: never fall back to browser storage.
+      if (!isNative()) clearBrowserDatabase();
     }
 
     // Seed backends if empty
@@ -118,61 +109,47 @@ export class StorageService {
       }
     }
 
-    // Seed agents if empty
-    const agents = await this.getAgents();
-    if (agents.length === 0) {
-      for (const a of BUILTIN_AGENTS) {
-        await this.saveAgent(a);
-      }
+    // New library-based games replace pre-library saves. Inspect metadata before hydration.
+    if (this.usesLocalService()) {
+      const items = await invoke<Array<{key:string;value:string}>>('db_kv_list', {table:'saves'});
+      for (const item of items) if (safeJsonParse<GameSave>(item.value, 'save').textWorld?.setupVersion !== 2) await this.deleteGame(item.key);
+    } else {
+      const saves = this.readBrowserList<GameSave>('story_tavern_saves');
+      this.getStorage().setItem('story_tavern_saves', JSON.stringify(saves.filter(s => s.textWorld?.setupVersion === 2)));
     }
+    await reconcileAgentCatalog(this);
+    if (!(await this.getLibrary())) await this.commitLibrary({revision:0,data:defaultLibrary()}, -1);
+  }
 
-    // Seed groups if empty
-    const groups = await this.getAgentGroups();
-    if (groups.length === 0) {
-      for (const g of DEFAULT_AGENT_GROUPS) {
-        await this.saveAgentGroup(g);
-      }
-    }
+  async getLibrary(): Promise<LibraryRecord | null> {
+    const raw = this.usesLocalService() ? await invoke<string|null>('db_kv_get', {table:'settings',key:'story_library_v2'}) : this.getStorage().getItem('story_tavern_library_v2');
+    if (!raw) return null;
+    const record = safeJsonParse<LibraryRecord>(raw, 'story library');
+    if (!Number.isInteger(record.revision) || record.revision < 0) throw new Error('配置库版本无效');
+    validateLibrary(record.data);
+    return record;
+  }
 
-    // Seed saves if empty
-    // One-time upgrade: preserve existing prompts and bindings; initialize the new role
-    // on the group's existing admin backend/model, with its own generation parameters.
-    const settings = await this.getSettings();
-    if (!settings.characterGenerationMigrated) {
-      if (!(await this.getAgents()).some(a => a.id === "character_generator")) {
-        await this.saveAgent(BUILTIN_AGENTS.find(a => a.id === "character_generator")!);
-      }
-      for (const group of await this.getAgentGroups()) {
-        const source = group.bindings.find(b => b.agentId === "admin_patch");
-        if (source && !group.bindings.some(b => b.agentId === "character_generator")) {
-          await this.saveAgentGroup({ ...group, bindings: [...group.bindings, {
-            agentId: "character_generator", backendId: source.backendId, model: source.model,
-          }] });
-        }
-      }
-      await this.saveSettings({ ...settings, characterGenerationMigrated: true });
-    }
-    const behaviorSettings = await this.getSettings();
-    // Version 2 also upgrades installs which already completed the original two-role migration.
-    if ((behaviorSettings.behaviorGroundingVersion ?? 0) < 2) {
-      for (const [id, sourceId] of [['action_adjudicator','world_resolver'], ['narration_auditor','narrator'], ['character_change_auditor','world_resolver']]) {
-        if (!(await this.getAgents()).some(a => a.id === id)) await this.saveAgent(BUILTIN_AGENTS.find(a => a.id === id)!);
-        for (const group of await this.getAgentGroups()) {
-          const inherited = group.bindings.find(b => b.agentId === sourceId);
-          if (inherited && !group.bindings.some(b => b.agentId === id)) await this.saveAgentGroup({ ...group, bindings: [...group.bindings, {...structuredClone(inherited), agentId:id}] });
-        }
-      }
-      await this.saveSettings({ ...behaviorSettings, behaviorGroundingMigrated: true, behaviorGroundingVersion: 2 });
-    }
-    const saves = await this.getSaves();
-    if (saves.length === 0) {
-      await this.saveGame(INITIAL_DEMO_SAVE);
-    }
+  async commitLibrary(record: LibraryRecord, expectedRevision: number, signal?: AbortSignal): Promise<void> {
+    validateLibrary(record.data);
+    if (record.revision !== expectedRevision + 1) throw new Error('配置库版本无效');
+    const value = JSON.stringify(record);
+    signal?.throwIfAborted();
+    if (this.usesLocalService()) { await invoke('library_commit', {value,expectedRevision}); return; }
+    const write = () => {
+      signal?.throwIfAborted();
+      const raw = this.getStorage().getItem('story_tavern_library_v2');
+      const previous = raw ? safeJsonParse<LibraryRecord>(raw, 'story library') : null;
+      if ((previous?.revision ?? -1) !== expectedRevision) throw new Error('配置库版本冲突，请重新载入');
+      this.getStorage().setItem('story_tavern_library_v2', value);
+    };
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.locks) await navigator.locks.request('story_tavern_library_v2', write);
+    else write();
   }
 
   // --- Backends ---
   async getBackends(): Promise<Backend[]> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
         table: "backends",
       });
@@ -186,7 +163,7 @@ export class StorageService {
 
   async saveBackend(backend: Backend): Promise<void> {
     const immutableBackend = { ...backend };
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "backends",
         key: immutableBackend.id,
@@ -202,10 +179,10 @@ export class StorageService {
   }
 
   async deleteBackend(id: string): Promise<void> {
-    const allBackends = this.isTauri() ? await this.getBackends() : this.readBrowserList<Backend>('story_tavern_backends');
+    const allBackends = this.usesLocalService() ? await this.getBackends() : this.readBrowserList<Backend>('story_tavern_backends');
     const target = allBackends.find((b) => b.id === id);
 
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_delete", { table: "backends", key: id });
     } else {
       const list = allBackends.filter((b) => b.id !== id);
@@ -216,7 +193,7 @@ export class StorageService {
     if (target?.secretRef) {
       const remaining = (await this.getBackends()).filter((b) => b.id !== id);
       const isShared = remaining.some((b) => b.secretRef === target.secretRef);
-      if (!isShared && this.isTauri()) {
+      if (!isShared && this.usesLocalService()) {
         try {
           await invoke("secret_delete", { secretRef: target.secretRef });
         } catch (e) {
@@ -228,7 +205,7 @@ export class StorageService {
 
   // --- Agents ---
   async getAgents(): Promise<AgentDefinition[]> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
         table: "agents",
       });
@@ -242,7 +219,7 @@ export class StorageService {
 
   async saveAgent(agent: AgentDefinition): Promise<void> {
     const immutableAgent = { ...agent };
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "agents",
         key: immutableAgent.id,
@@ -258,7 +235,7 @@ export class StorageService {
   }
 
   async deleteAgent(id: string): Promise<void> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_delete", { table: "agents", key: id });
       return;
     }
@@ -268,7 +245,7 @@ export class StorageService {
 
   // --- Agent Groups ---
   async getAgentGroups(): Promise<AgentGroup[]> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
         table: "agent_groups",
       });
@@ -282,7 +259,7 @@ export class StorageService {
 
   async saveAgentGroup(group: AgentGroup): Promise<void> {
     const immutableGroup = { ...group };
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "agent_groups",
         key: immutableGroup.id,
@@ -298,7 +275,7 @@ export class StorageService {
   }
 
   async deleteAgentGroup(id: string): Promise<void> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_delete", { table: "agent_groups", key: id });
       return;
     }
@@ -308,10 +285,8 @@ export class StorageService {
 
   // --- Saves ---
   async getSaves(): Promise<GameSave[]> {
-    if (this.isTauri()) {
-      const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
-        table: "saves",
-      });
+    if (this.usesLocalService()) {
+      const items = await invoke<Array<{ key: string; value: string }>>("text_save_list");
       const raw = items.map(i => safeJsonParse<GameSave>(i.value, `GameSave '${i.key}'`));
       const migrated = raw.map(migrateGameSave);
       // Validate the entire batch before persisting any upgraded record.
@@ -328,8 +303,20 @@ export class StorageService {
   }
 
   async saveGame(save: GameSave): Promise<void> {
+    if (save.textWorld) {
+      const stored = (await this.getSaves()).find(s => s.id === save.id);
+      const canonical=(value:any):any=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+      const comparable=(value:GameSave)=>{const {textSnapshot,...rest}=value as GameSave&{textSnapshot?:string};return canonical(rest);};
+      if (stored?.textWorld && JSON.stringify(comparable(stored))===JSON.stringify(comparable(save))) return;
+      const next = structuredClone(save);
+      if (stored?.textWorld && stored.textWorld.revision !== save.textWorld.revision) throw new Error('文本存档版本冲突');
+      next.textWorld!.revision = (stored?.textWorld?.revision ?? -1) + 1;
+      await this.commitTextGame(next,stored?.textWorld?.revision ?? null);
+      save.textWorld!.revision = next.textWorld!.revision;
+      return;
+    }
     const immutableSave = migrateGameSave(save);
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "saves",
         key: immutableSave.id,
@@ -344,8 +331,30 @@ export class StorageService {
     this.getStorage().setItem("story_tavern_saves", JSON.stringify(list));
   }
 
+  async commitTextGame(save: GameSave, expectedRevision: number | null): Promise<void> {
+    if (!save.textWorld) throw new Error('缺少文本存档');
+    validateTextWorld(save.textWorld);
+    if (save.textWorld.revision !== (expectedRevision ?? -1) + 1) throw new Error('新版本必须递增一次');
+    const candidate = structuredClone(save);
+    if (candidate.turns.at(-1)?.textTurn) candidate.turns.at(-1)!.textTurn!.commit = 'saved';
+    if (this.usesLocalService()) {
+      await invoke('text_save_commit',{value:JSON.stringify(candidate),expectedRevision});
+    } else {
+      const write = () => {
+        const list = this.readBrowserList<GameSave>('story_tavern_saves');
+        const at = list.findIndex(s => s.id === candidate.id);
+        if ((list[at]?.textWorld?.revision ?? null) !== expectedRevision) throw new Error('文本存档版本冲突');
+        if (at >= 0) list[at] = candidate; else list.push(candidate);
+        this.getStorage().setItem('story_tavern_saves',JSON.stringify(list));
+      };
+      if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.locks) await navigator.locks.request('story_tavern_text_save',write);
+      else write();
+    }
+    if (save.turns.at(-1)?.textTurn) save.turns.at(-1)!.textTurn!.commit = 'saved';
+  }
+
   async deleteGame(saveId: string): Promise<void> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_delete", {
         table: "saves",
         key: saveId,
@@ -360,7 +369,7 @@ export class StorageService {
   // --- Traces Persistence ---
   async saveTrace(trace: TurnTrace): Promise<void> {
     const immutableTrace = { ...trace };
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "traces",
         key: immutableTrace.id,
@@ -379,7 +388,7 @@ export class StorageService {
   }
 
   async getTraces(limit = 100): Promise<TurnTrace[]> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const items = await invoke<Array<{ key: string; value: string }>>("db_kv_list", {
         table: "traces",
       });
@@ -394,7 +403,7 @@ export class StorageService {
   }
 
   async getTrace(id: string): Promise<TurnTrace | undefined> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const val = await invoke<string | null>("db_kv_get", {
         table: "traces",
         key: id,
@@ -408,7 +417,7 @@ export class StorageService {
 
   // --- Settings ---
   async getSettings(): Promise<AppSettings> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       const val = await invoke<string | null>("db_kv_get", {
         table: "settings",
         key: "app_settings",
@@ -429,7 +438,7 @@ export class StorageService {
 
   async saveSettings(settings: AppSettings): Promise<void> {
     const immutableSettings = { ...settings };
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("db_kv_set", {
         table: "settings",
         key: "app_settings",
@@ -442,7 +451,7 @@ export class StorageService {
 
   // --- Keyring Secret Ops ---
   async setSecret(secretRef: string, secretVal: string): Promise<void> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("secret_set", { secretRef, secretVal });
     } else {
       this.getStorage().setItem(`secret_${secretRef}`, secretVal);
@@ -450,7 +459,7 @@ export class StorageService {
   }
 
   async deleteSecret(secretRef: string): Promise<void> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       await invoke("secret_delete", { secretRef });
     } else {
       this.getStorage().removeItem(`secret_${secretRef}`);
@@ -458,14 +467,14 @@ export class StorageService {
   }
 
   async getDbPath(): Promise<string> {
-    if (this.isTauri()) {
+    if (this.usesLocalService()) {
       try {
         return await invoke<string>("db_get_path");
       } catch (e) {
         return "SQLite in AppData";
       }
     }
-    return "Browser LocalStorage";
+    return "Test memory storage";
   }
 }
 

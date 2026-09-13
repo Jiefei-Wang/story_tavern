@@ -1,7 +1,7 @@
 import { withCharacterContract } from "../character-schema/AgentContract";
 import { withConversationContract } from "./ConversationContracts";
 import { withInputAuthorityContract } from "./InputAuthority";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { invoke, createChannel, hasLocalHost } from "../../db/host";
 import { OpenAIStream } from "./OpenAIStream";
 import {
   AgentDefinition,
@@ -15,8 +15,16 @@ import { MockSimulator } from "./MockSimulator";
 import { AgentRuntimeError } from "../errors/PipelineStageError";
 import { SchemaValidator } from "../schema/SchemaValidator";
 import { parseOpenAIResponse } from "./OpenAIResponseParser";
+import type {ParsedOpenAIResponse} from './OpenAIResponseParser';
+export interface RuntimeMessage {role:'system'|'user'|'assistant'|'tool';content:string;tool_calls?:ParsedOpenAIResponse['toolCalls'];tool_call_id?:string}
 
 export interface RunAgentOptions {
+  /** Library games: a single literal behavior system prompt, never render game data into it. */
+  behaviorOnly?: boolean;
+  toolSchema?: Record<string,unknown>;
+  /** Small routing and batched Designer JSON; narrator remains natural prose. */
+  jsonObject?: boolean;
+  conversation?: RuntimeMessage[];
   /** Internal bound: at most one additional request for JSON-shaped syntax errors. */
   formatRetryAttempt?: 0 | 1;
   instructions?: string;
@@ -36,6 +44,7 @@ export interface RunAgentOptions {
 }
 
 export interface RunAgentResult<T = any> {
+  toolCalls?: ParsedOpenAIResponse['toolCalls'];
   success: boolean;
   data: T;
   spanId: string;
@@ -134,7 +143,7 @@ export class AgentRuntime {
     }
 
     const savedDefinition = agents.find((a) => a.id === agentId);
-    const agentDef = savedDefinition ? withInputAuthorityContract(withCharacterContract(withConversationContract(savedDefinition), context.characterSchema), context.player?.input) : undefined;
+    const agentDef = savedDefinition ? agentId.startsWith('text_') ? {...savedDefinition,outputSchema:null} : withInputAuthorityContract(withCharacterContract(withConversationContract(savedDefinition), context.characterSchema), context.player?.input) : undefined;
     if (!agentDef) {
       const errMsg = `Agent definition not found: ${agentId}`;
       return {
@@ -198,7 +207,8 @@ export class AgentRuntime {
         const backend = backends.find((b) => b.id === binding?.backendId);
         const model = binding?.model || backend?.defaultModel || "mock-model";
 
-        const resolvedMessages = renderMessages(agentDef.messages, context);
+        const resolvedMessages:RuntimeMessage[] = options.behaviorOnly ? [{ role: 'system', content: agentDef.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n') || '按照本次任务处理消息。' }] : renderMessages(agentDef.messages, context);
+        if (options.conversation) resolvedMessages.push(...options.conversation);
         if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
         globalTraceManager.updateSpan(traceId, spanId, {
           backendId: backend?.id || "mock",
@@ -360,10 +370,13 @@ export class AgentRuntime {
         top_p: topP,
         reasoning_effort: binding.overrides?.reasoningEffort ?? "none",
         ...sanitizedExtraBody,
+        ...(options.jsonObject ? {response_format:{type:'json_object'}} : {}),
+        ...(options.toolSchema ? {tools:[{type:'function',function:{name:'document_command',description:'调用一个受限文档操作，等待真实工具结果后继续。',parameters:options.toolSchema}}],tool_choice:{type:'function',function:{name:'document_command'}},parallel_tool_calls:false} : {}),
       };
 
       // Render placeholders into messages
-      const resolvedMessages = renderMessages(agentDef.messages, context);
+      const resolvedMessages:RuntimeMessage[] = options.behaviorOnly ? [{ role: 'system', content: agentDef.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n') || '按照本次任务处理消息。' }] : renderMessages(agentDef.messages, context);
+      if (options.conversation) resolvedMessages.push(...options.conversation);
       if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
 
       // Record immutable snapshot with exact request parameters
@@ -373,7 +386,7 @@ export class AgentRuntime {
         inputContext: structuredClone(context),
         templateMessages: structuredClone(agentDef.messages),
         resolvedMessages: structuredClone(resolvedMessages),
-        requestParams: structuredClone(requestParams),
+        requestParams: structuredClone({ ...requestParams, stream: !options.toolSchema }),
       });
 
       // Real LLM execution through Concurrency Limiter & Tauri/Browser HTTP
@@ -389,7 +402,7 @@ export class AgentRuntime {
           const payload = {
             ...requestParams,
             messages: resolvedMessages,
-            stream: true,
+            stream: !options.toolSchema,
           };
           globalTraceManager.updateSpan(traceId, spanId, { generationStatus: "generating" });
           let lastPublish = 0;
@@ -407,13 +420,12 @@ export class AgentRuntime {
             return result;
           };
 
-          const isTauri =
-            typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+          const isTauri = hasLocalHost();
 
           if (isTauri) {
             const decoder = new TextDecoder();
             let streamError: unknown;
-            const onChunk = new Channel<number[]>();
+            const onChunk = createChannel<number[]>();
             onChunk.onmessage = (bytes) => {
               if (streamError) return;
               if (options.signal?.aborted) {
@@ -433,7 +445,7 @@ export class AgentRuntime {
               timeoutMs: backend.timeoutMs || 60000,
               request: payload,
               onChunk,
-            });
+            }, options.signal);
             if (streamError) throw streamError;
             if (options.signal?.aborted) {
               const err = new Error("Generation aborted by user");
@@ -556,7 +568,7 @@ export class AgentRuntime {
       // Keep rejected responses reviewable. Recording evidence does not mark a span successful.
       globalTraceManager.updateSpan(traceId, spanId, { rawResponse });
       // Parse and strictly validate response structure
-      const { content, tokenUsage } = parseOpenAIResponse(rawResponse);
+      const { content, tokenUsage, toolCalls } = parseOpenAIResponse(rawResponse,options.toolSchema?'document_command':undefined);
       globalTraceManager.updateSpan(traceId, spanId, { liveContent: content });
 
       let parsedData: any = content;
@@ -608,6 +620,7 @@ export class AgentRuntime {
         success: true,
         data: parsedData,
         spanId,
+        toolCalls,
       };
     } catch (err: any) {
       const isAbort = options.signal?.aborted === true;

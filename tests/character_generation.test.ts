@@ -101,21 +101,3 @@ test("failed parallel generation waits for siblings and never mutates the origin
   assert.equal(siblingFinished, true);
   assert.deepEqual(before, INITIAL_HARBOR_TAVERN_WORLD);
 });
-
-test("upgrade adds character role without overwriting existing prompts or custom model configuration", async () => {
-  const storage = new StorageService();
-  await storage.initDatabase();
-  const groups = await storage.getAgentGroups();
-  const group = { ...groups[0], bindings: groups[0].bindings.filter(b => b.agentId !== "character_generator").map(b => ({ ...b, model: "custom-model" })) };
-  await storage.saveAgentGroup(group);
-  const agents = await storage.getAgents();
-  const admin = agents.find(a => a.id === "admin_patch")!;
-  await storage.saveAgent({ ...admin, name: "My custom admin" });
-  await storage.saveSettings({ ...await storage.getSettings(), characterGenerationMigrated: false });
-  await storage.initDatabase();
-  const upgraded = (await storage.getAgentGroups()).find(g => g.id === group.id)!;
-  assert.equal(upgraded.bindings.find(b => b.agentId === "character_generator")?.model, "custom-model");
-  assert.equal((await storage.getAgents()).find(a => a.id === "admin_patch")?.name, "My custom admin");
-  await storage.initDatabase();
-  assert.equal((await storage.getAgentGroups()).find(g => g.id === group.id)!.bindings.filter(b => b.agentId === "character_generator").length, 1);
-});

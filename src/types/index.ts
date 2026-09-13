@@ -333,6 +333,9 @@ export interface TurnTrace {
 }
 
 export interface GameTurn {
+  /** Program-owned request history; narratorOutput remains clean display text. */
+  narration?: { anchor: number; requestText: string };
+  textTurn?: import('../engine/text/types').TextTurnData;
   npcExperiences?: Record<string, NPCExperience[]>;
   /** Original legacy patch log retained for audit after snapshot/diff migration. */
   legacyPatches?: JsonPatchOperation[];
@@ -357,6 +360,9 @@ export interface GameTurn {
 }
 
 export interface GameSave {
+  storyInfo?: { storyId: string; title: string; summary: string };
+  textWorld?: import('../engine/text/types').TextWorld;
+  legacyBackup?: unknown;
   worldDefinition: WorldDefinition;
   id: string;
   name: string;

@@ -466,7 +466,8 @@ export const AgentEditorPage: React.FC = () => {
         )}
 
         {/* Tab 2: Messages Editor with Right Variables Drawer */}
-        {activeTab === "messages" && (
+        {['text_router', 'text_designer', 'text_storyteller'].includes(agent.id) && activeTab === 'messages' && <p className="p-3 bg-blue-50 text-blue-700 text-xs rounded-xl">新故事只使用 system 定义行为，不在其中填入世界或人物，也不展开模板变量。世界、角色、玩家定义和「收到」由程序预填，其他消息模板不参与新故事请求。</p>}
+          {activeTab === "messages" && (
           <div className="flex gap-6 h-full">
             {/* Left: Message Cards Stream */}
             <div className="flex-1 space-y-4 overflow-y-auto pr-2">

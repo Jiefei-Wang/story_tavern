@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "../src/db/initialData";
+import { BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";

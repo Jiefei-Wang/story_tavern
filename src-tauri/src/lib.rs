@@ -10,11 +10,9 @@ use commands::secret::{secret_delete, secret_set};
 pub fn run() {
     let database = db::init_db().expect("failed to initialize SQLite database");
 
-    // Auto-seed API keys from environment or local .env if found
-    if let Some(key) = commands::secret::find_env_secret() {
-        let _ = commands::secret::set_secret_internal("backend_openrouter", &key);
-        let _ = commands::secret::set_secret_internal("secret_openrouter_default", &key);
-    }
+    // Existing credentials take priority. The established getter seeds only missing refs.
+    let _ = commands::secret::get_secret_internal("backend_openrouter");
+    let _ = commands::secret::get_secret_internal("secret_openrouter_default");
 
     tauri::Builder::default()
         .manage(database)
@@ -30,6 +28,9 @@ pub fn run() {
             db_kv_get,
             db_kv_list,
             db_kv_delete,
+            commands::text::text_save_list,
+            commands::text::text_save_commit,
+            commands::text::library_commit,
             test_control::test_control_start,
             test_control::test_control_reply,
         ])

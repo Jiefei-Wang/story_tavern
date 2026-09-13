@@ -1,3 +1,4 @@
+import { validateTextWorld } from '../text/Documents';
 import {
   CharacterFieldDefinition as Field,
   GameSave,
@@ -50,6 +51,7 @@ function infer(id: string, value: any): Field {
 export function migrateGameSave(raw: unknown): GameSave {
   if (!raw || typeof raw !== "object") throw new Error("存档必须是对象");
   const save = JSON.parse(JSON.stringify(raw)) as GameSave;
+  if (save.textWorld) { validateTextWorld(save.textWorld); return save; }
   if (
     typeof save.id !== "string" ||
     typeof save.name !== "string" ||

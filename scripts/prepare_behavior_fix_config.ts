@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { BUILTIN_AGENTS } from '../src/db/initialData';
+import { BUILTIN_AGENTS } from '../tests/fixtures/legacyInitialData';
 import { REFUSAL_DETECTOR } from '../src/engine/evaluation/RefusalDetector';
 const root='artifacts/behavior-tests';
 const config=JSON.parse(fs.readFileSync(`${root}/unit-test-config.json`,'utf8'));

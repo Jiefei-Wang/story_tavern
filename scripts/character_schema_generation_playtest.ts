@@ -4,7 +4,7 @@ import {
   BUILTIN_AGENTS,
   DEFAULT_AGENT_GROUPS,
   DEFAULT_BACKENDS,
-} from "../src/db/initialData";
+} from "../tests/fixtures/legacyInitialData";
 import { gamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { validateCharacterAgainstSchema } from "../src/engine/character-schema/CharacterSchema";

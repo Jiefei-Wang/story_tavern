@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
-import { DEFAULT_BACKENDS } from "../src/db/initialData";
+import { DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import type { AgentDefinition } from "../src/types";
 

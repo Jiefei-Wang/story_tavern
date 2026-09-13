@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
 import { parseExtraBody } from "../src/pages/AgentGroups/ExtraBodyEditor";
 import { REASONING_EFFORT_OPTIONS, AgentDefinition, AgentGroup } from "../src/types";
-import { DEFAULT_BACKENDS } from "../src/db/initialData";
+import { DEFAULT_BACKENDS } from "./fixtures/legacyInitialData";
 import { useAgentGroupStore } from "../src/stores/useAgentGroupStore";
 import { storageService } from "../src/db/storage";
 

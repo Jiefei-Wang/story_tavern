@@ -1,5 +1,6 @@
 [package]
 name = "story_tavern"
+default-run = "story_tavern"
 version = "0.1.0"
 description = "AI-Driven Pure Text RPG Engine"
 authors = ["you"]
@@ -13,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [features]
-test-control = ["dep:tiny_http"]
+test-control = []
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -27,4 +28,4 @@ log = "0.4"
 uuid = { version = "1.10", features = ["v4", "fast-rng"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
-tiny_http = { version = "0.12", optional = true }
+tiny_http = "0.12"

@@ -38,7 +38,7 @@ export const GenerationTaskModal: React.FC<GenerationTaskModalProps> = ({ turn, 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const spans = trace?.spans.filter((s) => s.type === "agent_call" || s.type === "input_parser") || [];
+  const spans = trace?.spans.filter((s) => s.type === "agent_call" || s.type === "input_parser" || s.type.startsWith('text_')) || [];
   const isInitTurn = turn.traceId === "trace_init" || turn.turnIndex === 0;
 
   return (

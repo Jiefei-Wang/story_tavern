@@ -1,3 +1,4 @@
+import { loadPreferences } from '../db/preferences';
 import React, { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./routes";
@@ -8,6 +9,7 @@ import { useAgentStore } from "../stores/useAgentStore";
 import { useAgentGroupStore } from "../stores/useAgentGroupStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useTraceStore } from "../stores/useTraceStore";
+import { useLibraryStore } from '../stores/useLibraryStore';
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -26,12 +28,14 @@ export const App: React.FC = () => {
     setInitError(null);
     try {
       await storageService.initDatabase();
+      await loadPreferences();
       await Promise.all([
         loadSettings(),
         loadBackends(),
         loadAgents(),
         loadGroups(),
         loadSaves(),
+        useLibraryStore.getState().load(),
       ]);
       await loadTraces();
       if (storageService.isTauri()) {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { TraceSpan } from "../src/types";
 import { summarizeBehaviorRecovery } from "../src/engine/evaluation/BehaviorRecovery";
 import { evaluateStructure, extractTurnEvidence, renderBehaviorReview } from "../src/engine/evaluation/BehaviorEvaluation";
-import { INITIAL_DEMO_SAVE } from "../src/db/initialData";
+import { INITIAL_DEMO_SAVE } from "./fixtures/legacyInitialData";
 import type { PipelineTurnResult } from "../src/engine/pipeline/GamePipeline";
 
 function span(id: string, type: string, parsedOutput: unknown, extras: Partial<TraceSpan> = {}): TraceSpan {

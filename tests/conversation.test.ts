@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BUILTIN_AGENTS } from "../src/db/initialData";
+import { BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
