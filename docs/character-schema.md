@@ -82,7 +82,7 @@ Field 支持 text / number / integer / boolean / enum / list / object；label、
 - 新增核心：`CharacterSchema.ts`、`HarborSchema.ts`、`AgentContract.ts`、`GuardedPatches.ts`、`Migration.ts`、`EditSchema.ts`、`AuthoringContract.ts`，均位于 `src/engine/character-schema/`。
 - 类型与存储：`src/types/index.ts`、`src/db/initialData.ts`、`src/db/storage.ts`、`src/stores/useGameStore.ts`、`src/engine/world/WorldState.ts`。
 - 流水线集成：`src/engine/pipeline/GamePipeline.ts`、`src/engine/characters/CharacterGenerator.ts`、`src/engine/world/WorldViews.ts`、`src/engine/runtime/AgentRuntime.ts`、`ConversationContracts.ts`、`MockSimulator.ts`、`src/engine/errors/PipelineStageError.ts`。
-- UI：`src/pages/Characters/CharactersPage.tsx`，新增 `CharacterFields.tsx`、`SchemaEditor.tsx`；更新 `src/pages/Play/PlayPage.tsx`、`src/pages/Agents/AgentEditorPage.tsx` 的固定属性展示/预览上下文。
+- 当前 UI：角色与世界公共库使用 `src/pages/Library/LibraryPage.tsx`，本局配置使用 `SaveConfigurationPage.tsx`；旧人物页及专用 Schema 编辑器已移除，底层 Schema 校验、迁移和 `CharacterFields.tsx` 测试仍保留。
 - 助手接入：`src/engine/assistantConfiguration.ts`、`docs/ai-assistant.md`。
 - 新增测试：`tests/character_schema.test.ts`、`tests/character_schema_assistant.test.ts`、`tests/fixtures/characterWorlds.ts`。
 - 旧测试相关 fixture/assertion 迁移：`tests/character_generation.test.ts`、`comprehensive_test.ts`、`conversation.test.ts`、`explicit_admin.test.ts`、`invariants.test.ts`、`test_suite.ts`。

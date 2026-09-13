@@ -32,44 +32,7 @@ pub fn init_db_at(path: PathBuf) -> Result<Database, String> {
     conn.busy_timeout(std::time::Duration::from_secs(30)).map_err(|e|e.to_string())?;
 
     // Create tables
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS backends (
-            id TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS agents (
-            id TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS agent_groups (
-            id TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS saves (
-            id TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS traces (
-            id TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-        ",
-    )
+    conn.execute_batch(CREATE_TABLES)
     .map_err(|e| format!("Failed to initialize SQLite tables: {}", e))?;
 
     // Migration: If traces was previously created with created_at instead of updated_at
@@ -83,8 +46,16 @@ pub fn init_db_at(path: PathBuf) -> Result<Database, String> {
 
 pub fn init_in_memory_db() -> Result<Database, String> {
     let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
-    conn.execute_batch(
-        "
+    conn.execute_batch(CREATE_TABLES)
+    .map_err(|e| e.to_string())?;
+
+    Ok(Database {
+        conn: Mutex::new(conn),
+        db_path: PathBuf::from(":memory:"),
+    })
+}
+
+const CREATE_TABLES: &str = "
         CREATE TABLE IF NOT EXISTS backends (
             id TEXT PRIMARY KEY,
             data TEXT NOT NULL,
@@ -119,12 +90,4 @@ pub fn init_in_memory_db() -> Result<Database, String> {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
-        ",
-    )
-    .map_err(|e| e.to_string())?;
-
-    Ok(Database {
-        conn: Mutex::new(conn),
-        db_path: PathBuf::from(":memory:"),
-    })
-}
+        ";

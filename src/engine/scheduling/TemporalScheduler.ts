@@ -1,5 +1,4 @@
-import { GameEvent, NPCIntent, TemporalBlock } from "../../types";
-import { getSafeEventDuration, getSafeIntentDuration } from "../world/TimingEngine";
+import { TemporalBlock } from "../../types";
 import { elapsedSecondsForBlock, eventsElapsedSeconds, waitPlanningSeconds } from "./TurnTiming";
 
 export interface ReactionBudget {
@@ -40,18 +39,4 @@ export function calculateReactionBudget(
     response_window: false,
     trigger_event_ids: eventIds,
   };
-}
-
-/**
- * Estimates physical action duration in seconds based on action type.
- */
-export function estimateEventDuration(event: GameEvent): number {
-  return getSafeEventDuration(event);
-}
-
-/**
- * Estimates the duration of an NPC's intended action.
- */
-export function estimateIntentDuration(intent: NPCIntent): number {
-  return getSafeIntentDuration(intent);
 }

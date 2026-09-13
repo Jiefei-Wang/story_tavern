@@ -34,7 +34,6 @@ import { buildSettledCharacterHistory } from '../world/CharacterStateHistory';
 import { generateNewCharacters } from "../characters/CharacterGenerator";
 import {
   calculateReactionBudget,
-  estimateIntentDuration,
 } from "../scheduling/TemporalScheduler";
 import { globalTraceManager } from "../tracing/TraceManager";
 import { applyPatches, cloneWorldState } from "../world/PatchEngine";

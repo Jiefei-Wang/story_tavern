@@ -4,6 +4,17 @@ import { Backend } from "../types";
 import { storageService } from "../db/storage";
 import { sanitizeCustomHeaders } from "../engine/runtime/AgentRuntime";
 
+async function withBackendSecret<T>(backend: Backend, apiKey: string | undefined, persist: boolean, run: (secretRef?: string) => Promise<T>): Promise<T> {
+  const temporary = Boolean(apiKey?.trim()) && !persist;
+  const secretRef = temporary ? `temp_secret_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` : backend.secretRef || (apiKey?.trim() ? `secret_${backend.id}` : undefined);
+  try {
+    if (apiKey?.trim()) await storageService.setSecret(secretRef!, apiKey.trim());
+    return await run(secretRef);
+  } finally {
+    if (temporary) await storageService.deleteSecret(secretRef!).catch(() => {});
+  }
+}
+
 async function listBrowserModels(backend: Backend, secretRef?: string): Promise<string[]> {
   const headers = sanitizeCustomHeaders(backend.customHeaders);
   if ((backend.authType || "bearer") === "bearer") {
@@ -93,51 +104,38 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       },
     }));
 
-    let effectiveSecretRef = backend.secretRef;
-    let isTempSecret = false;
-
     try {
-      if (apiKeyOverride && apiKeyOverride.trim()) {
+      return await withBackendSecret(backend, apiKeyOverride, persistStatus, async effectiveSecretRef => {
+        const started = Date.now();
+        const res: TestConnectionResult = storageService.usesLocalService() ? await invoke<TestConnectionResult>("backend_test_connection", {
+          baseUrl: backend.baseUrl,
+          authType: backend.authType || "bearer",
+          secretRef: effectiveSecretRef || null,
+          headers: backend.customHeaders || {},
+          timeoutMs: backend.timeoutMs || 15000,
+        }) : { success: true, model_count: (await listBrowserModels(backend, effectiveSecretRef)).length, latency_ms: Date.now() - started };
+
         if (persistStatus) {
-          effectiveSecretRef = effectiveSecretRef || `secret_${backend.id}`;
-          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
-        } else {
-          // Ephemeral secret for draft testing
-          isTempSecret = true;
-          effectiveSecretRef = `temp_secret_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
+          const updatedBackend: Backend = {
+            ...backend,
+            status: res.success ? "online" : "offline",
+            lastTestedAt: new Date().toISOString(),
+          };
+          await storageService.saveBackend(updatedBackend);
+          set((state) => ({
+            backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
+          }));
         }
-      }
 
-      const started = Date.now();
-      const res: TestConnectionResult = storageService.usesLocalService() ? await invoke<TestConnectionResult>("backend_test_connection", {
-        baseUrl: backend.baseUrl,
-        authType: backend.authType || "bearer",
-        secretRef: effectiveSecretRef || null,
-        headers: backend.customHeaders || {},
-        timeoutMs: backend.timeoutMs || 15000,
-      }) : { success: true, model_count: (await listBrowserModels(backend, effectiveSecretRef)).length, latency_ms: Date.now() - started };
-
-      if (persistStatus) {
-        const updatedBackend: Backend = {
-          ...backend,
-          status: res.success ? "online" : "offline",
-          lastTestedAt: new Date().toISOString(),
-        };
-        await storageService.saveBackend(updatedBackend);
         set((state) => ({
-          backends: state.backends.map((b) => (b.id === backend.id ? updatedBackend : b)),
+          testingStatus: {
+            ...state.testingStatus,
+            [backendId]: { testing: false, result: res },
+          },
         }));
-      }
 
-      set((state) => ({
-        testingStatus: {
-          ...state.testingStatus,
-          [backendId]: { testing: false, result: res },
-        },
-      }));
-
-      return res;
+        return res;
+      });
     } catch (err: any) {
       const errRes: TestConnectionResult = {
         success: false,
@@ -166,10 +164,6 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       }));
 
       return errRes;
-    } finally {
-      if (isTempSecret && effectiveSecretRef) {
-        await storageService.deleteSecret(effectiveSecretRef).catch(() => {});
-      }
     }
   },
 
@@ -178,53 +172,37 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     apiKeyOverride?: string,
     persist: boolean = false
   ) => {
-    let effectiveSecretRef = backend.secretRef;
-    let isTempSecret = false;
-
     try {
-      if (apiKeyOverride && apiKeyOverride.trim()) {
-        if (persist) {
-          effectiveSecretRef = effectiveSecretRef || `secret_${backend.id}`;
-          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
-        } else {
-          isTempSecret = true;
-          effectiveSecretRef = `temp_secret_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          await storageService.setSecret(effectiveSecretRef, apiKeyOverride.trim());
-        }
-      }
+      return await withBackendSecret(backend, apiKeyOverride, persist, async effectiveSecretRef => {
+        const models = storageService.usesLocalService() ? await invoke<string[]>("backend_list_models", {
+          baseUrl: backend.baseUrl,
+          authType: backend.authType || "bearer",
+          secretRef: effectiveSecretRef || null,
+          headers: backend.customHeaders || {},
+          timeoutMs: backend.timeoutMs || 20000,
+        }) : await listBrowserModels(backend, effectiveSecretRef);
 
-      const models = storageService.usesLocalService() ? await invoke<string[]>("backend_list_models", {
-        baseUrl: backend.baseUrl,
-        authType: backend.authType || "bearer",
-        secretRef: effectiveSecretRef || null,
-        headers: backend.customHeaders || {},
-        timeoutMs: backend.timeoutMs || 20000,
-      }) : await listBrowserModels(backend, effectiveSecretRef);
-
-      if (Array.isArray(models) && models.length > 0) {
-        const existing = backend.models || [];
-        const merged = Array.from(new Set([...models, ...existing]));
-        if (persist) {
-          const updated: Backend = {
-            ...backend,
-            models: merged,
-            status: "online",
-          };
-          await storageService.saveBackend(updated);
-          set((state) => ({
-            backends: state.backends.map((b) => (b.id === backend.id ? updated : b)),
-          }));
+        if (Array.isArray(models) && models.length > 0) {
+          const existing = backend.models || [];
+          const merged = Array.from(new Set([...models, ...existing]));
+          if (persist) {
+            const updated: Backend = {
+              ...backend,
+              models: merged,
+              status: "online",
+            };
+            await storageService.saveBackend(updated);
+            set((state) => ({
+              backends: state.backends.map((b) => (b.id === backend.id ? updated : b)),
+            }));
+          }
+          return merged;
         }
-        return merged;
-      }
-      return backend.models || [];
+        return backend.models || [];
+      });
     } catch (err) {
       console.warn("Refresh models failed:", err);
       return backend.models || [];
-    } finally {
-      if (isTempSecret && effectiveSecretRef) {
-        await storageService.deleteSecret(effectiveSecretRef).catch(() => {});
-      }
     }
   },
 }));
