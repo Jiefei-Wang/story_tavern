@@ -1,886 +1,152 @@
-import { useGameStore } from "../../stores/useGameStore";
-import { HARBOR_WORLD_DEFINITION } from "../../engine/character-schema/HarborSchema";
-import { buildCharacterSchemaPrompt } from "../../engine/character-schema/CharacterSchema";
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Save,
-  Plus,
-  Trash2,
-  Copy,
-  ChevronUp,
-  ChevronDown,
-  Play,
-  Eye,
-  CheckCircle2,
-  AlertCircle,
-  FileCode,
-  Tag,
-  Loader2,
-} from "lucide-react";
-import { AgentDefinition, AgentMessage } from "../../types";
-import { useAgentStore } from "../../stores/useAgentStore";
-import { useAgentGroupStore } from "../../stores/useAgentGroupStore";
-import { useBackendStore } from "../../stores/useBackendStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { renderMessages } from "../../engine/template/PlaceholderEngine";
-import { agentRuntime } from "../../engine/runtime/AgentRuntime";
-import { JsonViewer } from "../../components/Common/JsonViewer";
+import { ConfigurationTarget } from '../../components/Common/ConfigurationTarget';
+import { useRepositoryStore, useAgentEditorStore, useGroupEditorStore } from '../../stores/useRepositoryStore';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Save } from 'lucide-react';
+import type { AgentDefinition } from '../../types';
+import { useBackendStore } from '../../stores/useBackendStore';
+import { agentRuntime } from '../../engine/runtime/AgentRuntime';
+import { getAgentPrompt, isStoryAgent, renderAgentPrompt, samplePromptContext, STORY_VARIABLES, validateAgentPrompt } from '../../engine/template/AgentPrompt';
+import { assistantAgentSchema } from '../../engine/modelAssistant';
+import { JsonViewer } from '../../components/Common/JsonViewer';
+import { parseExtraBody } from '../AgentGroups/ExtraBodyEditor';
 
-const AVAILABLE_VARIABLES = [
-  {
-    category: "Player (玩家)",
-    vars: ["{{player.input}}", "{{text player.input}}"],
-  },
-  {
-    category: "NPC (角色与心智)",
-    vars: [
-      "{{npc.name}}",
-      "{{npc.location}}",
-      "{{json npc.attributes}}",
-      "{{json npc.relationships}}",
-      "{{characterSchemaPrompt}}",
-      "{{json npc}}",
-    ],
-  },
-  {
-    category: "Scene (场景与环境)",
-    vars: ["{{scene.location}}", "{{scene.weather}}", "{{scene.lighting}}", "{{json scene}}"],
-  },
-  {
-    category: "Observations (感知观察)",
-    vars: ["{{observations}}", "{{json observations}}"],
-  },
-  {
-    category: "Timing (时序与预算)",
-    vars: ["{{reaction.available_time}}", "{{reaction.response_window}}"],
-  },
-  {
-    category: "Events (事件列表)",
-    vars: ["{{events}}", "{{json events}}", "{{npcReactions}}", "{{json npcReactions}}"],
-  },
-];
-
-const DEFAULT_SAMPLE_CONTEXT = {
-  player: { input: "我走到窗边，对艾琳低声说：“今晚离开这里。”" },
-  scene: {
-    location: "tavern_outside",
-    weather: "clear",
-    lighting: "morning",
-    description: "港口外的薄雾正在散去",
-  },
-  npc: {
-    id: "erin",
-    name: "艾琳 (Erin)",
-    location: "tavern_outside",
-    attributes: {},
-  },
-  observations: [
-    { eventId: "e1", saw: true, heard: false },
-    { eventId: "e2", saw: true, heard: true, content: "今晚离开这里。" },
-  ],
-  reaction: {
-    available_time: 2.5,
-    response_window: false,
-  },
-};
+const field = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm';
 
 export const AgentEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { agents, saveAgent } = useAgentStore();
-  const { groups, activeGroupId } = useAgentGroupStore();
+  const repository = useRepositoryStore();
+  const { agents, saveAgent } = useAgentEditorStore();
+  const { groups, activeGroupId } = useGroupEditorStore();
   const { backends } = useBackendStore();
-  const { settings } = useSettingsStore();
-
-  const [activeTab, setActiveTab] = useState<
-    "basic" | "messages" | "inputs" | "schema" | "defaults" | "preview"
-  >("messages");
-
   const [agent, setAgent] = useState<AgentDefinition | null>(null);
-  const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
-  const [sampleContextJson, setSampleContextJson] = useState(
-    JSON.stringify({ ...DEFAULT_SAMPLE_CONTEXT, characterSchema: useGameStore.getState().activeSave?.worldDefinition.characterSchema || HARBOR_WORLD_DEFINITION.characterSchema, characterSchemaPrompt: buildCharacterSchemaPrompt(useGameStore.getState().activeSave?.worldDefinition.characterSchema || HARBOR_WORLD_DEFINITION.characterSchema), npc: { ...DEFAULT_SAMPLE_CONTEXT.npc, ...(Object.values(useGameStore.getState().activeSave?.worldState.entities || {}).find(e => e.type === "character") || {}) } }, null, 2)
-  );
-  const [renderedPreview, setRenderedPreview] = useState<Array<{ role: string; content: string }> | null>(null);
-  const [testResult, setTestResult] = useState<any>(null);
-  const [isTesting, setIsTesting] = useState(false);
-  const [schemaJsonText, setSchemaJsonText] = useState("");
-  const [schemaError, setSchemaError] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [contextText, setContextText] = useState('');
+  const [preview, setPreview] = useState('');
+  const [result, setResult] = useState<any>(null);
+  const [schema, setSchema] = useState('');
+  const [extraBody, setExtraBody] = useState('{}');
+  const promptInput = useRef<HTMLTextAreaElement>(null);
+  const running = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (id === "new") {
-      const newDef: AgentDefinition = {
-        id: `agent_${Date.now()}`,
-        name: "新建 Agent",
-        description: "自定义 Agent 描述",
-        messages: [
-          { id: "m1", role: "system", content: "You are an AI assistant." },
-          { id: "m2", role: "user", content: "Input: {{player.input}}" },
-        ],
-        inputs: [{ name: "player.input", type: "string", required: true }],
-        outputSchema: null,
-        defaults: {
-          temperature: 0.7,
-          maxTokens: 0,
-        },
-      };
-      setAgent(newDef);
-      setSchemaJsonText("");
-    } else {
-      const existing = agents.find((a) => a.id === id);
-      if (existing) {
-        setAgent(JSON.parse(JSON.stringify(existing)));
-        setSchemaJsonText(
-          existing.outputSchema ? JSON.stringify(existing.outputSchema, null, 2) : ""
-        );
-      }
-    }
+    const source = id === 'new' ? {
+      id: `agent_${Date.now()}`, name: '新建 Agent', description: '', prompt: '请根据以下输入完成任务：\n{{input}}',
+      messages: [], inputs: [], outputSchema: null, defaults: { temperature: 0.7, maxTokens: 0 },
+    } : agents.find(a => a.id === id);
+    if (!source) { setAgent(null); return; }
+    setAgent({ ...structuredClone(source), prompt: getAgentPrompt(source) });
+    setExtraBody(JSON.stringify(source.defaults.extraBody || {}, null, 2));
+    setSchema(source.outputSchema ? JSON.stringify(source.outputSchema, null, 2) : '');
+    setContextText(JSON.stringify(samplePromptContext(source), null, 2));
+    setPreview(''); setResult(null); setStatus('');
   }, [id, agents]);
+  useEffect(() => () => running.current?.abort(), []);
+  useEffect(() => {
+    useRepositoryStore.setState({ editorDirty: repository.target === 'repository' && status === '尚未保存' });
+    return () => { useRepositoryStore.setState({ editorDirty: false }); };
+  }, [status, repository.target]);
 
-  if (!agent) {
-    return <div className="p-10 text-center text-slate-500 text-xs">正在载入 Agent...</div>;
-  }
-
-  const handleSave = async () => {
-    let parsedSchema = null;
-    if (schemaJsonText.trim()) {
-      try {
-        parsedSchema = JSON.parse(schemaJsonText);
-      } catch (err: any) {
-        setSchemaError("JSON Schema 语法错误: " + err.message);
-        setActiveTab("schema");
-        return;
-      }
-    }
-
-    const updated = {
-      ...agent,
-      outputSchema: parsedSchema,
-    };
-
-    await saveAgent(updated);
-    navigate("/agents");
+  if (!agent) return <div className="space-y-4"><ConfigurationTarget /><p className="text-slate-500">此编辑目标中没有该 Agent。</p><button onClick={() => navigate('/agents')}>返回 Agents</button></div>;
+  const story = isStoryAgent(agent.id);
+  const legacyText = agent.id.startsWith('text_');
+  const group = groups.find(g => g.id === (repository.target === 'repository' ? 'group_fast' : activeGroupId));
+  const binding = group?.bindings.find(b => b.agentId === agent.id);
+  const backend = backends.find(b => b.id === binding?.backendId);
+  const variables: Record<string, string> = story ? STORY_VARIABLES : agent.id === 'model_refusal_detector'
+    ? { responseText: '被测模型的回复正文', retry: '格式重试反馈；首次调用为空' }
+    : Object.fromEntries([...new Set(['input', ...agent.inputs.map(i => i.name)])].map(name => [name, '调用方提供的变量；测试时填写样本值']));
+  const edit = (updates: Partial<AgentDefinition>) => { setAgent({ ...agent, ...updates }); setStatus('尚未保存'); setError(''); setPreview(''); setResult(null); };
+  const draft = () => {
+    const value = { ...agent, defaults: { ...agent.defaults, extraBody: parseExtraBody(extraBody) }, ...(!legacyText ? { outputSchema: schema.trim() ? JSON.parse(schema) : null } : {}) };
+    validateAgentPrompt(value);
+    assistantAgentSchema.parse(value);
+    return value;
   };
-
-  const handleAddMessage = (role: "system" | "user" | "assistant") => {
-    const newMsg: AgentMessage = {
-      id: `m_${Date.now()}`,
-      role,
-      content: "",
-    };
-    const updated = [...agent.messages, newMsg];
-    setAgent({ ...agent, messages: updated });
-    setActiveMessageIndex(updated.length - 1);
-  };
-
-  const handleUpdateMessageContent = (idx: number, content: string) => {
-    const updated = [...agent.messages];
-    updated[idx].content = content;
-    setAgent({ ...agent, messages: updated });
-  };
-
-  const handleDeleteMessage = (idx: number) => {
-    if (agent.messages.length <= 1) return;
-    const updated = agent.messages.filter((_, i) => i !== idx);
-    setAgent({ ...agent, messages: updated });
-    setActiveMessageIndex(Math.max(0, idx - 1));
-  };
-
-  const handleDuplicateMessage = (idx: number) => {
-    const target = agent.messages[idx];
-    const dup: AgentMessage = {
-      ...target,
-      id: `m_${Date.now()}`,
-    };
-    const updated = [...agent.messages];
-    updated.splice(idx + 1, 0, dup);
-    setAgent({ ...agent, messages: updated });
-    setActiveMessageIndex(idx + 1);
-  };
-
-  const handleMoveMessage = (idx: number, direction: "up" | "down") => {
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= agent.messages.length) return;
-    const updated = [...agent.messages];
-    const temp = updated[idx];
-    updated[idx] = updated[targetIdx];
-    updated[targetIdx] = temp;
-    setAgent({ ...agent, messages: updated });
-    setActiveMessageIndex(targetIdx);
-  };
-
-  const handleInsertVariable = (variableStr: string) => {
-    if (activeMessageIndex < 0 || activeMessageIndex >= agent.messages.length) return;
-    const msg = agent.messages[activeMessageIndex];
-    handleUpdateMessageContent(activeMessageIndex, msg.content + " " + variableStr);
-  };
-
-  const handleRenderPreview = () => {
+  const save = async () => {
+    setError(''); setSaving(true);
     try {
-      const parsedContext = JSON.parse(sampleContextJson);
-      const rendered = renderMessages(agent.messages, parsedContext);
-      setRenderedPreview(rendered);
-    } catch (err: any) {
-      alert("Sample Context JSON 解析错误: " + err.message);
-    }
+      const value = draft(); await saveAgent(value);
+      if (id === 'new') navigate(`/agents/${encodeURIComponent(value.id)}`, { replace: true });
+      setStatus(repository.target === 'repository' ? '已更新草稿，请点击保存仓库修改' : '已保存');
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setSaving(false); }
   };
-
-  const handleTestAgent = async () => {
-    setIsTesting(true);
-    setTestResult(null);
-    setSchemaError(null);
-
+  const insert = (name: string) => {
+    const input = promptInput.current, text = agent.prompt || '';
+    const start = input?.selectionStart ?? text.length, end = input?.selectionEnd ?? start;
+    const variable = `{{${name}}}`;
+    edit({ prompt: text.slice(0, start) + variable + text.slice(end) });
+    requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(start + variable.length, start + variable.length); });
+  };
+  const render = () => {
+    const context = JSON.parse(contextText);
+    if (!context || typeof context !== 'object' || Array.isArray(context)) throw new Error('样本变量必须为 JSON 对象');
+    const value = draft(), text = renderAgentPrompt(value, context);
+    setPreview(text); return { value, context };
+  };
+  const test = async () => {
+    setError(''); setResult(null);
+    const controller = new AbortController(); running.current = controller;
+    setTesting(true);
     try {
-      // 1. Validate Schema text if present
-      let draftSchema = null;
-      if (schemaJsonText.trim()) {
-        try {
-          draftSchema = JSON.parse(schemaJsonText);
-        } catch (jsonErr: any) {
-          const errMsg = `Schema JSON invalid: ${jsonErr.message}`;
-          setSchemaError(errMsg);
-          setTestResult({ success: false, error: errMsg });
-          setIsTesting(false);
-          return;
-        }
-      }
-
-      // 2. Validate sample context JSON
-      let parsedContext: any;
-      try {
-        parsedContext = JSON.parse(sampleContextJson);
-      } catch (ctxErr: any) {
-        const errMsg = `Sample Context JSON invalid: ${ctxErr.message}`;
-        setTestResult({ success: false, error: errMsg });
-        setIsTesting(false);
-        return;
-      }
-
-      // 3. Construct test agent draft with current editor state and draft schema
-      const draftAgent: AgentDefinition = {
-        ...agent,
-        outputSchema: draftSchema,
-      };
-
-      const testAgents: AgentDefinition[] = [
-        ...agents.filter((a) => a.id !== agent.id),
-        draftAgent,
-      ];
-
-      // Ensure active group has a binding for this agent (especially if new or unassigned)
-      const currentGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
-      let testGroups = groups;
-      if (currentGroup && !currentGroup.bindings.some((b) => b.agentId === agent.id)) {
-        const fallbackBackend = backends[0];
-        const tempBinding = {
-          agentId: agent.id,
-          backendId: fallbackBackend?.id || "backend_openrouter",
-          model: fallbackBackend?.defaultModel || "nvidia/nemotron-3-super-120b-a12b:free",
-        };
-        const updatedGroup = {
-          ...currentGroup,
-          bindings: [...currentGroup.bindings, tempBinding],
-        };
-        testGroups = groups.map((g) => (g.id === currentGroup.id ? updatedGroup : g));
-      }
-
-      const res = await agentRuntime.runAgent({
-        agentId: agent.id,
-        groupId: currentGroup?.id || activeGroupId,
-        context: parsedContext,
-        agents: testAgents,
-        groups: testGroups,
-        backends,
-        mockMode: settings.mockLlmMode,
-      });
-      setTestResult(res);
-    } catch (err: any) {
-      setTestResult({ success: false, error: err.message || String(err) });
-    } finally {
-      setIsTesting(false);
-    }
+      const { value, context } = render();
+      if (!group || !binding || !backend?.enabled) throw new Error('请先在当前 Agent 组中为此 Agent 配置已启用的 Backend 和模型');
+      const output = await agentRuntime.runAgent({ agentId: value.id, groupId: group.id, agents: agents.map(a => a.id === value.id ? value : a), groups, backends,
+        context, promptMode: true, jsonObject: story && value.id !== 'text_storyteller', mockMode: false, signal: controller.signal });
+      setResult(output);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { running.current = null; setTesting(false); }
   };
 
-  return (
-    <div className="space-y-5 h-full flex flex-col">
-      {/* Top action bar */}
-      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-5 py-3 shadow-sm shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/agents")}
-            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h1 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-              <span>编辑 Agent: {agent.name}</span>
-              <span className="font-mono text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                {agent.id}
-              </span>
-            </h1>
-          </div>
+  return <div className="space-y-4">
+    <ConfigurationTarget disabled={saving || testing || status === '尚未保存'} />
+    <header className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3"><button aria-label="返回 Agents" onClick={() => navigate('/agents')}><ArrowLeft className="w-4 h-4"/></button><h1 className="text-xl font-bold">{agent.name} · Prompt</h1></div>
+      <button disabled={saving || testing || repository.busy} onClick={save} className="flex items-center gap-2 rounded-lg bg-blue-600 text-white px-4 py-2 text-sm disabled:opacity-50"><Save className="w-4 h-4"/>{saving ? '保存中…' : repository.target === 'repository' ? '更新 Agent 草稿' : '保存 Agent'}</button>
+    </header>
+    {status && <p role="status" className="text-sm text-slate-500">{status}</p>}
+    {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
+    <fieldset disabled={saving || testing} className="space-y-4 min-w-0">
+      <details className="rounded-xl border bg-white p-4" open={id === 'new' ? true : undefined}>
+        <summary className="cursor-pointer text-sm font-medium">基本信息</summary>
+        <div className="grid sm:grid-cols-2 gap-4 mt-3">
+          <label className="text-sm">名称<input aria-label="Agent 名称" className={field} value={agent.name} onChange={e => edit({ name: e.target.value })}/></label>
+          <label className="text-sm">ID<input aria-label="Agent ID" className={field} disabled={id !== 'new'} value={agent.id} onChange={e => edit({ id: e.target.value })}/></label>
+          <label className="text-sm sm:col-span-2">描述<textarea className={field} value={agent.description} onChange={e => edit({ description: e.target.value })}/></label>
         </div>
-
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>保存 Agent</span>
-        </button>
+      </details>
+      <section className="grid lg:grid-cols-[minmax(0,1fr)_250px] gap-4">
+        <label className="text-sm font-semibold min-w-0">Prompt<textarea aria-label="Prompt" ref={promptInput} rows={22} className={`${field} mt-2 font-mono leading-relaxed resize-y`} value={agent.prompt || ''} onChange={e => edit({ prompt: e.target.value })}/></label>
+        <aside className="space-y-2 pt-1"><h2 className="text-sm font-semibold">可用变量</h2><p className="text-xs text-slate-500">点击插入。可自由调整顺序、标签和数据格式；未引用的数据不会自动追加。</p>
+          {Object.entries(variables).map(([name, description]) => <button type="button" key={name} onClick={() => insert(name)} className="block w-full text-left rounded-lg border bg-white p-2"><code className="text-xs text-blue-700">{'{{' + name + '}}'}</code><span className="block text-xs text-slate-500 mt-1">{description}</span></button>)}
+          <p className="text-xs text-slate-500">对象与列表默认转为 JSON。支持 {'{{json material}}'} 和点路径，如 {'{{player.name}}'}；数组可用数字索引。仅能引用当前阶段实际提供的字段，不支持循环或执行代码。</p>
+        </aside>
+      </section>
+      <details className="rounded-xl border bg-white p-4">
+        <summary className="cursor-pointer text-sm font-medium">生成参数{!legacyText && '与输出校验'}</summary>
+        <div className="grid sm:grid-cols-3 gap-4 mt-4">
+          {(['temperature', 'maxTokens', 'topP'] as const).map(key => <label key={key} className="text-sm">{{temperature:'Temperature', maxTokens:'Max Tokens（0 为无上限）', topP:'Top P'}[key]}<input aria-label={key} type="number" min={0} max={key === 'temperature' ? 2 : key === 'topP' ? 1 : undefined} step={key === 'maxTokens' ? 1 : 0.1} className={field} value={agent.defaults[key] ?? ''} onChange={e => edit({ defaults: { ...agent.defaults, [key]: e.target.value === '' ? undefined : Number(e.target.value) } })}/></label>)}
+        </div>
+        <label className="block text-sm mt-4">额外请求字段（JSON）<textarea aria-label="额外请求字段" rows={5} className={`${field} font-mono`} value={extraBody} onChange={e => { setExtraBody(e.target.value); setStatus('尚未保存'); setPreview(''); setResult(null); }}/></label>
+        {!legacyText && <label className="block text-sm mt-4">输出 Schema（空白为纯文本）<textarea aria-label="输出 Schema" rows={8} className={`${field} font-mono`} value={schema} onChange={e => { setSchema(e.target.value); setStatus('尚未保存'); setPreview(''); setResult(null); }}/></label>}
+      </details>
+    </fieldset>
+    <details className="rounded-xl border bg-white p-4">
+      <summary className="cursor-pointer text-sm font-medium">预览与测试</summary>
+      <p className="text-sm text-slate-500 my-3">样本变量用于测试，不修改本局数据。预览与游戏使用同一 Prompt 渲染器。{story && '人物选择、ID 引用和输出协议仍由游戏管线校验。'}</p>
+      <label className="text-sm">样本变量 JSON<textarea aria-label="样本变量 JSON" disabled={testing} rows={12} className={`${field} font-mono mt-2`} value={contextText} onChange={e => { setContextText(e.target.value); setPreview(''); setResult(null); }}/></label>
+      <div className="flex flex-wrap items-center gap-3 my-3 text-sm"><button disabled={testing} onClick={() => { setError(''); try { render(); } catch(e) { setError(e instanceof Error ? e.message : String(e)); } }} className="border rounded px-3 py-2">预览 Prompt</button>
+        <button disabled={saving || testing || !binding || !backend?.enabled} onClick={test} className="bg-blue-600 text-white rounded px-3 py-2 disabled:opacity-50">{testing ? '测试中…' : '真实模型测试'}</button>
+        {testing && <button onClick={() => running.current?.abort()}>取消测试</button>}
+        <span className="text-slate-500">{group?.name || '未选择组'} · {backend?.name || '未配置 Backend'} · {binding?.model || '未绑定模型'}</span>
       </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 text-xs font-medium shrink-0">
-        <button
-          onClick={() => setActiveTab("basic")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "basic"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          基本信息
-        </button>
-        <button
-          onClick={() => setActiveTab("messages")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "messages"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          提示词 (Messages) ({agent.messages.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("inputs")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "inputs"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          输入变量 ({agent.inputs?.length || 0})
-        </button>
-        <button
-          onClick={() => setActiveTab("schema")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "schema"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          输出 Schema
-        </button>
-        <button
-          onClick={() => setActiveTab("defaults")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "defaults"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          默认参数
-        </button>
-        <button
-          onClick={() => setActiveTab("preview")}
-          className={`px-4 py-2 border-b-2 transition-all ${
-            activeTab === "preview"
-              ? "border-blue-600 text-blue-600 font-semibold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          测试运行 / 预览
-        </button>
-      </div>
-
-      {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-        {/* Tab 1: Basic */}
-        {activeTab === "basic" && (
-          <div className="max-w-xl space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Agent ID (代码唯一引用)</span>
-                {[
-                  "input_compiler",
-                  "perception",
-                  "npc_reaction",
-                  "world_resolver",
-                  "time_skip",
-                  "admin_patch",
-                  "narrator",
-                ].includes(agent.id) ? (
-                  <span className="text-[11px] text-blue-600 font-normal">
-                    (引擎内置核心契约，只读)
-                  </span>
-                ) : id !== "new" ? (
-                  <span className="text-[11px] text-slate-400 font-normal">
-                    (已保存 Agent 唯一标识，只读)
-                  </span>
-                ) : null}
-              </label>
-              <input
-                type="text"
-                value={agent.id}
-                readOnly={id !== "new"}
-                disabled={id !== "new"}
-                onChange={(e) => {
-                  if (id === "new") setAgent({ ...agent, id: e.target.value });
-                }}
-                className={`w-full text-xs font-mono border rounded-lg px-3 py-2 outline-none ${
-                  id !== "new"
-                    ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
-                    : "bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-800"
-                }`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                名称 (Display Name)
-              </label>
-              <input
-                type="text"
-                value={agent.name}
-                onChange={(e) => setAgent({ ...agent, name: e.target.value })}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                描述
-              </label>
-              <textarea
-                rows={3}
-                value={agent.description}
-                onChange={(e) => setAgent({ ...agent, description: e.target.value })}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Messages Editor with Right Variables Drawer */}
-        {['text_router', 'text_designer', 'text_storyteller'].includes(agent.id) && activeTab === 'messages' && <p className="p-3 bg-blue-50 text-blue-700 text-xs rounded-xl">新故事只使用 system 定义行为，不在其中填入世界或人物，也不展开模板变量。世界、角色、玩家定义和「收到」由程序预填，其他消息模板不参与新故事请求。</p>}
-          {activeTab === "messages" && (
-          <div className="flex gap-6 h-full">
-            {/* Left: Message Cards Stream */}
-            <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs text-slate-500">
-                  点击下方卡片可编辑，右侧点击变量即可插入对应占位符：
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAddMessage("system")}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium"
-                  >
-                    + System
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddMessage("user")}
-                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-medium"
-                  >
-                    + User
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddMessage("assistant")}
-                    className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-medium"
-                  >
-                    + Assistant
-                  </button>
-                </div>
-              </div>
-
-              {agent.messages.map((msg, idx) => {
-                const isFocused = activeMessageIndex === idx;
-
-                return (
-                  <div
-                    key={msg.id || idx}
-                    onClick={() => setActiveMessageIndex(idx)}
-                    className={`rounded-xl border transition-all ${
-                      isFocused
-                        ? "border-blue-500 ring-2 ring-blue-500/10 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    {/* Message Header */}
-                    <div className="h-9 px-4 bg-slate-50/80 border-b border-slate-200/80 flex items-center justify-between rounded-t-xl text-xs">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-mono uppercase font-bold text-[10px] px-2 py-0.5 rounded ${
-                            msg.role === "system"
-                              ? "bg-slate-200 text-slate-700"
-                              : msg.role === "user"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-purple-100 text-purple-700"
-                          }`}
-                        >
-                          {msg.role}
-                        </span>
-                        <span className="text-[11px] text-slate-400">#{idx + 1}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveMessage(idx, "up");
-                          }}
-                          disabled={idx === 0}
-                          className="p-1 hover:text-slate-700 disabled:opacity-30"
-                          title="上移"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveMessage(idx, "down");
-                          }}
-                          disabled={idx === agent.messages.length - 1}
-                          className="p-1 hover:text-slate-700 disabled:opacity-30"
-                          title="下移"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDuplicateMessage(idx);
-                          }}
-                          className="p-1 hover:text-slate-700"
-                          title="复制消息"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMessage(idx);
-                          }}
-                          disabled={agent.messages.length <= 1}
-                          className="p-1 hover:text-rose-600 disabled:opacity-30"
-                          title="删除"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Message Content Textarea */}
-                    <div className="p-3">
-                      <textarea
-                        rows={msg.content.split("\n").length > 4 ? 6 : 4}
-                        value={msg.content}
-                        onChange={(e) => handleUpdateMessageContent(idx, e.target.value)}
-                        placeholder={`输入 ${msg.role} 提示词内容……`}
-                        className="w-full text-xs font-mono bg-transparent outline-none resize-y leading-relaxed text-slate-800"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Right: Available Variables Drawer */}
-            <div className="w-72 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 shrink-0 overflow-y-auto max-h-[600px]">
-              <div>
-                <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-blue-600" />
-                  <span>可用变量 (点击插入)</span>
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  点击将占位符插入到当前激活的消息框中。
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {AVAILABLE_VARIABLES.map((cat) => (
-                  <div key={cat.category} className="space-y-1.5">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      {cat.category}
-                    </span>
-                    <div className="space-y-1">
-                      {cat.vars.map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => handleInsertVariable(v)}
-                          className="w-full text-left font-mono text-[11px] px-2 py-1 rounded bg-white hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border border-slate-200 text-slate-700 transition-all truncate block"
-                          title={`点击插入 ${v}`}
-                        >
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Inputs */}
-        {activeTab === "inputs" && (
-          <div className="space-y-4 max-w-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500">
-                定义传递给当前 Agent 的输入变量结构：
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = [
-                    ...(agent.inputs || []),
-                    { name: "new_variable", type: "string", required: true },
-                  ];
-                  setAgent({ ...agent, inputs: updated });
-                }}
-                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>添加变量</span>
-              </button>
-            </div>
-
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
-                <tr>
-                  <th className="py-2 px-3">变量名</th>
-                  <th className="py-2 px-3">类型 / 说明</th>
-                  <th className="py-2 px-3 text-center">必填</th>
-                  <th className="py-2 px-3 text-right">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(agent.inputs || []).map((inp, idx) => (
-                  <tr key={idx}>
-                    <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={inp.name}
-                        onChange={(e) => {
-                          const updated = [...agent.inputs];
-                          updated[idx].name = e.target.value;
-                          setAgent({ ...agent, inputs: updated });
-                        }}
-                        className="w-full font-mono text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none focus:border-blue-500"
-                      />
-                    </td>
-                    <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={inp.type}
-                        onChange={(e) => {
-                          const updated = [...agent.inputs];
-                          updated[idx].type = e.target.value;
-                          setAgent({ ...agent, inputs: updated });
-                        }}
-                        className="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none focus:border-blue-500"
-                      />
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={inp.required}
-                        onChange={(e) => {
-                          const updated = [...agent.inputs];
-                          updated[idx].required = e.target.checked;
-                          setAgent({ ...agent, inputs: updated });
-                        }}
-                        className="rounded text-blue-600 focus:ring-blue-500"
-                      />
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = agent.inputs.filter((_, i) => i !== idx);
-                          setAgent({ ...agent, inputs: updated });
-                        }}
-                        className="text-slate-400 hover:text-rose-600"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Tab 4: Output Schema */}
-        {activeTab === "schema" && (
-          <div className="space-y-4 max-w-2xl">
-            <div>
-              <span className="text-xs font-semibold text-slate-700">
-                JSON Output Schema (留空则代表纯文本输出，如 Narrator)
-              </span>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                模型返回结果将依据此 Schema 进行 JSON 结构化校验。
-              </p>
-            </div>
-
-            {schemaError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{schemaError}</span>
-              </div>
-            )}
-
-            <textarea
-              rows={12}
-              value={schemaJsonText}
-              onChange={(e) => {
-                setSchemaJsonText(e.target.value);
-                setSchemaError(null);
-              }}
-              placeholder={`{\n  "type": "object",\n  "properties": {\n    "thought": { "type": "string" }\n  }\n}`}
-              className="w-full text-xs font-mono bg-slate-900 text-slate-100 rounded-xl p-4 outline-none resize-y leading-relaxed"
-            />
-          </div>
-        )}
-
-        {/* Tab 5: Defaults */}
-        {activeTab === "defaults" && (
-          <div className="max-w-md space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                默认温度 (Temperature)
-              </label>
-              <input
-                type="number"
-                step={0.1}
-                min={0}
-                max={2}
-                value={agent.defaults.temperature ?? 0.7}
-                onChange={(e) =>
-                  setAgent({
-                    ...agent,
-                    defaults: {
-                      ...agent.defaults,
-                      temperature: parseFloat(e.target.value),
-                    },
-                  })
-                }
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                最大生成 Token (Max Tokens，0 = 无上限)
-              </label>
-              <input
-                type="number"
-                step={100}
-                min={0}
-                value={agent.defaults.maxTokens ?? 0}
-                onChange={(e) =>
-                  setAgent({
-                    ...agent,
-                    defaults: {
-                      ...agent.defaults,
-                      maxTokens: e.target.value ? parseInt(e.target.value) : 0,
-                    },
-                  })
-                }
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Tab 6: Preview & Test Agent */}
-        {activeTab === "preview" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Sample Context editor */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">
-                  Sample Context (样本变量 JSON)
-                </span>
-                <button
-                  type="button"
-                  onClick={handleRenderPreview}
-                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md text-xs font-medium transition-colors"
-                >
-                  渲染预览 (Render Messages)
-                </button>
-              </div>
-
-              <textarea
-                rows={12}
-                value={sampleContextJson}
-                onChange={(e) => setSampleContextJson(e.target.value)}
-                className="w-full text-xs font-mono bg-slate-900 text-slate-100 rounded-xl p-3 outline-none leading-relaxed"
-              />
-
-              <button
-                type="button"
-                onClick={handleTestAgent}
-                disabled={isTesting}
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-2 shadow-sm transition-all"
-              >
-                {isTesting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Play className="w-4 h-4 fill-current" />
-                )}
-                <span>用当前 Agent Group 测试调用 (Test Agent)</span>
-              </button>
-            </div>
-
-            {/* Right: Rendered Messages & Test output */}
-            <div className="space-y-4 overflow-y-auto">
-              <span className="text-xs font-bold text-slate-800">
-                渲染后的提示词 (Resolved Messages)
-              </span>
-
-              {renderedPreview ? (
-                <div className="space-y-2">
-                  {renderedPreview.map((m, i) => (
-                    <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-                      <span className="text-[10px] font-mono font-bold uppercase text-blue-600">
-                        {m.role}
-                      </span>
-                      <pre className="text-xs font-mono whitespace-pre-wrap text-slate-800">
-                        {m.content}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-slate-400 p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
-                  点击左侧“渲染预览”按钮，查看替换变量后的完整提示词。
-                </div>
-              )}
-
-              {testResult && (
-                <div className="pt-3 border-t border-slate-200 space-y-2">
-                  <span className="text-xs font-bold text-slate-800">模型调用结果:</span>
-                  <JsonViewer data={testResult} />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+      {preview && <pre aria-label="渲染后的 Prompt" className="whitespace-pre-wrap break-words text-sm rounded bg-slate-50 p-3">{preview}</pre>}
+      {result && <div className="mt-4 space-y-2"><p role="status" className={result.success ? 'text-emerald-700' : 'text-rose-600'}>{result.success ? '测试成功' : '测试失败：' + result.error}</p><pre className="whitespace-pre-wrap text-sm">{typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)}</pre><details><summary>完整结果 JSON</summary><JsonViewer data={result}/></details></div>}
+    </details>
+  </div>;
 };

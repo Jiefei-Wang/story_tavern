@@ -8,6 +8,8 @@
 
 本版本不兼容旧存档。初始化时移除不含 `textWorld.setupVersion=2` 的旧存档记录，不清除 Backend、凭证、保留的当前 Agent 自定义配置、助手偏好或新存档。默认只预填配置库，不自动创建游戏存档；清空故事库后不会再次填充默认故事。
 
+Agent 编辑器直接编辑完整 Prompt 与有效生成参数，不再展示消息角色、兼容开关或手工输入变量声明；文本 Agent 不展示运行时忽略的输出 Schema。其他 Agent 的输出校验仍可配置。Agent 组常规修改自动保存，extraBody 单独保存。
+
 ## 已注册资源
 
 所有能力由 `src/engine/assistantConfiguration.ts` 的 `assistantResources` 生成，并实际发送给助手。
@@ -17,8 +19,9 @@
 | `library` | 角色、世界、故事和首页故事选择；关联数据一起原子保存 |
 | `textSaves` | 已有存档的世界描述、人物文档、人物列表及玩家引用 |
 | `saves` | 已有存档名称、故事展示信息和 Agent 组；新游戏的旧数字世界占位数据不可修改 |
-| `agents` | Agent 定义、system 行为提示、默认生成参数 |
+| `agents` | Agent 定义、完整 `prompt` 模板、默认生成参数 |
 | `groups` | Agent 组及独立 Backend / 模型 / 参数绑定 |
+| `repositoryDefaults` | 开发服务中的仓库默认 Agent 与组；独立文件保存，不自动应用到本机 |
 | `backends` | 服务地址、认证方式、启用状态、超时、并发和模型列表；不包含凭证 |
 | `settings` | 语言、主题、开发者模式、模拟模式、自动保存和日志等级 |
 | `selection` | 当前 Agent 组、当前存档；与首页所选故事分开 |
@@ -44,17 +47,29 @@
 
 ## 模型消息协议
 
-新游戏的每个生成请求固定使用以下顺序：
+每个故事 Agent 的完整输入由 `agents.<id>.prompt` 决定。程序只渲染一次模板，作为一条 user 消息发送；不再在模板外补拼 system、世界定义、“收到”、历史或本轮材料。UI 的“Prompt”是编辑概念，不是 API 消息角色。默认模板包含以下材料，用户可以删除、重排或改变其文字包装；移除变量就不会发送该数据。
 
-1. `system`：当前 Agent 的行为说明。仅拼接已配置的 system 文本，不插入世界、角色、玩家数据，不执行模板插值；配置的其他角色模板消息不参与新故事请求。
-2. `user`：完整世界描述 + 配角定义 + 玩家定义，要求回复「收到」。角色定义包含名字、设定、详细资料与初始记忆。
-3. `assistant`：`收到`，由程序预填，不额外调用模型。
-4. `assistant`：用户填写的开头消息，随后为已保存的历史消息。
-5. `user`：本轮原始输入、任务、路由指示和必要的动态材料。
+| 变量 | 内容 |
+| --- | --- |
+| `{{world}}` | 本局世界描述 |
+| `{{characters}}` / `{{player}}` | 配角列表／玩家定义（id、name、definition、initialMemory） |
+| `{{history}}` | 含开头、已完成回合与时间锚点的消息列表；只读 |
+| `{{input}}` | 当前用户原始输入 |
+| `{{task}}` | 本阶段任务与输出要求 |
+| `{{material}}` | 当前阶段材料 |
+| `{{routingInstructions}}` | Router 的解释；Router 阶段为空 |
+| `{{retry}}` | 本次格式重试反馈；首次请求为空 |
 
+对象和数组默认输出 JSON；支持 `{{json material}}`、`{{player.name}}`、`{{material.cards.0.profile}}` 等点路径。变量必须由当前阶段提供，不存在的字段会在请求前报错；不执行表达式、循环或动态代码。注入内容中的双花括号保持原文，不做二次插值。变量列表不是授权扩展，不能访问凭证、任意存储或其他上下文。检测器仅提供 `{{responseText}}` 与 `{{retry}}`；格式重试说明也通过变量渲染，不在 Prompt 外追加。修改 Prompt 不改变 ID 引用、人物不变量和程序输出协议校验。
+
+`material` 按角色区分：Router 为 `player_id/cards`；Character Designer 为 `requests/existing_cards`；Outline Designer 为 `cards`（包含初始记忆与状态历史）；Narrator 为 `performances/updated_cards`，不额外提供 thought 或 end_state。预览与真实调用共用同一渲染器；样本 JSON 只是测试数据，模型测试必须使用当前组的明确绑定，不临时猜选模型。
+
+示例：“把 Narrator 的 Prompt 改为先列出 <input>{{input}}</input>，再用 <actions>{{material.performances}}</actions> 包裹动作材料”；“只把配角数据从 JSON 外围标题改成 XML 标签，其余 Prompt 保留”。
+
+旧记录没有 `prompt` 时，读取时显式投影旧有效行为文本和默认材料模板，不自动落盘或丢弃 messages、未知字段。保存 Prompt 后以它为准。旧 `save_agent` 和 messages JSON Patch 仍能修改提示词：仅在本批没有同时修改 prompt 时，将变更后的旧消息转换成 prompt；优先使用 `/agents/<id>/prompt` 对应的资源内路径 `/<id>/prompt`。旧无效角色消息留作归档，不作为编辑设置。
 世界配置只有 `description` 进入游戏请求；世界名称、概要、图片，以及故事标题、简介都不作为定义发送。完整描述在生成环节共用，不再有独立的后台世界秘密通道。人物仍应保持自己的知识边界。角色、玩家、历史和当前输入正常提供。
 
-运行流程保留 `text_router → text_designer → text_storyteller`；没有选中人物时跳过 Designer。玩家不是可由路由选择的 NPC。动态创建人物时沿用人物文档验证与原子存档提交，且不会写入公共角色库。memory 文档是初始记忆与背景；Designer 的 end_state 和历史锚点是只读运行记录。
+运行流程为 `text_router → text_outline_designer → text_storyteller`；Router 仅解释需求、选择人物和提出创建/重做需求，不安排节奏或方向。没有人物交互时直接交 Narrator。创建或重新生成人物卡时先按需调用 `text_character_designer`。Outline Designer 负责人物思维、表达概要、动作和 end_state；Narrator 扩写完整对白，不新增持久后果。玩家不是可由路由选择的 NPC。动态创建人物时沿用人物文档验证与原子存档提交，且不会写入公共角色库。memory 文档是初始记忆与背景；Outline Designer 的 thought、expression_outline、end_state 和历史锚点是只读运行记录。
 
 ## 校验、持久化与限制
 
@@ -85,3 +100,30 @@
 `src/db/agentCatalog.ts` 清理已退役 Agent、非默认旧流程组与 `group_unit_test`，默认组只保留四个当前绑定。保留当前提示词、当前模型绑定、未知字段及安全拒绝检测配置，不从旧绑定继承配置。缺失默认项由静态目录补齐；被清理组的存档当前引用切换为 Fast，历史回合不修改。历史管线定义仅作为 `tests/fixtures/legacyInitialData.ts` 的回归夹具，不进入正式初始化或恢复默认操作。
 
 AI 助手的 `agents`、`groups` 资源读取清理后的实际配置，仍支持局部 JSON Patch、引用校验、取消、冲突及失败回执。例如可修改 `/text_router/messages/0/content` 或 `/model_refusal_detector/defaults/temperature`；不要重新创建已退役的默认 ID。
+
+### Designer 拆分与重新生成人物
+
+- 新角色 `text_character_designer` / `text_outline_designer` 的提示词和独立 Backend/模型绑定沿用 `agents` / `agentGroups` 资源的 schema、校验和局部 JSON Patch 读写、保存与界面同步。例如修改 `/text_outline_designer/messages/0/content`。
+- 游戏输入支持“重新生成艾琳的人物设定，保留经历”以及“重新生成艾琳和守卫的人物卡”。Router 通过 `regenerate_characters: [{character_id, description}]` 指定一位或多位已有角色；玩家卡也可重做，但玩家不可成为代演的 NPC。未知/重复 ID、遗漏卡片、非法状态均拒绝。只要求重做人物反应时交 Outline Designer，不重建卡片。
+- 重做保留 ID、文档未知元数据、其他人物和历史，以当前卡片覆盖冲突的旧状态。变更只进入本轮候选存档，取消、失败或保存冲突均不部分提交；不修改公共角色库。模型遵守语义意图仍需真实模型评测，程序仅校验结构和引用。
+- 原 `text_designer` 已退役：初始化先将其 Backend、模型与参数迁移到缺少的新角色绑定，保留已有新绑定，再删除旧定义及各组旧绑定。自定义组不会因为只有旧 Designer 绑定而被删除。旧提示词不会自动复制为两套不同职责提示词；旧 ID 的助手动作明确报资源不存在，请改用 `text_character_designer` 或 `text_outline_designer`。旧历史 `expression` 继续显示；新输出使用 `expression_outline`，仍兼容 routed-v2 存档。独立助手偏好键不变。
+
+## 仓库默认配置编辑
+
+开发服务（`npm run dev`）的 Agents、Agent 编辑器与 Agent 组页面提供「编辑目标：本机配置 / 仓库默认」。正式安装版和 `npm run preview` 不提供仓库写入接口。
+
+- 本机模式延续现有存储与自动保存行为。仓库模式复用表单并保留草稿；Agent 表单先点击「更新 Agent 草稿」，组字段、复制和删除直接更新草稿，再点击「保存仓库修改」统一落盘。切回本机不会应用或丢弃已记录的仓库草稿；重新载入会丢弃草稿。
+- 唯一默认数据源是 `src/db/repositoryDefaults.json`（`agents` 和 `groups` 均以 ID 为键），初始化、运行时默认导出和打包读取同一文件。已有本机自定义值继续保留；修改仓库不自动覆盖本机。开发保存不触发页面重载，避免打断未保存的游戏进度。
+- 「应用到本机」要求仓库已保存且没有正在生成的回合；逐项更新同 ID 的 Agent 与组，保留未来字段、本机其他 Agent/组、Backend 凭证、助手偏好、当前组选择、历史与存档草稿。本机必须已有所引用的 Backend。发生失败会显示已完成项数并停止，不声称整批事务回滚。
+- 仓库组只引用项目默认的 `backend_openrouter` / `backend_local`，模型 ID 可以自由填写。必须保留五个运行时核心 Agent 和 `group_fast` / `group_quality` / `group_local`；退役 ID 不可重新注册。禁止凭证字段、认证头和非法/重复绑定；未知非凭证字段保留。
+- 开发接口只读写上述固定文件，检查本机 Host、同源请求及专用请求头，并用文件内容版本拒绝过期保存。临时文件放在 `.tmp/repository-config/`。仓库冲突需要重新载入后编辑；成功回执返回后才同步已保存版本。
+
+助手资源 `repositoryDefaults` 包含只读的 `available`、`revision` 和可写的 `data.agents` / `data.groups`。`available=false` 表示未连接仓库开发接口，不能修改；界面存在未保存的 Agent 表单或仓库草稿时拒绝助手保存，以免覆盖用户工作。Agent 与组可以在同一资源的 JSON Patch 中一起更新并校验引用。示例：
+
+```json
+{"type":"patch_config","resource":"repositoryDefaults","patches":[{"op":"replace","path":"/data/groups/group_fast/bindings/0/model","value":"example/model"}]}
+```
+
+这只保存仓库默认，不应用到本机。助手若被明确要求修改本机，继续使用原 `agents` / `groups` 资源；旧 `save_agent` / `save_group` 动作和助手 Backend/模型偏好键含义不变。
+
+定向回归：`node --disallow-code-generation-from-strings --import tsx --test tests/repository_configuration.test.ts`。测试使用 `.tmp/` 隔离文件及本机存储替身，覆盖实际开发 HTTP/文件落盘、局部 Patch、未知字段、非法引用/凭证、取消、冲突、失败回执与显式应用；不证明 Tauri 原生存储或真实模型行为。

@@ -127,7 +127,7 @@ export const HistoryPage: React.FC = () => {
               {!selectedTurn.textTurn.designs?.length && <p className="text-xs text-slate-400">本轮没有人物状态更新。</p>}
               {selectedTurn.textTurn.designs?.map(design => <section key={design.character_id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
                 <h3 className="font-semibold">{selectedTurn.textTurn!.after.documents[`characters/${design.character_id}/public.md`]?.text.split('\n')[0].replace(/^#+\s*/, '') || design.character_id}</h3>
-                <p>表达：{design.expression || '无'}</p><p>动作：{design.action || '无'}</p>
+                <p>表达概要：{design.expression_outline ?? design.expression ?? '无'}</p><p>动作：{design.action || '无'}</p>
                 <p className="whitespace-pre-wrap text-slate-600">{stateDescription(design.end_state)}</p>
               </section>)}
             </div> : <div className="space-y-2">

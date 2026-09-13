@@ -1,3 +1,4 @@
+import { validateAgentPrompt } from "../engine/template/AgentPrompt";
 import { create } from "zustand";
 import { AgentDefinition } from "../types";
 import { storageService } from "../db/storage";
@@ -24,6 +25,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   saveAgent: async (agent: AgentDefinition) => {
+    if (agent.prompt !== undefined) validateAgentPrompt(agent);
     agent.updatedAt = new Date().toISOString().split("T")[0];
     await storageService.saveAgent(agent);
     const agents = await storageService.getAgents();

@@ -10,6 +10,19 @@ export async function reconcileAgentCatalog(storage: CatalogStorage) {
     if (!agents.some(a => a.id === agent.id)) await storage.saveAgent(structuredClone(agent));
   }
   const groups = await storage.getAgentGroups();
+  // Split roles inherit the exact former Designer connection, without replacing
+  // existing new bindings. Remove the obsolete role only after migrating bindings.
+  for (const group of groups) {
+    const source = group.bindings.find(b => b.agentId === 'text_designer');
+    if (!source) continue;
+    for (const agentId of ['text_character_designer', 'text_outline_designer']) {
+      if (!group.bindings.some(b => b.agentId === agentId)) {
+        group.bindings.push({ ...structuredClone(source), agentId });
+      }
+    }
+    group.bindings = group.bindings.filter(b => b.agentId !== 'text_designer');
+    await storage.saveAgentGroup(group);
+  }
   const removedGroups = new Set(groups.filter(g =>
     !DEFAULT_AGENT_GROUPS.some(d => d.id === g.id) &&
     (g.id === 'group_unit_test' || g.bindings.some(b => RETIRED_AGENT_IDS.has(b.agentId)))

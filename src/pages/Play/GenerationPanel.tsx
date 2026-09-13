@@ -5,6 +5,8 @@ import { TurnTrace, TraceSpan } from "../../types";
 
 export const AGENT_LABELS: Record<string, string> = {
   text_router: '命令路由 · 选择人物',
+  text_character_designer: 'Character Designer · 创建或重做人物设定',
+  text_outline_designer: 'Outline Designer · 设计人物交互',
   text_designer: 'Designer · 设计人物反应',
   text_storyteller: 'Narrator · 整合故事',
   text_organizer: '组织时间线与感知',

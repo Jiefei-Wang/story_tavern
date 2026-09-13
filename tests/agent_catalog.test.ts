@@ -20,7 +20,7 @@ test('empty database has complete static defaults; cleanup preserves current con
   try {
     const storage = new StorageService();
     await storage.initDatabase();
-    const expected = ['model_refusal_detector','text_designer','text_router','text_storyteller'];
+    const expected = ['model_refusal_detector','text_character_designer','text_outline_designer','text_router','text_storyteller'];
     assert.deepEqual((await storage.getAgents()).map(a=>a.id).sort(), expected);
     assert.equal((await storage.getBackends()).length, DEFAULT_BACKENDS.length);
     assert.ok((await storage.getLibrary())?.data.stories.harbor_story);
@@ -29,7 +29,7 @@ test('empty database has complete static defaults; cleanup preserves current con
       assert.ok(group.bindings.every(b=>b.model && DEFAULT_BACKENDS.some(d=>d.id===b.backendId)));
     }
     const router = {...structuredClone(BUILTIN_AGENTS[0]),name:'自定义路由',future:{keep:true}};
-    const detector = {...structuredClone(BUILTIN_AGENTS[3]),name:'保留检测配置',future:{detector:true}};
+    const detector = {...structuredClone(BUILTIN_AGENTS.find(a => a.id === 'model_refusal_detector')!),name:'保留检测配置',future:{detector:true}};
     await storage.saveAgent(router); await storage.saveAgent(detector);
     for (const id of RETIRED_AGENT_IDS) await storage.saveAgent({...structuredClone(router),id});
     const fast = {...structuredClone(DEFAULT_AGENT_GROUPS[0]),futureGroup:true};
@@ -87,4 +87,30 @@ test('empty database has complete static defaults; cleanup preserves current con
     stores.forEach((s,i)=>(s.setState as any)(states[i]));
     if(descriptor) Object.defineProperty(globalThis,'localStorage',descriptor); else delete (globalThis as any).localStorage;
   }
+});
+
+
+test('Designer cleanup migrates missing bindings, removes old role, preserves custom groups and is idempotent', async () => {
+  const { reconcileAgentCatalog } = await import('../src/db/agentCatalog');
+  const legacy = { ...structuredClone(BUILTIN_AGENTS[0]), id: 'text_designer', name: '旧自定义设计', future: true };
+  const agents = [legacy];
+  const binding = { agentId: 'text_designer', backendId: 'private-backend', model: 'custom-designer', overrides: { temperature: 0.23 }, future: { keep: true } };
+  const groups = ['group_fast', 'custom'].map(id => ({ id, name: id, bindings: [structuredClone(binding)] }));
+  const storage: any = {
+    getAgents: async () => structuredClone(agents), saveAgent: async (a: any) => { agents.push(a); }, deleteAgent: async (id: string) => { const i = agents.findIndex(a => a.id === id); if (i >= 0) agents.splice(i, 1); },
+    getAgentGroups: async () => structuredClone(groups), saveAgentGroup: async (g: any) => { const i = groups.findIndex(x => x.id === g.id); if (i < 0) groups.push(g); else groups[i] = g; },
+    deleteAgentGroup: async () => {}, getSaves: async () => [], saveGame: async () => { throw new Error('must not touch saves'); },
+  };
+  await reconcileAgentCatalog(storage);
+  for (const id of ['group_fast', 'custom']) {
+    const group = groups.find(g => g.id === id)!;
+    for (const agentId of ['text_character_designer', 'text_outline_designer'])
+      assert.deepEqual(group.bindings.find(b => b.agentId === agentId), { ...binding, agentId });
+  }
+  assert(!agents.some(a => a.id === 'text_designer'));
+  assert(groups.every(g => !g.bindings.some(b => b.agentId === 'text_designer')));
+  groups[0].bindings.find(b => b.agentId === 'text_outline_designer')!.model = 'new-choice';
+  const before = structuredClone({ agents, groups });
+  await reconcileAgentCatalog(storage);
+  assert.deepEqual({ agents, groups }, before);
 });

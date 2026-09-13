@@ -40,7 +40,7 @@ test('new games snapshot definitions and opening; library changes and deletion c
   await storageService.deleteGame(save.id);
 });
 
-test('actual HTTP messages are behavior system, definitions user, 收到 assistant, opening, current input', async t => {
+test('actual HTTP prompt includes configured definitions, opening and input, excluding display metadata', async t => {
   const library = defaultLibrary();
   library.worlds.harbor.name = 'WORLD_NAME_NOT_SENT'; library.worlds.harbor.summary = 'WORLD_SUMMARY_NOT_SENT'; library.worlds.harbor.image = 'https://example.com/IMAGE_NOT_SENT.png';
   library.stories.harbor_story.name = 'STORY_NAME_NOT_SENT'; library.stories.harbor_story.summary = 'STORY_SUMMARY_NOT_SENT';
@@ -50,7 +50,7 @@ test('actual HTTP messages are behavior system, definitions user, 收到 assista
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: any) => {
     const body = JSON.parse(options.body); sent.push(body);
     const system = body.messages[0].content;
-    const output = system.includes('只选择本轮') ? { characters: ['erin'], new_characters: [], instructions: '回应' } : system.includes('一次共同设计') ? { characters: [{ character_id: 'erin', expression: '你好。', action: null, end_state: { summary: '已经问候' } }] } : '艾琳说：“你好。”';
+    const output = system.includes('只选择本轮') ? { characters: ['erin'], new_characters: [], instructions: '回应' } : system.includes('一次共同设计') ? { characters: [{ character_id: 'erin', thought: null, expression_outline: '你好。', action: null, end_state: { summary: '已经问候' } }] } : '艾琳说：“你好。”';
     return new Response(JSON.stringify({ choices: [{ message: { content: typeof output === 'string' ? output : JSON.stringify(output) } }] }), { headers: { 'content-type': 'application/json' } });
   });
   const agents = ROUTED_AGENTS.map(a => ({ ...a, messages: [...a.messages, { id: 'stale_task', role: 'user' as const, content: 'OLD_TEMPLATE_NOT_SENT' }] }));
@@ -58,16 +58,14 @@ test('actual HTTP messages are behavior system, definitions user, 收到 assista
   await new TextProcessor(o => runtime.runAgent(o)).execute(save, '你好', { agents, activeGroupId: 'test', groups: [{ id: 'test', name: 'test', bindings: agents.map(a => ({ agentId: a.id, backendId: 'test', model: 'model' })) }], backends: [{ id: 'test', name: 'test', baseUrl: 'http://localhost:1234/v1', authType: 'none', customHeaders: {}, enabled: true, timeoutMs: 1000, maxConcurrency: 1 }], mockMode: false, recentTurns: save.turns });
   assert.equal(sent.length, 3);
   for (const body of sent) {
-    assert.deepEqual(body.messages.slice(0, 4).map((m: any) => m.role), ['system', 'user', 'assistant', 'assistant']);
-    assert.equal(body.messages[2].content, '收到');
-    assert(body.messages[1].content.includes('PLAYER_DETAIL_INCLUDED'));
-    assert(body.messages[1].content.includes(library.worlds.harbor.description));
-    assert(body.messages[1].content.includes('艾琳'));
-    assert(body.messages[3].content.startsWith(library.stories.harbor_story.opening));
-    assert(body.messages.at(-1).content.includes('用户原始输入：\n你好'));
-    assert(!body.messages[0].content.includes('PLAYER_DETAIL_INCLUDED'));
+    assert.deepEqual(body.messages.map((m: any) => m.role), ['user']);
+    const prompt = body.messages[0].content;
+    assert(prompt.includes('PLAYER_DETAIL_INCLUDED'));
+    assert(prompt.includes(library.worlds.harbor.description));
+    assert(prompt.includes('艾琳'));
+    assert(prompt.includes(library.stories.harbor_story.opening));
+    assert(prompt.includes('用户原始输入：\n你好'));
     assert(!JSON.stringify(body.messages).includes('NOT_SENT'));
-    assert.equal(body.messages.filter((m: any) => m.role === 'system').length, 1);
   }
 });
 

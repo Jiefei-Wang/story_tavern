@@ -1,13 +1,14 @@
+import { ConfigurationTarget } from '../../components/Common/ConfigurationTarget';
+import { useRepositoryStore, useAgentEditorStore, useGroupEditorStore } from '../../stores/useRepositoryStore';
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Bot, Plus, Copy, Edit2, Trash2, Tag, Calendar } from "lucide-react";
-import { useAgentStore } from "../../stores/useAgentStore";
-import { useAgentGroupStore } from "../../stores/useAgentGroupStore";
 
 export const AgentsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { agents, duplicateAgent, deleteAgent, resetBuiltinAgents } = useAgentStore();
-  const { groups } = useAgentGroupStore();
+  const repository = useRepositoryStore();
+  const { agents, duplicateAgent, deleteAgent, resetBuiltinAgents } = useAgentEditorStore();
+  const { groups } = useGroupEditorStore();
 
   const handleEdit = (id: string) => {
     navigate(`/agents/${id}`);
@@ -46,19 +47,23 @@ export const AgentsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ConfigurationTarget />
+      <fieldset disabled={repository.busy} className="space-y-6 min-w-0">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Bot className="w-5 h-5 text-blue-600" />
-            <span>Agents (智能体与提示词模板)</span>
+            <span>Agents</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Agent 本身就是 Prompt Template。定义消息时序、输入占位符、输出 Schema 与生成默认参数。
+            编辑完整 Prompt 与数据格式；服务和模型在 Agent 组中选择。
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <details hidden={repository.target === 'repository'} className="relative text-xs">
+            <summary className="cursor-pointer px-3 py-2 text-slate-600">更多操作</summary>
           <button
             onClick={async () => {
               if (confirm("确定要将所有内置 Agent 重置为最新的默认提示词模板吗？")) {
@@ -70,6 +75,7 @@ export const AgentsPage: React.FC = () => {
           >
             <span>重置内置模板</span>
           </button>
+          </details>
           <button
             onClick={handleCreate}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all"
@@ -87,9 +93,6 @@ export const AgentsPage: React.FC = () => {
             <tr>
               <th className="py-3 px-4">名称 / ID</th>
               <th className="py-3 px-4">描述</th>
-              <th className="py-3 px-4">标签</th>
-              <th className="py-3 px-4">版本</th>
-              <th className="py-3 px-4">更新日期</th>
               <th className="py-3 px-4 text-right">操作</th>
             </tr>
           </thead>
@@ -102,26 +105,8 @@ export const AgentsPage: React.FC = () => {
                     <div className="font-mono text-[11px] text-blue-600">{agent.id}</div>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-slate-600 max-w-sm line-clamp-2">
+                <td className="py-3 px-4 text-slate-600 max-w-sm">
                   {agent.description}
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex flex-wrap gap-1">
-                    {(agent.tags || ["核心"]).map((tag) => (
-                      <span
-                        key={tag}
-                        className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                  {agent.version || "v1.0"}
-                </td>
-                <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
-                  {agent.updatedAt || "2026-09-11"}
                 </td>
                 <td className="py-3 px-4 text-right space-x-2">
                   <button
@@ -151,6 +136,7 @@ export const AgentsPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+      </fieldset>
     </div>
   );
 };

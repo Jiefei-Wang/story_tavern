@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { repositoryConfigPlugin } from './scripts/repository-config-plugin';
 import { localServicePlugin } from './scripts/local-service-plugin';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), localServicePlugin()],
+  plugins: [repositoryConfigPlugin(), react(), localServicePlugin()],
   define: { 'import.meta.env.VITE_SHARED_STORAGE': JSON.stringify('true') },
   resolve: {
     alias: {

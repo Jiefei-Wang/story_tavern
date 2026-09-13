@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   X,
@@ -7,7 +7,6 @@ import {
   Cpu,
   AlertCircle,
   ExternalLink,
-  ChevronDown,
   ChevronRight,
   FileText,
 } from "lucide-react";
@@ -192,8 +191,6 @@ interface SpanTaskItemProps {
 }
 
 const SpanTaskItem: React.FC<SpanTaskItemProps> = ({ span, index }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-
   const title = span.displayLabel || AGENT_LABELS[span.agentId || ""] || span.name;
   const content =
     span.liveContent ||
@@ -201,16 +198,14 @@ const SpanTaskItem: React.FC<SpanTaskItemProps> = ({ span, index }) => {
     (typeof span.rawResponse === "string" ? span.rawResponse : "");
 
   return (
-    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+    <details open className="group border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
       {/* Header */}
-      <button
-        type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
+      <summary
+        className="w-full px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer list-none"
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-slate-400">
-            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            <ChevronRight aria-hidden="true" className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
           </span>
           <span className="text-xs font-semibold text-slate-800 truncate">
             {index}. {title}
@@ -249,29 +244,27 @@ const SpanTaskItem: React.FC<SpanTaskItemProps> = ({ span, index }) => {
               : "生成中…"}
           </span>
         </div>
-      </button>
+      </summary>
 
       {/* Content */}
-      {isExpanded && (
-        <div className="p-3 border-t border-slate-100 bg-white space-y-2">
-          {span.error && (
-            <div className="p-2.5 bg-rose-50 text-rose-700 rounded-lg text-xs border border-rose-200 break-words">
-              <span className="font-semibold">错误信息: </span>
-              {span.error}
-            </div>
-          )}
+      <div className="p-3 border-t border-slate-100 bg-white space-y-2">
+        {span.error && (
+          <div className="p-2.5 bg-rose-50 text-rose-700 rounded-lg text-xs border border-rose-200 break-words">
+            <span className="font-semibold">错误信息: </span>
+            {span.error}
+          </div>
+        )}
 
-          {content ? (
-            <pre className="text-xs font-sans text-slate-700 leading-relaxed whitespace-pre-wrap break-words bg-slate-50/60 p-3 rounded-lg border border-slate-100 max-h-60 overflow-y-auto select-text">
-              {content}
-            </pre>
-          ) : (
-            <div className="text-xs text-slate-400 italic py-1 px-1">
-              {span.status === "running" ? "正在接收大模型正文…" : span.status === "error" ? "无输出内容" : "等待处理…"}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        {content ? (
+          <pre className="text-xs font-sans text-slate-700 leading-relaxed whitespace-pre-wrap break-words bg-slate-50/60 p-3 rounded-lg border border-slate-100 max-h-60 overflow-y-auto select-text">
+            {content}
+          </pre>
+        ) : (
+          <div className="text-xs text-slate-400 italic py-1 px-1">
+            {span.status === "running" ? "正在接收大模型正文…" : span.status === "error" ? "无输出内容" : "等待处理…"}
+          </div>
+        )}
+      </div>
+    </details>
   );
 };

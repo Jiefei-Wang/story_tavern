@@ -51,12 +51,15 @@ export interface TextTurnData {
 }
 export interface CharacterDesign {
     character_id: string;
-    expression: string | null;
+    expression?: string | null;
+    thought?: string | null;
+    expression_outline?: string | null;
     action: string | null;
     end_state: Record<string, unknown>;
 }
 export interface CharacterRoute {
     characters: string[];
+    regenerate_characters: { character_id: string; description: string }[];
     new_characters: { request_id: string; description: string }[];
     instructions: string;
 }

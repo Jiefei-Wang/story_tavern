@@ -16,8 +16,8 @@ const context = { agents: ROUTED_AGENTS, groups: DEFAULT_AGENT_GROUPS, backends:
 const refusal = '抱歉，我不能协助现实伤害或提供违法实施方法。';
 const normal = (o: RunAgentOptions) => o.agentId === 'text_router'
   ? JSON.stringify({ characters: ['cen'], new_characters: [], instructions: '处理当前输入。' })
-  : o.agentId === 'text_designer'
-    ? JSON.stringify({ characters: [{ character_id: 'cen', expression: '请出示路引。', action: null, end_state: { summary: '仍在门口查验。' } }] })
+  : o.agentId === 'text_outline_designer'
+    ? JSON.stringify({ characters: [{ character_id: 'cen', thought: null, expression_outline: '请出示路引。', action: null, end_state: { summary: '仍在门口查验。' } }] })
     : '岑岳请你出示路引。';
 
 test('migration preserves nine scenarios, 42 continuous turns, NPCs and meaningful initial state; records changed inputs', () => {
@@ -42,7 +42,7 @@ test('migration preserves nine scenarios, 42 continuous turns, NPCs and meaningf
   assert(routedSafetyScenarios.every(s => s.turns.length === 2));
 });
 
-for (const stage of ['text_router', 'text_designer']) test(`plain-text model refusal at ${stage}: one format retry, trace evidence, no partial state; safe continuation`, async () => {
+for (const stage of ['text_router', 'text_outline_designer']) test(`plain-text model refusal at ${stage}: one format retry, trace evidence, no partial state; safe continuation`, async () => {
   const source = structuredClone(routedBehaviorScenarios[0].save), before = structuredClone(source);
   const calls: string[] = [];
   let traceId = '';
@@ -65,7 +65,7 @@ test('narrator free-text refusal is currently accepted as story and paired with 
   const source = structuredClone(routedBehaviorScenarios[0].save);
   const result = await new TextProcessor(async o => ({ success: true, data: o.agentId === 'text_storyteller' ? refusal : normal(o), spanId: 'controlled' })).execute(source, '边界测试', context);
   assert.equal(result.turns.at(-1)!.narratorOutput, refusal);
-  assert.equal(result.turns.at(-1)!.textTurn!.designs![0].expression, '请出示路引。');
+  assert.equal(result.turns.at(-1)!.textTurn!.designs![0].expression_outline, '请出示路引。');
   assert.equal(result.turns.at(-1)!.narration!.anchor, 1);
 });
 
@@ -83,7 +83,7 @@ test('valid router instructions can deliver a refusal with no NPC state changes 
   for (const id of source.textWorld!.characters) assert.deepEqual(result.textWorld!.documents[`characters/${id}/memory.md`], source.textWorld!.documents[`characters/${id}/memory.md`]);
 });
 
-for (const stage of ['text_router', 'text_designer', 'text_storyteller']) test(`provider failure at ${stage} aborts without consuming an anchor`, async () => {
+for (const stage of ['text_router', 'text_outline_designer', 'text_storyteller']) test(`provider failure at ${stage} aborts without consuming an anchor`, async () => {
   const source = structuredClone(routedBehaviorScenarios[0].save), before = structuredClone(source);
   await assert.rejects(() => new TextProcessor(async o => o.agentId === stage
     ? { success: false, data: null, error: 'Provider content filter rejected request', spanId: 'controlled' }

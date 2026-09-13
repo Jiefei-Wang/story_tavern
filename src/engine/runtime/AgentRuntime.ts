@@ -8,6 +8,7 @@ import {
   AgentGroup,
   Backend,
 } from "../../types";
+import { renderAgentPrompt, getAgentPrompt } from "../template/AgentPrompt";
 import { renderMessages } from "../template/PlaceholderEngine";
 import { globalConcurrencyLimiter } from "../scheduling/ConcurrencyLimiter";
 import { globalTraceManager } from "../tracing/TraceManager";
@@ -19,8 +20,7 @@ import type {ParsedOpenAIResponse} from './OpenAIResponseParser';
 export interface RuntimeMessage {role:'system'|'user'|'assistant'|'tool';content:string;tool_calls?:ParsedOpenAIResponse['toolCalls'];tool_call_id?:string}
 
 export interface RunAgentOptions {
-  /** Library games: a single literal behavior system prompt, never render game data into it. */
-  behaviorOnly?: boolean;
+  promptMode?: boolean;
   toolSchema?: Record<string,unknown>;
   /** Small routing and batched Designer JSON; narrator remains natural prose. */
   jsonObject?: boolean;
@@ -207,14 +207,14 @@ export class AgentRuntime {
         const backend = backends.find((b) => b.id === binding?.backendId);
         const model = binding?.model || backend?.defaultModel || "mock-model";
 
-        const resolvedMessages:RuntimeMessage[] = options.behaviorOnly ? [{ role: 'system', content: agentDef.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n') || '按照本次任务处理消息。' }] : renderMessages(agentDef.messages, context);
-        if (options.conversation) resolvedMessages.push(...options.conversation);
-        if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
+        const resolvedMessages:RuntimeMessage[] = options.promptMode || agentDef.prompt !== undefined ? [{ role: 'user', content: renderAgentPrompt(agentDef, { ...context, retry: options.instructions || context.retry || '' }) }] : renderMessages(agentDef.messages, context);
+        if (!options.promptMode && agentDef.prompt === undefined && options.conversation) resolvedMessages.push(...options.conversation);
+        if (!options.promptMode && agentDef.prompt === undefined && options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
         globalTraceManager.updateSpan(traceId, spanId, {
           backendId: backend?.id || "mock",
           model,
           inputContext: structuredClone(context),
-          templateMessages: structuredClone(agentDef.messages),
+          templateMessages: options.promptMode || agentDef.prompt !== undefined ? [{ id: 'prompt', role: 'user', content: getAgentPrompt(agentDef) }] : structuredClone(agentDef.messages),
           resolvedMessages: structuredClone(resolvedMessages),
           requestParams: { model, mockMode: true },
         });
@@ -375,16 +375,16 @@ export class AgentRuntime {
       };
 
       // Render placeholders into messages
-      const resolvedMessages:RuntimeMessage[] = options.behaviorOnly ? [{ role: 'system', content: agentDef.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n') || '按照本次任务处理消息。' }] : renderMessages(agentDef.messages, context);
-      if (options.conversation) resolvedMessages.push(...options.conversation);
-      if (options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
+      const resolvedMessages:RuntimeMessage[] = options.promptMode || agentDef.prompt !== undefined ? [{ role: 'user', content: renderAgentPrompt(agentDef, { ...context, retry: options.instructions || context.retry || '' }) }] : renderMessages(agentDef.messages, context);
+      if (!options.promptMode && agentDef.prompt === undefined && options.conversation) resolvedMessages.push(...options.conversation);
+      if (!options.promptMode && agentDef.prompt === undefined && options.instructions) resolvedMessages.push({ role: "system", content: options.instructions });
 
       // Record immutable snapshot with exact request parameters
       globalTraceManager.updateSpan(traceId, spanId, {
         backendId: backend.id,
         model,
         inputContext: structuredClone(context),
-        templateMessages: structuredClone(agentDef.messages),
+        templateMessages: options.promptMode || agentDef.prompt !== undefined ? [{ id: 'prompt', role: 'user', content: getAgentPrompt(agentDef) }] : structuredClone(agentDef.messages),
         resolvedMessages: structuredClone(resolvedMessages),
         requestParams: structuredClone({ ...requestParams, stream: !options.toolSchema }),
       });

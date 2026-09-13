@@ -32,6 +32,8 @@ export interface AgentInputDefinition {
 }
 
 export interface AgentDefinition {
+  /** Editable complete prompt; messages remain only for old records/actions. */
+  prompt?: string;
   id: string;
   name: string;
   description: string;

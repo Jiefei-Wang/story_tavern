@@ -66,7 +66,7 @@ export function AIAssistant() {
             <label className="text-xs space-y-1">助手模型<input aria-label="助手模型" disabled={busy} className={`${field} w-full block`} list="assistant-models" value={model} onChange={e => setModel(e.target.value)} placeholder="选择或输入模型 ID" /></label>
             <datalist id="assistant-models">{backend?.models?.map(m => <option key={m} value={m} />)}</datalist>
           </div>
-          <p className="text-xs text-slate-500">助手可调整角色、世界、故事库、本局设定、系统设置和模型配置。修改保存到桌面与浏览器共用的本地数据库；凭证使用安全表单，历史回合不可编辑。</p>
+          <p className="text-xs text-slate-500">助手可调整角色、世界、故事库、本局设定、系统设置和模型配置。本机修改保存到本地数据库；开发服务中的仓库默认独立保存、不自动应用。凭证使用安全表单，历史回合不可编辑。</p>
           {!backend && <p className="text-xs text-amber-700">请先在 Backends 中保存并启用服务，再选择助手 Backend。</p>}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4" aria-live="polite">

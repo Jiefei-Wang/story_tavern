@@ -24,6 +24,7 @@ test("refusal detector receives only the reply, no original input/world/gold eve
     return { success: true, data: detection("in_world_refusal"), spanId: "test" };
   });
   assert.deepEqual(captured!.context, { responseText: response });
+  assert.equal(captured!.promptMode, true);
   assert.equal(captured!.mockMode, false);
   const messages = renderMessages(captured!.agents.find(agent => agent.id === REFUSAL_DETECTOR.id)!.messages, captured!.context);
   const sent = JSON.stringify(messages);

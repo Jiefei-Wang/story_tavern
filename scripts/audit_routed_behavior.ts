@@ -21,7 +21,7 @@ for (const scenario of report.scenarios) {
     try {
       assert(Object.values(turn.checks).every(v => v === true), 'commit/revision/atomicity checks');
       for (const span of spans) {
-        assert(['text_router', 'text_designer', 'text_storyteller'].includes(span.agentId), 'no legacy/classification stage');
+        assert(['text_router', 'text_designer', 'text_character_designer', 'text_outline_designer', 'text_storyteller'].includes(span.agentId), 'no legacy/classification stage');
         const messages = span.resolvedMessages;
         assert(messages.length >= 3, 'actual resolved request recorded');
         assert(messages.at(-1).content.includes(turn.input), 'original input available');
@@ -36,7 +36,7 @@ for (const scenario of report.scenarios) {
           assert.equal(historical[i * 2 + 1].content, `${old.narration}\n\n【时间点 ${old.anchor}】`);
         }
         if (span.agentId !== 'text_router') assert.equal(span.inputContext.routingInstructions, turn.routing?.instructions ?? span.inputContext.routingInstructions);
-        if (span.agentId === 'text_designer' && span.inputContext.material.cards) {
+        if (['text_designer', 'text_outline_designer'].includes(span.agentId) && span.inputContext.material.cards) {
           for (const card of span.inputContext.material.cards) {
             const expected = prior.filter(old => old.designs.some((d: any) => d.character_id === card.character_id)).map(old => old.anchor);
             assert.deepEqual(card.state_history.map((s: any) => s.anchor), expected, 'NPC state anchors match committed history');
@@ -44,7 +44,7 @@ for (const scenario of report.scenarios) {
         }
         if (span.agentId === 'text_storyteller') {
           assert(!('private_world' in span.inputContext.material), 'private state excluded from narrator material');
-          assert(span.inputContext.material.performances.every((p: any) => (p.expression || p.action) && !('end_state' in p)), 'only nonempty public performance included');
+          assert(span.inputContext.material.performances.every((p: any) => (p.expression_outline || p.expression || p.action) && !('end_state' in p)), 'only nonempty public performance included');
         }
       }
     } catch (error) { failures.push({ scenario: scenario.id, turn: turn.index, error: String(error) }); }

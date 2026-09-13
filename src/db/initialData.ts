@@ -1,14 +1,13 @@
 import type { AgentDefinition, AgentGroup, Backend } from '../types';
-import { ROUTED_AGENTS } from '../engine/text/Agents';
-import { REFUSAL_DETECTOR } from '../engine/evaluation/RefusalDetector';
+import repositoryDefaults from './repositoryDefaults.json';
 
 /** Repository-owned defaults used by both desktop and browser initialization. */
-export const BUILTIN_AGENTS: AgentDefinition[] = [...ROUTED_AGENTS, REFUSAL_DETECTOR];
+export const BUILTIN_AGENTS: AgentDefinition[] = Object.values(repositoryDefaults.agents) as AgentDefinition[];
 export const RETIRED_AGENT_IDS = new Set([
   'input_compiler', 'perception', 'npc_reaction', 'world_resolver', 'time_skip',
   'admin_patch', 'narrator', 'character_generator', 'action_adjudicator',
   'narration_auditor', 'character_change_auditor',
-  'text_organizer', 'text_character', 'text_narrator', 'text_editor',
+  'text_organizer', 'text_character', 'text_narrator', 'text_editor', 'text_designer',
 ]);
 
 export const DEFAULT_BACKENDS: Backend[] = [
@@ -49,8 +48,4 @@ export const DEFAULT_BACKENDS: Backend[] = [
 ];
 
 
-export const DEFAULT_AGENT_GROUPS: AgentGroup[] = [
-  { id: 'group_fast', name: 'Fast (快速低成本)', description: '当前故事流程与独立模型安全拒绝检测', bindings: BUILTIN_AGENTS.map(a => ({ agentId:a.id, backendId:'backend_openrouter', model:'deepseek/deepseek-v4.1-flash', overrides:{reasoningEffort:'none'} })) },
-  { id: 'group_quality', name: 'Quality (高质量模型组合)', description: '当前故事流程与独立模型安全拒绝检测', bindings: BUILTIN_AGENTS.map(a => ({ agentId:a.id, backendId:'backend_openrouter', model:'nvidia/nemotron-3-super-120b-a12b:free' })) },
-  { id: 'group_local', name: 'Local (本地离线模型)', description: '本地推理的当前故事流程与独立模型安全拒绝检测', bindings: BUILTIN_AGENTS.map(a => ({ agentId:a.id, backendId:'backend_local', model:'qwen2.5:7b' })) },
-];
+export const DEFAULT_AGENT_GROUPS: AgentGroup[] = Object.values(repositoryDefaults.groups) as AgentGroup[];

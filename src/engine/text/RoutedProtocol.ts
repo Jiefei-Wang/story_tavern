@@ -9,7 +9,7 @@ const ids = (value: unknown, allowed: string[], field: string): string[] => {
         throw new Error(`${field} 含未授权或重复人物 ID`);
     return value;
 };
-export function validateRoute(value: any, allowed: string[]): CharacterRoute {
+export function validateRoute(value: any, allowed: string[], regeneratable = allowed): CharacterRoute {
     if (!object(value)) throw new Error('命令路由须返回 JSON 对象');
     const characters = ids(value.characters, allowed, 'characters');
     if (!Array.isArray(value.new_characters) || value.new_characters.length > 4)
@@ -20,7 +20,11 @@ export function validateRoute(value: any, allowed: string[]): CharacterRoute {
         return { request_id: item.request_id, description: requiredText(item.description, '新人物 description') };
     });
     if (new Set(requests.map((r: any) => r.request_id)).size !== requests.length) throw new Error('新人物 request_id 重复');
-    return { characters, new_characters: requests, instructions: requiredText(value.instructions, '路由 instructions') };
+    const regenerate = value.regenerate_characters ?? [];
+    if (!Array.isArray(regenerate)) throw new Error('regenerate_characters 必须为列表');
+    ids(regenerate.map((r: any) => r?.character_id), regeneratable, 'regenerate_characters');
+    const regenerate_characters = regenerate.map((r: any) => ({ character_id: r.character_id, description: requiredText(r.description, '重新生成人物 description') }));
+    return { characters, new_characters: requests, regenerate_characters, instructions: requiredText(value.instructions, '路由 instructions') };
 }
 export function validateState(value: unknown): Record<string, unknown> {
     if (!object(value) || JSON.stringify(value).length > 32000) throw new Error('end_state / initial_state 必须为至多 32000 字符的 JSON 对象');
@@ -34,6 +38,17 @@ export function validateDesigns(value: any, allowed: string[]): CharacterDesign[
         for (const key of ['expression', 'action'])
             if (item[key] !== null && typeof item[key] !== 'string') throw new Error(`${item.character_id}.${key} 必须是文本或 null`);
         return { character_id: item.character_id, expression: item.expression?.trim() || null, action: item.action?.trim() || null, end_state: validateState(item.end_state) };
+    });
+}
+export function validateOutlines(value: any, allowed: string[]): CharacterDesign[] {
+    if (!object(value) || !Array.isArray(value.characters)) throw new Error('Outline Designer 缺少 characters 列表');
+    const selected = ids(value.characters.map((item: any) => item?.character_id), allowed, 'Outline.characters');
+    if (selected.length !== allowed.length) throw new Error('Outline Designer 不能遗漏选中人物');
+    return value.characters.map((item: any) => {
+        for (const key of ['thought', 'expression_outline', 'action'])
+            if (item[key] !== null && typeof item[key] !== 'string') throw new Error(`${item.character_id}.${key} 必须是文本或 null`);
+        return { character_id: item.character_id, thought: item.thought?.trim() || null, expression_outline: item.expression_outline?.trim() || null,
+            action: item.action?.trim() || null, end_state: validateState(item.end_state) };
     });
 }
 export function validateCards(value: any, requested: string[]) {

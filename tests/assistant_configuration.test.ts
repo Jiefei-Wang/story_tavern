@@ -112,3 +112,43 @@ test("executor persists and syncs settings/world/backend while preserving secret
     else Reflect.deleteProperty(globalThis, "localStorage");
   }
 });
+
+test('Prompt patch persists and refreshes UI; legacy edits, unknown fields, cancel, conflict and failures remain safe', async t => {
+  const memory = new Map<string, string>();
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k: string) => memory.get(k) ?? null, setItem: (k: string, v: string) => memory.set(k, v), removeItem: (k: string) => memory.delete(k) } });
+  const before = fixture();
+  try {
+    useAgentStore.setState({ agents: Object.values(before.agents) as any });
+    useAgentGroupStore.setState({ groups: Object.values(before.groups) as any, activeGroupId: 'g' });
+    useBackendStore.setState({ backends: Object.values(before.backends) as any });
+    useSettingsStore.setState({ settings: before.settings as any });
+    useGameStore.setState({ saves: [], activeSave: null, isExecuting: false });
+    const snapshot = readAssistantConfiguration(), receipts: string[] = [];
+    assert.equal((snapshot.resources as Resources).agents.a.prompt, 'Hello');
+    const change = reply(patch('agents', '/a/prompt', '<input>{{input}}</input>'));
+    await executeAssistantChanges(change, snapshot, new AbortController().signal, message => receipts.push(message));
+    const saved = (await storageService.getAgents()).find(a => a.id === 'a')!;
+    assert.equal(saved.prompt, '<input>{{input}}</input>');
+    assert.deepEqual((saved as any).futureAgent, before.agents.a.futureAgent);
+    assert.equal((saved.messages[0] as any).futureMessage, true);
+    assert.equal(useAgentStore.getState().agents.find(a => a.id === 'a')!.prompt, saved.prompt);
+    assert.equal(receipts.length, 1);
+    await assert.rejects(executeAssistantChanges(change, snapshot, new AbortController().signal, () => {}), /配置已变化/);
+    const cancelled = new AbortController(); cancelled.abort();
+    await assert.rejects(executeAssistantChanges(reply(patch('agents', '/a/prompt', 'cancelled')), readAssistantConfiguration(), cancelled.signal, () => {}));
+    const legacy = { ...saved, messages: [{ ...saved.messages[0], content: 'legacy changed' }] };
+    delete legacy.prompt;
+    const planned = planAssistantChanges(reply({ type: 'save_agent', value: legacy }), readAssistantConfiguration().resources as Resources);
+    assert.equal(planned.agents.a.prompt, 'legacy changed');
+    const invalid = structuredClone(readAssistantConfiguration().resources as Resources);
+    invalid.agents.text_router = { ...saved, id: 'text_router', prompt: '{{secretRef}}' };
+    assert.throws(() => planAssistantChanges(reply(), invalid), /不提供变量/);
+    t.mock.method(storageService, 'saveAgent', async () => { throw new Error('prompt disk failure'); });
+    await assert.rejects(executeAssistantChanges(reply(patch('agents', '/a/prompt', 'failed')), readAssistantConfiguration(), new AbortController().signal, message => receipts.push(message)), /prompt disk failure/);
+    assert.equal(receipts.length, 1);
+    assert.equal(useAgentStore.getState().agents.find(a => a.id === 'a')!.prompt, saved.prompt);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
+});

@@ -4,7 +4,7 @@ import { TextProcessor, textProcessor } from '../src/engine/text/Processor';
 import { createTextWorld, migrateToText, restoreLegacyCopy } from '../src/engine/text/Migration';
 import { DocumentWorkspace, validateTextWorld } from '../src/engine/text/Documents';
 import { prepareHistory, historyMessages, characterHistory, anchoredNarration, visibleNarration } from '../src/engine/text/History';
-import { validateCards, validateDesigns, validateRoute } from '../src/engine/text/RoutedProtocol';
+import { validateCards, validateDesigns, validateOutlines, validateRoute } from '../src/engine/text/RoutedProtocol';
 import { ROUTED_AGENTS, addTextBindings } from '../src/engine/text/Agents';
 import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS, DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from './fixtures/legacyInitialData';
 import { StorageService, storageService } from '../src/db/storage';
@@ -30,8 +30,8 @@ const adapter = (options: { selected?: string[]; create?: boolean; silent?: bool
         if (options.fail === o.agentId) throw new Error('controlled model failure');
         let data: unknown;
         if (o.agentId === 'text_router') data = { characters: options.selected ?? ['erin'], new_characters: options.create ? [{ request_id: 'new_1', description: '路上独立的一位女孩，不是艾琳' }] : [], instructions: o.context.input === '不是一个扫帚' ? '纠正上次扫帚的描写，不把纠正当成发言，不重新执行玩家行动。' : '按用户需求回应，不替玩家决定。' };
-        else if (o.agentId === 'text_designer' && o.context.task.startsWith('创建')) data = { cards: [{ request_id: 'new_1', name: '路过的女孩', public: '在路边的女孩。', profile: '说话直接。', initial_state: { summary: '刚走到路边。' } }] };
-        else if (o.agentId === 'text_designer') data = { characters: o.context.material.cards.map((c: any) => ({ character_id: c.character_id, expression: options.invalidDesign ? [] : options.silent ? null : '有什么事吗？', action: options.silent ? null : '停下脚步。', end_state: { summary: '留意来人的招呼。', future: { retained: true } } })) };
+        else if (o.agentId === 'text_character_designer') data = { cards: [{ request_id: 'new_1', name: '路过的女孩', public: '在路边的女孩。', profile: '说话直接。', initial_state: { summary: '刚走到路边。' } }] };
+        else if (o.agentId === 'text_outline_designer') data = { characters: o.context.material.cards.map((c: any) => ({ character_id: c.character_id, thought: null, expression_outline: options.invalidDesign ? [] : options.silent ? null : '有什么事吗？', action: options.silent ? null : '停下脚步。', end_state: { summary: '留意来人的招呼。', future: { retained: true } } })) };
         else if (o.agentId === 'text_storyteller') data = '女孩停下脚步，问：“有什么事吗？”';
         else throw new Error('Unexpected legacy stage: ' + o.agentId);
         return { success: true, data: typeof data === 'string' ? data : JSON.stringify(data), spanId: 'test' };
@@ -44,7 +44,7 @@ test('one routing + one batched Designer + one narrator, atomically saved with e
     const storage = new StorageService();
     await storage.commitTextGame(source, null);
     const result = await new TextProcessor(a.run).execute(source, '我向两人打招呼。', context);
-    assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_designer', 'text_storyteller']);
+    assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_outline_designer', 'text_storyteller']);
     assert(a.calls.every(c => !c.toolSchema));
     assert(a.calls.slice(0, 2).every(c => c.jsonObject));
     assert(!a.calls[2].jsonObject);
@@ -64,7 +64,7 @@ test('one routing + one batched Designer + one narrator, atomically saved with e
 test('new character cards are created before the one joint design call and use program-generated IDs', async () => {
     const a = adapter({ create: true }), source = fixture();
     const result = await new TextProcessor(a.run).execute(source, '我向路上另一位女孩打招呼。', context);
-    assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_designer', 'text_designer', 'text_storyteller']);
+    assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_character_designer', 'text_outline_designer', 'text_storyteller']);
     const id = result.turns.at(-1)!.textTurn!.createdCharacters![0];
     assert(id.startsWith('person_'));
     assert(result.textWorld!.characters.includes(id));
@@ -87,8 +87,8 @@ test('no selected NPC means no Designer call, while narrator still receives inpu
     const a = adapter({ selected: [] });
     await new TextProcessor(a.run).execute(fixture(), '不是一个扫帚', context);
     assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_storyteller']);
-    assert(a.calls[1].conversation!.at(-1)!.content.includes('不是一个扫帚'));
-    assert(a.calls[1].conversation!.at(-1)!.content.includes('不把纠正当成发言'));
+    assert.equal(a.calls[1].context.input, '不是一个扫帚');
+    assert(a.calls[1].context.routingInstructions.includes('不把纠正当成发言'));
 });
 
 test('correction remains one linear turn; every stage gets original feedback and full preceding story', async () => {
@@ -99,7 +99,7 @@ test('correction remains one linear turn; every stage gets original feedback and
     const b = adapter();
     const second = await new TextProcessor(b.run).execute(first, '不是一个扫帚', context);
     for (const call of b.calls) {
-        const sent = JSON.stringify(call.conversation);
+        const sent = JSON.stringify(call.context);
         assert(sent.includes('房间角落有一个扫帚'));
         assert(sent.includes('不是一个扫帚'));
         assert(sent.includes('【时间点 2】'));
@@ -110,18 +110,18 @@ test('correction remains one linear turn; every stage gets original feedback and
     assert.equal(second.turns.at(-1)!.narration!.anchor, 3);
 });
 
-test('stable request prefix survives selection changes, skipped NPC turns and reload', async () => {
+test('history variable preserves prior messages across selection changes, skipped NPC turns and reload', async () => {
     const source = fixture(), a = adapter(), first = await new TextProcessor(a.run).execute(source, '我打招呼。', context);
     const b = adapter({ selected: [] }), second = await new TextProcessor(b.run).execute(JSON.parse(JSON.stringify(first)), '看看天气。', context);
     const c = adapter(), third = await new TextProcessor(c.run).execute(second, '我再次问艾琳。', context);
     for (const id of ['text_router', 'text_storyteller']) {
-        const oldPrefix = a.calls.find(o => o.agentId === id)!.conversation!.slice(0, -1);
-        const next = c.calls.find(o => o.agentId === id)!.conversation!;
+        const oldPrefix = a.calls.find(o => o.agentId === id)!.context.history;
+        const next = c.calls.find(o => o.agentId === id)!.context.history;
         assert.deepEqual(next.slice(0, oldPrefix.length), oldPrefix);
-        assert(next.some(m => m.content === first.turns.at(-1)!.narration!.requestText));
-        assert(next.some(m => m.content === second.turns.at(-1)!.narration!.requestText));
+        assert(next.some((m: any) => m.content === first.turns.at(-1)!.narration!.requestText));
+        assert(next.some((m: any) => m.content === second.turns.at(-1)!.narration!.requestText));
     }
-    const state = c.calls.find(o => o.agentId === 'text_designer')!.context.material.cards[0].state_history;
+    const state = c.calls.find(o => o.agentId === 'text_outline_designer')!.context.material.cards[0].state_history;
     assert.equal(state.length, 1);
     assert.equal(state[0].anchor, 2, 'idle NPC keeps its earlier state origin');
     assert.equal(characterHistory(third.turns, 'erin').at(-1)!.anchor, 4);
@@ -130,8 +130,8 @@ test('stable request prefix survives selection changes, skipped NPC turns and re
 test('narrator receives no private end states or world secrets', async () => {
     const source = fixture(); source.textWorld!.documents['world/private.md'].text = 'PRIVATE_WORLD_SENTINEL';
     const a = adapter(); await new TextProcessor(a.run).execute(source, '我打招呼。', context);
-    assert(JSON.stringify(a.calls[1].conversation).includes('PRIVATE_WORLD_SENTINEL'));
-    const narrator = JSON.stringify(a.calls[2].conversation);
+    assert(JSON.stringify(a.calls[1].context).includes('PRIVATE_WORLD_SENTINEL'));
+    const narrator = JSON.stringify(a.calls[2].context);
     assert(!narrator.includes('PRIVATE_WORLD_SENTINEL'));
     assert(!narrator.includes('end_state'));
     assert(!narrator.includes('昨晚听见'));
@@ -141,7 +141,7 @@ test('invalid Designer shape gets one detailed retry and failed trace; no histor
     const a = adapter({ invalidDesign: true }), source = fixture(), snapshot = structuredClone(source);
     let traceId = '';
     await assert.rejects(() => new TextProcessor(a.run).execute(source, '我打招呼。', { ...context, onTraceStarted: id => { traceId = id; } }), /erin.expression/);
-    assert.equal(a.calls.filter(o => o.agentId === 'text_designer').length, 2);
+    assert.equal(a.calls.filter(o => o.agentId === 'text_outline_designer').length, 2);
     assert(!a.calls.some(o => o.agentId === 'text_storyteller'));
     const trace = globalTraceManager.getTrace(traceId)!;
     assert.equal(trace.spans.filter(s => s.type === 'text_validation' && s.status === 'error').length, 2);
@@ -199,7 +199,7 @@ test('new role bindings inherit exact existing models/overrides and preserve cus
     ] };
     const mapped = addTextBindings(old);
     assert.equal(mapped.bindings.find(b => b.agentId === 'text_router')!.model, 'router_model');
-    assert.equal(mapped.bindings.find(b => b.agentId === 'text_designer')!.model, 'character_model');
+    assert.equal(mapped.bindings.find(b => b.agentId === 'text_outline_designer')!.model, 'character_model');
     assert.equal(mapped.bindings.find(b => b.agentId === 'text_storyteller')!.model, 'narrator_model');
     assert.deepEqual(mapped.bindings.slice(0, 3), old.bindings);
     mapped.bindings.find(b => b.agentId === 'text_router')!.model = 'custom_new';
@@ -207,13 +207,13 @@ test('new role bindings inherit exact existing models/overrides and preserve cus
     assert.deepEqual(addTextBindings(mapped), mapped);
 });
 
-test('actual HTTP request has fixed system first, visible history anchors, current input last, and no tool loop', async () => {
+test('actual HTTP prompt contains history anchors and current input without a hidden message prefix or tool loop', async () => {
     const oldFetch = globalThis.fetch; const sent: any[] = [];
     globalThis.fetch = async (_url, options) => {
         const request = JSON.parse(String(options?.body)); sent.push(request);
         const content = request.messages[0].content;
         const output = content.includes('只选择本轮') ? { characters: ['erin'], new_characters: [], instructions: '回应' }
-            : content.includes('一次共同设计') ? { characters: [{ character_id: 'erin', expression: '你好。', action: null, end_state: { summary: '已问候。' } }] } : '她说：“你好。”';
+            : content.includes('一次共同设计') ? { characters: [{ character_id: 'erin', thought: null, expression_outline: '你好。', action: null, end_state: { summary: '已问候。' } }] } : '她说：“你好。”';
         return new Response(JSON.stringify({ choices: [{ message: { content: typeof output === 'string' ? output : JSON.stringify(output) } }] }), { headers: { 'content-type': 'application/json' } });
     };
     try {
@@ -222,7 +222,7 @@ test('actual HTTP request has fixed system first, visible history anchors, curre
         await new TextProcessor(o => runtime.runAgent(o)).execute(fixture(), '你好', realContext);
         assert.equal(sent.length, 3);
         for (const request of sent) {
-            assert.equal(request.messages[0].role, 'system');
+            assert.deepEqual(request.messages.map((m: any) => m.role), ['user']);
             assert(request.messages.some((m: any) => m.content.includes('【时间点 1】')));
             assert(request.messages.at(-1).content.includes('用户原始输入：\n你好'));
             assert.equal(request.tools, undefined);
@@ -249,6 +249,7 @@ test('atomic CAS rejects competing candidates, preserves unknown fields and stab
 });
 
 test('assistant edits new cards and role prompts, rejects writable runtime state, preserves history/cancel/conflict', async () => {
+    for (const agent of BUILTIN_AGENTS) await storageService.saveAgent(agent);
     const source = fixture(), storage = new StorageService(); await storage.commitTextGame(source, null);
     const generated = await new TextProcessor(adapter({ create: true }).run).execute(source, '我打招呼。', context); await storage.commitTextGame(generated, 0);
     useGameStore.setState({ saves: [generated], activeSave: generated, isExecuting: false });
@@ -259,7 +260,7 @@ test('assistant edits new cards and role prompts, rejects writable runtime state
     assert(!JSON.stringify(resource).includes('designs'));
     const id = generated.turns.at(-1)!.textTurn!.createdCharacters![0];
     const reply: any = { reply: '', actions: [{ type: 'patch_config', resource: 'textSaves', patches: [{ op: 'replace', path: `/${source.id}/documents/characters~1${id}~1profile.md/text`, value: '# 女孩\n说话温和。' }] }] };
-    for (const key of ['anchor', 'designs', 'end_state', 'turns', 'narration']) assert.throws(() => planAssistantChanges({ reply: '', actions: [{ type: 'patch_config', resource: 'textSaves', patches: [{ op: 'add', path: `/${source.id}/${key}`, value: {} }] }] } as any, snapshot.resources! as any), /只读历史/);
+    for (const key of ['anchor', 'designs', 'thought', 'expression_outline', 'end_state', 'turns', 'narration']) assert.throws(() => planAssistantChanges({ reply: '', actions: [{ type: 'patch_config', resource: 'textSaves', patches: [{ op: 'add', path: `/${source.id}/${key}`, value: {} }] }] } as any, snapshot.resources! as any), /只读历史/);
     const aborted = new AbortController(); aborted.abort(); await assert.rejects(() => executeAssistantChanges(reply, snapshot, aborted.signal, () => {}));
     await executeAssistantChanges(reply, snapshot, new AbortController().signal, () => {});
     const saved = (await storage.getSaves()).find(s => s.id === source.id)!;
@@ -267,10 +268,13 @@ test('assistant edits new cards and role prompts, rejects writable runtime state
     assert.deepEqual(saved.turns, JSON.parse(JSON.stringify(generated.turns)));
     assert.equal(useGameStore.getState().activeSave!.textWorld!.documents[`characters/${id}/profile.md`].text, '# 女孩\n说话温和。');
     await assert.rejects(() => executeAssistantChanges(reply, snapshot, new AbortController().signal, () => {}), /配置已变化/);
-    const next = readAssistantConfiguration();
-    const roles: any = { reply: '', actions: [{ type: 'patch_config', resource: 'agents', patches: [{ op: 'replace', path: '/text_designer/messages/0/content', value: 'Designer 的自定义提示词。' }] }] };
-    await executeAssistantChanges(roles, next, new AbortController().signal, () => {});
-    assert.equal(useAgentStore.getState().agents.find(a => a.id === 'text_designer')!.messages[0].content, 'Designer 的自定义提示词。');
+    for (const id of ['text_outline_designer', 'text_character_designer']) {
+        const next = readAssistantConfiguration();
+        const roles: any = { reply: '', actions: [{ type: 'patch_config', resource: 'agents', patches: [{ op: 'replace', path: `/${id}/messages/0/content`, value: `${id} 的自定义提示词。` }] }] };
+        await executeAssistantChanges(roles, next, new AbortController().signal, () => {});
+        assert.equal(useAgentStore.getState().agents.find(a => a.id === id)!.messages[0].content, `${id} 的自定义提示词。`);
+        assert.equal((await storageService.getAgents()).find(a => a.id === id)!.messages[0].content, `${id} 的自定义提示词。`);
+    }
 });
 
 test('store commit failure persists diagnostics and leaves successful story/state history unchanged', async () => {
@@ -300,4 +304,75 @@ test('legacy migration and document authoring preserve unknown metadata and play
     workspace.replace('world/common.md', 0, world.documents['world/common.md'].text, '新常识');
     assert.equal(workspace.world.documents['world/common.md'].future, 'keep');
     assert.throws(() => validateTextWorld({ ...world, characters: [] }), /玩家必须存在/);
+});
+
+
+test('regenerate one or multiple cards keeps IDs, unrelated documents, metadata and history; persisted atomically', async () => {
+    for (const targets of [['erin'], ['erin', 'guard'], ['player']]) {
+        const source = fixture(), snapshot = structuredClone(source), calls: RunAgentOptions[] = [];
+        source.textWorld!.documents[`characters/${targets[0]}/profile.md`].future = { keep: true };
+        const before = structuredClone(source);
+        const runner = async (o: RunAgentOptions) => {
+            calls.push(o);
+            const data = o.agentId === 'text_router'
+                ? { characters: [], new_characters: [], regenerate_characters: targets.map(character_id => ({ character_id, description: '重做设定，保留身份与经历' })), instructions: '只重新生成人物卡，不推进交互。' }
+                : o.agentId === 'text_character_designer'
+                ? { cards: o.context.material.requests.map((r: any) => ({ request_id: r.request_id, name: r.character_id, public: '新版公开设定', profile: '新版完整设定', initial_state: { summary: '保留的重要经历' } })) }
+                : '人物设定已更新。';
+            return { success: true, data: typeof data === 'string' ? data : JSON.stringify(data), spanId: 'test' };
+        };
+        const storage = new StorageService(); await storage.commitTextGame(source, null);
+        const result = await new TextProcessor(runner).execute(source, `重新生成${targets.join('和')}的人物卡`, context);
+        assert.deepEqual(calls.map(o => o.agentId), ['text_router', 'text_character_designer', 'text_storyteller']);
+        assert.deepEqual(source, before);
+        assert.deepEqual(result.textWorld!.characters, source.textWorld!.characters);
+        assert.deepEqual(result.turns.slice(0, -1), prepareHistory(snapshot.turns));
+        assert.deepEqual(result.turns.at(-1)!.textTurn!.createdCharacters, []);
+        for (const id of source.textWorld!.characters) {
+            const path = `characters/${id}/profile.md`;
+            if (targets.includes(id)) {
+                assert(result.textWorld!.documents[path].text.includes('新版完整设定'));
+                assert.equal(result.textWorld!.documents[path].revision, source.textWorld!.documents[path].revision + 1);
+            } else assert.deepEqual(result.textWorld!.documents[path], source.textWorld!.documents[path]);
+        }
+        assert.deepEqual(result.textWorld!.documents[`characters/${targets[0]}/profile.md`].future, { keep: true });
+        assert.equal(calls.at(-1)!.context.material.updated_cards.length, targets.length);
+        await storage.commitTextGame(result, 0);
+        const loaded = (await storage.getSaves()).find(s => s.id === source.id)!;
+        assert.deepEqual(loaded.textWorld, result.textWorld);
+        await assert.rejects(storage.commitTextGame(result, 0), /冲突/);
+    }
+});
+
+test('regeneration rejects unauthorized, duplicate or missing targets and cancels/fails without changing source', async () => {
+    const route = { characters: [], new_characters: [], instructions: '重做', regenerate_characters: [{ character_id: 'missing', description: '重做' }] };
+    assert.throws(() => validateRoute(route, ['erin']), /未授权/);
+    assert.throws(() => validateRoute({ ...route, regenerate_characters: Array(2).fill({ character_id: 'erin', description: '重做' }) }, ['erin']), /重复/);
+    assert.throws(() => validateRoute({ ...route, regenerate_characters: [{ character_id: 'erin', description: '' }] }, ['erin']), /非空/);
+    for (const failure of ['missing', 'cancel', 'narrator']) {
+        const source = fixture(), before = structuredClone(source), controller = new AbortController();
+        await assert.rejects(new TextProcessor(async o => {
+            if (o.agentId === 'text_router') return { success: true, spanId: 'test', data: JSON.stringify({ ...route, regenerate_characters: [{ character_id: 'erin', description: '重做' }] }) };
+            if (o.agentId === 'text_character_designer') {
+                if (failure === 'cancel') controller.abort();
+                return { success: true, spanId: 'test', data: JSON.stringify({ cards: failure === 'missing' ? [] : [{ request_id: 'regenerate.0', name: '艾琳', public: '新', profile: '新', initial_state: {} }] }) };
+            }
+            throw new Error('narrator failure');
+        }).execute(source, '重新生成艾琳', { ...context, signal: controller.signal }));
+        assert.deepEqual(source, before);
+    }
+});
+
+test('outline requires thought and expression outline; narrator only receives public outline and action', async () => {
+    assert.throws(() => validateOutlines({ characters: [{ character_id: 'erin', expression: 'full dialogue', action: null, end_state: {} }] }, ['erin']), /thought/);
+    const a = adapter();
+    const result = await new TextProcessor(async o => {
+        if (o.agentId !== 'text_outline_designer') return a.run(o);
+        return { success: true, spanId: 'test', data: JSON.stringify({ characters: [{ character_id: 'erin', thought: 'PRIVATE_THOUGHT', expression_outline: '礼貌询问来意', action: '停步', end_state: { summary: '已询问' } }] }) };
+    }).execute(fixture(), '打招呼', context);
+    const material = a.calls.at(-1)!.context.material;
+    assert.equal(material.performances[0].expression_outline, '礼貌询问来意');
+    assert(!JSON.stringify(material).includes('PRIVATE_THOUGHT'));
+    assert(!('expression' in material.performances[0]));
+    assert.equal(result.turns.at(-1)!.textTurn!.designs![0].thought, 'PRIVATE_THOUGHT');
 });

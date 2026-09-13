@@ -138,30 +138,17 @@ export const PlayPage: React.FC = () => {
 
   const insertQuickCommand = (keyword: string) => {
     setInputText((prev) => {
-      let next = "";
-      if (!prev || !prev.trim()) {
-        next = keyword;
-      } else if (prev.endsWith("\n\n")) {
-        next = prev + keyword;
-      } else if (prev.endsWith("\n")) {
-        next = prev + "\n" + keyword;
-      } else {
-        next = prev + "\n\n" + keyword;
-      }
-      return next;
+      if (!prev.trim()) return keyword;
+      const separator = prev.endsWith("\n\n") ? "" : prev.endsWith("\n") ? "\n" : "\n\n";
+      return prev + separator + keyword;
     });
 
     setIsTimeMenuOpen(false);
     setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        const field = textareaRef.current;
-        const position = textWorld && keyword.startsWith('[')
-          ? field.value.lastIndexOf(keyword) + keyword.indexOf('\n') + 1
-          : field.value.length;
-        field.selectionStart = position;
-        field.selectionEnd = position;
-      }
+      const field = textareaRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(field.value.length, field.value.length);
     }, 30);
   };
 
@@ -344,18 +331,6 @@ export const PlayPage: React.FC = () => {
                           <span className="font-medium">查看生成任务</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveMenuTurnIdx(null);
-                            handleCopyText(turn.narratorOutput, idx);
-                          }}
-                          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
-                        >
-                          <Copy className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>复制旁白</span>
-                        </button>
-
                         {turn.traceId && turn.traceId !== "trace_init" && (
                           <Link
                             to="/debug"
@@ -486,41 +461,16 @@ export const PlayPage: React.FC = () => {
 
               {isTimeMenuOpen && (
                 <div className="absolute left-0 bottom-full mb-1.5 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 text-xs text-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => insertQuickCommand("快进：10分钟")}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    10分钟
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertQuickCommand("快进：半小时")}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    半小时
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertQuickCommand("快进：1小时")}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    1小时
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertQuickCommand("快进：1天")}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    1天
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertQuickCommand("快进：一周")}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    一周
-                  </button>
+                  {["10分钟", "半小时", "1小时", "1天", "一周"].map(time => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => insertQuickCommand(`快进：${time}`)}
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      {time}
+                    </button>
+                  ))}
                   <div className="h-px bg-slate-100 my-1" />
                   <button
                     type="button"

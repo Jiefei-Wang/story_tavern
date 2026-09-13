@@ -5,6 +5,9 @@ node_modules/
 
 # Build Outputs & Bundles
 .tmp/
+# Local historical evaluation runs and screenshots (not source fixtures)
+artifacts/routed-behavior/
+artifacts/text-first/
 .playwright-mcp/
 dist/
 dist-ssr/

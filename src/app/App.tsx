@@ -1,3 +1,4 @@
+import { useRepositoryStore } from '../stores/useRepositoryStore';
 import { loadPreferences } from '../db/preferences';
 import React, { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
@@ -38,6 +39,7 @@ export const App: React.FC = () => {
         useLibraryStore.getState().load(),
       ]);
       await loadTraces();
+      if (import.meta.env.DEV && !storageService.isTauri()) await useRepositoryStore.getState().load().catch(() => {});
       if (storageService.isTauri()) {
         const { initializeTestControl } = await import("./testControl");
         await initializeTestControl();

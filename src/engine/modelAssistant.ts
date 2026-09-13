@@ -1,23 +1,13 @@
 import { z } from "zod";
 import { invoke, createChannel } from "../db/host";
-import { AgentDefinition, AgentGroup, Backend, REASONING_EFFORT_OPTIONS } from "../types";
+import { AgentDefinition, AgentGroup, Backend } from "../types";
 import { storageService } from "../db/storage";
 import { sanitizeCustomHeaders, extractJsonPayload } from "./runtime/AgentRuntime";
 import { parseOpenAIResponse } from "./runtime/OpenAIResponseParser";
 
 const text = z.string().trim().min(1);
-const object = z.record(z.string(), z.json());
-const parameters = z.object({ temperature: z.number().min(0).max(2).optional(), maxTokens: z.number().int().min(0).optional(), topP: z.number().min(0).max(1).optional(), extraBody: object.optional() }).passthrough();
-export const assistantAgentSchema = z.object({
-  id: text, name: text, description: z.string(), tags: z.array(z.string()).optional(), version: z.string().optional(), updatedAt: z.string().optional(),
-  messages: z.array(z.object({ id: text, role: z.enum(["system", "user", "assistant"]), content: z.string() }).passthrough()).min(1),
-  inputs: z.array(z.object({ name: text, type: text, description: z.string().optional(), required: z.boolean() }).passthrough()),
-  outputSchema: object.nullable(), defaults: parameters,
-}).passthrough();
-export const assistantGroupSchema = z.object({ id: text, name: text, description: z.string().optional(), updatedAt: z.string().optional(), bindings: z.array(z.object({
-  agentId: text, backendId: text, model: text,
-  overrides: parameters.extend({ reasoningEffort: z.enum(REASONING_EFFORT_OPTIONS.map(o => o.value)).optional() }).optional(),
-}).passthrough()) }).passthrough();
+export { assistantAgentSchema, assistantGroupSchema } from "./agentConfigurationSchema";
+import { assistantAgentSchema, assistantGroupSchema } from "./agentConfigurationSchema";
 export const assistantReplySchema = z.object({
   reply: z.string(),
   actions: z.array(z.discriminatedUnion("type", [

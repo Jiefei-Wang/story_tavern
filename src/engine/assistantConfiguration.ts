@@ -1,3 +1,6 @@
+import { useRepositoryStore } from '../stores/useRepositoryStore';
+import { repositorySchema, validateRepositoryConfiguration } from '../db/repositoryConfiguration';
+import { getAgentPrompt, validateAgentPrompt } from "./template/AgentPrompt";
 import { readPreference, writePreference } from '../db/preferences';
 import { z } from "zod";
 import * as jsonpatch from "fast-json-patch";
@@ -48,6 +51,22 @@ async function saveCollection(next: Document, before: Document, save: (value: an
 
 /** The single runtime capability catalog. New domains register read/schema/validate/save here. */
 export const assistantResources: Record<string, ConfigurationResource> = {
+  repositoryDefaults: {
+    description: '仓库默认 Agent 与 Agent 组，独立于本机 agents/groups。仅本地开发服务可写；available=false 时不可操作。data.agents 和 data.groups 按 ID 索引，支持局部 JSON Patch，revision/available 只读。保留五个核心 Agent 与 Fast/Quality/Local 组；绑定只允许 backend_openrouter/backend_local。不能保存凭证。保存写入仓库 JSON 并即时同步编辑页，不应用到本机；用户可在界面点击应用到本机，或明确要求修改本机 agents/groups。存在界面未保存仓库草稿时拒绝助手保存。',
+    schema: z.object({ available: z.boolean(), revision: z.string().optional(), data: repositorySchema.optional() }).strict(),
+    read: () => {
+      const record = useRepositoryStore.getState().record;
+      return record ? { available: true, ...structuredClone(record) } : { available: false };
+    },
+    validate: value => { if (value.available) validateRepositoryConfiguration(value.data); },
+    save: async (value, before, report, signal) => {
+      const state = useRepositoryStore.getState();
+      if (!before.available || value.available !== before.available || value.revision !== before.revision) throw new Error('仓库不可用或修改了只读版本字段');
+      if (state.editorDirty || !same(state.draft, state.record?.data)) throw new Error('界面有未保存的仓库草稿，请先保存或重新载入');
+      await state.save(value.data, before.revision, signal);
+      report('已保存仓库默认配置；未应用到本机');
+    },
+  },
   library: {
     description: '故事工坊独立配置库：characters（ID → 角色：name、setting、details、initialMemory、可选 image），worlds（ID → 世界：name、summary、description、可选 image），stories（ID → 故事：name、summary、worldId、playerId、supportingIds、opening），selectedStoryId（首页所选故事或 null）。三种配置共用一次原子提交，以保证引用始终有效。支持创建、编辑、删除与选择故事。主角必须存在且不得同时为配角，配角可为空且不能重复；删除角色或世界前须解除故事引用。世界只有 description 进入模型消息，名字、概要、图片只展示；故事 summary 只展示，opening 直接作为首条正文。新开局复制配置，公共库修改不改变已有存档；剧情新增人物留在本局。image 可为空、HTTP(S) 图片地址或不超过约 1 MB 的 PNG/JPEG/WebP data URL。角色设定、详细资料、初始记忆都参与定义。保存即时刷新 UI，不写历史、凭证或运行状态。',
     schema: librarySchema,
@@ -71,8 +90,9 @@ export const assistantResources: Record<string, ConfigurationResource> = {
     }, useBackendStore.getState().deleteBackend, report, signal),
   },
   agents: {
-    description: "Agent 定义（ID → 对象）。仓库静态默认仅含 text_router、text_designer、text_storyteller、model_refusal_detector；旧流程定义已退役，初始化不再恢复。包括消息、输入、输出 Schema、默认参数。文本默认流程使用 text_router、text_designer、text_storyteller，版本 routed-v2。新故事只使用配置的 system 消息合成一个行为说明，不执行模板插值；其他模板角色不参与。随后程序预填 user 世界/配角/玩家定义、assistant 收到、开头与历史、最后本轮材料。",
-    schema: z.record(id, assistantAgentSchema), read: () => keyed(useAgentStore.getState().agents),
+    description: "Agent 定义（ID → 对象）。仓库静态默认仅含 text_router、text_character_designer、text_outline_designer、text_storyteller、model_refusal_detector；旧流程定义已退役，初始化不再恢复。包括完整 prompt 与默认生成参数；messages/inputs 为旧配置兼容数据，不是当前编辑入口。Router 仅解释需求与安排角色；Character Designer 按需创建或重新生成人物卡，Outline Designer 设计交互思维、表达概要和动作，Narrator 扩写正文。两个新角色可通过 agents 与 agentGroups 局部 JSON Patch 独立配置；旧 text_designer 已显式迁移并删除：缺少的新绑定先继承旧连接，已有新绑定保留；旧 ID 的助手操作会报资源不存在，请改用两个新 ID。游戏输入可要求重新生成一个或多个人物（regenerate_characters），保留 ID 与历史；运行时 thought/expression_outline/end_state 不属于可写配置。文本默认流程使用 text_router、text_character_designer、text_outline_designer、text_storyteller，版本 routed-v2。prompt 是完整请求模板，支持 {{world}}、{{characters}}、{{player}}、{{history}}、{{input}}、{{task}}、{{material}}、{{routingInstructions}}、{{retry}}，支持点路径及 {{json material}}。只有模板引用的材料会进入请求，不再额外拼接世界、历史和本轮材料；输出协议仍由程序验证。检测器仅提供 {{responseText}} 与 {{retry}}。新增或修改 prompt 时校验变量；旧 messages 编辑会显式转换为 prompt，其他未知字段保留。",
+    schema: z.record(id, assistantAgentSchema), read: () => keyed(useAgentStore.getState().agents.map(a => ({ ...a, prompt: getAgentPrompt(a) }))),
+    validate: value => { for (const agent of Object.values(value)) if (agent.prompt !== undefined) validateAgentPrompt(agent); },
     save: (next, before, report, signal) => saveCollection(next, before, useAgentStore.getState().saveAgent, useAgentStore.getState().deleteAgent, report, signal),
   },
   groups: {
@@ -147,7 +167,7 @@ export const assistantResources: Record<string, ConfigurationResource> = {
       for (const [key,item] of Object.entries(value)) {
         const state=useGameStore.getState(), save=state.activeSave?.id===key?state.activeSave:state.saves.find(s=>s.id===key);
         if (!save?.textWorld || item.id!==key) throw new Error('文本存档引用不存在');
-        if (['narration','anchor','anchors','designs','state_history','end_state','turns','pipeline'].some(key=>key in item)) throw new Error('锚点与人物运行状态属于只读历史');
+        if (['narration','anchor','anchors','designs','state_history','thought','expression_outline','end_state','turns','pipeline'].some(key=>key in item)) throw new Error('锚点与人物运行状态属于只读历史');
         if (Object.keys(item.documents).some(p=>p.startsWith('turns/'))) throw new Error('历史记录不可写');
         for (const [path,doc] of Object.entries(item.documents) as [string,any][]) if (doc.revision!==(save.textWorld.documents[path]?.revision??0)) throw new Error('文档版本不可通过配置修改');
         validateTextWorld({...save.textWorld,...item,documents:{...Object.fromEntries(Object.entries(save.textWorld.documents).filter(([p])=>p.startsWith('turns/'))),...item.documents}});
@@ -232,21 +252,33 @@ export function planAssistantChanges(reply: z.infer<typeof assistantReplySchema>
   const next = structuredClone(before);
   next.textSaves ??= {}; // Older assistant snapshots predate the text resource.
   next.library ??= emptyLibrary();
+  next.repositoryDefaults ??= { available: false };
   rejectUnsafeKeys(reply);
+  const explicitPrompts = new Set<string>();
   for (const action of reply.actions) {
     if (action.type === "patch_config") {
       if (!Object.prototype.hasOwnProperty.call(assistantResources, action.resource) || !Object.prototype.hasOwnProperty.call(next, action.resource)) throw new Error(`未知配置资源：${action.resource}`);
       for (const patch of action.patches) {
         if (!patch.path.startsWith("/") || /~(?![01])/u.test(patch.path)) throw new Error("需要合法 JSON Pointer 路径");
         const parts = patch.path.split("/").slice(1).map(p => p.replace(/~1/g, "/").replace(/~0/g, "~"));
+        if (action.resource === 'agents' && (parts[1] === 'prompt' || parts.length === 1 && 'value' in patch && patch.value && typeof patch.value === 'object' && 'prompt' in patch.value)) explicitPrompts.add(parts[0]);
         if (parts.some(p => ["__proto__", "prototype", "constructor"].includes(p))) throw new Error("不安全的配置路径");
       }
       next[action.resource] = applyPatch(next[action.resource], action.patches, true, false, true).newDocument;
     } else if (action.type === "set_active_group") next.selection.activeGroupId = action.id;
     else {
+      if (action.type === "save_agent" && action.value.prompt !== undefined) explicitPrompts.add(action.value.id);
       const target = action.type === "save_agent" ? next.agents : next.groups;
       target[action.value.id] = preserveUnknownFields(target[action.value.id], action.value);
     }
+  }
+  // Old actions still edit messages; migrate them only when prompt was not changed explicitly.
+  for (const [key, agent] of Object.entries(next.agents)) {
+    if (!explicitPrompts.has(key) && !same(agent.messages, before.agents[key]?.messages) && same(agent.prompt, before.agents[key]?.prompt))
+      agent.prompt = getAgentPrompt({ ...agent, prompt: undefined } as any);
+  }
+  if (!same(next.repositoryDefaults, before.repositoryDefaults ?? { available: false })) {
+    if (!before.repositoryDefaults?.available || next.repositoryDefaults.available !== true || next.repositoryDefaults.revision !== before.repositoryDefaults.revision) throw new Error('仓库不可用或修改了只读版本字段');
   }
   for (const [key, resource] of Object.entries(assistantResources)) {
     resource.schema.parse(next[key]); // Validate, but never use the parsed copy to strip future fields.
