@@ -1,10 +1,9 @@
-import { createStorySave } from '../engine/library/Library';
+import { createStorySave, getStoryWorkflow } from '../engine/library/Library';
 import { useLibraryStore } from './useLibraryStore';
 import { editSaveSchema } from "../engine/character-schema/EditSchema";
 import { CharacterSchemaDefinition } from "../types";
 import { create } from "zustand";
 import { GameSave, GameTurn, WorldState } from "../types";
-import { gamePipeline } from "../engine/pipeline/GamePipeline";
 import { safePipelineError } from '../engine/errors/PipelineStageError';
 import { storageService } from "../db/storage";
 import { useAgentStore } from "./useAgentStore";
@@ -13,7 +12,7 @@ import { useBackendStore } from "./useBackendStore";
 import { useSettingsStore } from "./useSettingsStore";
 import { globalTraceManager } from "../engine/tracing/TraceManager";
 import { migrateToText } from '../engine/text/Migration';
-import { textProcessor } from '../engine/text/Processor';
+import { storyWorkflow } from '../engine/workflows/StoryTurn';
 
 interface GameState {
   migrateActiveToText: () => Promise<void>;
@@ -122,17 +121,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     const groups = useAgentGroupStore.getState().groups;
     const backends = useBackendStore.getState().backends;
     const activeGroupId = useAgentGroupStore.getState().activeGroupId;
-    const mockMode = useSettingsStore.getState().settings.mockLlmMode;
-    const autosave = useSettingsStore.getState().settings.autosave;
-
-    const currentWorld = activeSave.worldState;
-    const nextTurnIndex = activeSave.turns.length;
     const previousTraceId = activeSave.turns[activeSave.turns.length - 1]?.traceId ?? null;
     let runningTextTraceId: string | null = null;
 
     try {
-      if (activeSave.textWorld) {
-        const candidate = await textProcessor.execute(activeSave,input,{recentTurns:activeSave.turns,agents,groups,backends,activeGroupId,mockMode,signal:abortController.signal,onTraceStarted:traceId=>{
+      if (!activeSave.textWorld) throw new Error('旧状态管线已退役，请先迁移为文本存档');
+      {
+        const candidate = await storyWorkflow.execute(activeSave,input,{workflow:getStoryWorkflow(useLibraryStore.getState().record.data),agents,groups,backends,activeGroupId,mockMode:useSettingsStore.getState().settings.mockLlmMode,signal:abortController.signal,onTraceStarted:traceId=>{
           runningTextTraceId = traceId;
           if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) set({currentTraceId:traceId});
         }});
@@ -150,79 +145,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         set(s=>({saves:s.saves.map(old=>old.id===candidate.id?candidate:old),activeSave:s.activeSave?.id===candidate.id?candidate:s.activeSave,isExecuting:false,pendingPlayerInput:null,executionError:null}));
         return true;
       }
-      const result = await gamePipeline.executeTurn(
-        input,
-        currentWorld,
-        nextTurnIndex,
-        {
-          recentTurns: activeSave.turns,
-          agents,
-          groups,
-          backends,
-          activeGroupId,
-          mockMode,
-          worldDefinition: activeSave.worldDefinition,
-          signal: abortController.signal,
-          onTraceStarted: (traceId) => {
-            if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
-              set({ currentTraceId: traceId });
-            }
-          },
-        }
-      );
-
-      if (result.cancelled || abortController.signal.aborted) {
-        if (activeAbortController === abortController) {
-          activeAbortController = null;
-        }
-        set({
-          isExecuting: false,
-          pendingPlayerInput: null,
-          executionError: null,
-          currentTraceId: get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId,
-        });
-        return false;
-      }
-
-      // Persist completed trace to SQLite
-      const trace = globalTraceManager.getTrace(result.traceId);
-      if (trace && result.success) {
-        await storageService.saveTrace(trace).catch((err) =>
-          console.warn("Failed to persist trace:", err)
-        );
-      }
-
-      // Rollback invariant: Only commit worldStateAfter if turn was completely successful!
-      const updatedSave: GameSave = {
-        ...activeSave,
-        worldState: result.success ? result.turn.worldStateAfter : activeSave.worldState,
-        turns: [...activeSave.turns, result.turn],
-        updatedAt: new Date().toISOString(),
-        activeAgentGroupId: activeGroupId,
-      };
-
-      // A save may have been deleted while the model was running.
-      if (!get().saves.some((save) => save.id === activeSave.id)) {
-        set({ isExecuting: false, pendingPlayerInput: null });
-        return false;
-      }
-
-      if (autosave) {
-        await storageService.saveGame(updatedSave);
-      }
-
-      const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
-      set({
-        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
-        saves,
-        isExecuting: false,
-        pendingPlayerInput: null,
-        currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
-        executionError: get().activeSave?.id === activeSave.id
-          ? (result.success ? null : safePipelineError(new Error(result.error), result.traceId)) : get().executionError,
-      });
-
-      return result.success;
     } catch (err: any) {
       if (runningTextTraceId) {
         if (!abortController.signal.aborted && globalTraceManager.isActiveTrace(runningTextTraceId)) {
@@ -252,159 +174,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  retryTurn: async (turnIndex?: number) => {
-    const { activeSave, isExecuting } = get();
-    if (activeSave?.textWorld) { set({executionError:'文本回合已原子提交；请继续输入，或在独立存档中比较其他回应。'}); return false; }
-    if (!activeSave || isExecuting || activeSave.turns.length === 0) return false;
-
-    const targetIndex = turnIndex !== undefined ? turnIndex : activeSave.turns.length - 1;
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= activeSave.turns.length) return false;
-
-    const targetTurn = activeSave.turns[targetIndex];
-    const playerInput = targetTurn.playerInput;
-    if (!playerInput || playerInput === "(游戏开始)" || playerInput === "(新游戏开始)") return false;
-
-    const abortController = new AbortController();
-    activeAbortController = abortController;
-
-    set({ isExecuting: true, executionError: null, pendingPlayerInput: playerInput });
-
-    const agents = useAgentStore.getState().agents;
-    const groups = useAgentGroupStore.getState().groups;
-    const backends = useBackendStore.getState().backends;
-    const activeGroupId = useAgentGroupStore.getState().activeGroupId;
-    const mockMode = useSettingsStore.getState().settings.mockLlmMode;
-    const autosave = useSettingsStore.getState().settings.autosave;
-
-    const initialWorld = targetTurn.worldStateBefore;
-    const previousTraceId = activeSave.turns[activeSave.turns.length - 1]?.traceId ?? null;
-
-    try {
-      const result = await gamePipeline.executeTurn(
-        playerInput,
-        initialWorld,
-        targetTurn.turnIndex,
-        {
-          recentTurns: activeSave.turns.slice(0, targetIndex),
-          agents,
-          groups,
-          backends,
-          activeGroupId,
-          mockMode,
-          worldDefinition: activeSave.worldDefinition,
-          signal: abortController.signal,
-          onTraceStarted: (traceId) => {
-            if (get().activeSave?.id === activeSave.id && !abortController.signal.aborted) {
-              set({ currentTraceId: traceId });
-            }
-          },
-        }
-      );
-
-      if (result.cancelled || abortController.signal.aborted) {
-        if (activeAbortController === abortController) {
-          activeAbortController = null;
-        }
-        set({
-          isExecuting: false,
-          pendingPlayerInput: null,
-          executionError: null,
-          currentTraceId: get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId,
-        });
-        return false;
-      }
-
-      const trace = globalTraceManager.getTrace(result.traceId);
-      if (trace && result.success) {
-        await storageService.saveTrace(trace).catch((err) =>
-          console.warn("Failed to persist trace:", err)
-        );
-      }
-
-      // Retry Failure Protection: If turn execution failed, DO NOT mutate history or world state!
-      if (!result.success) {
-        set({
-          isExecuting: false,
-          pendingPlayerInput: null,
-          currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
-          executionError: get().activeSave?.id === activeSave.id ? safePipelineError(new Error(result.error), result.traceId) : get().executionError,
-        });
-        return false;
-      }
-
-      // ONLY ON SUCCESS: Branching, variations, truncation and world state update
-      const existingVariations: GameTurn[] =
-        targetTurn.variations && targetTurn.variations.length > 0
-          ? [...targetTurn.variations]
-          : [{ ...targetTurn }];
-
-      const newVariation: GameTurn = {
-        ...result.turn,
-        id: `turn_${Date.now()}_var_${existingVariations.length}`,
-      };
-
-      const updatedVariations = [...existingVariations, newVariation];
-      const newActiveVariationIndex = updatedVariations.length - 1;
-
-      const updatedTurn: GameTurn = {
-        ...newVariation,
-        variations: updatedVariations,
-        activeVariationIndex: newActiveVariationIndex,
-      };
-
-      // Causal consistency: Truncate any turns after targetIndex, branching a new timeline!
-      const newTurns = activeSave.turns.slice(0, targetIndex + 1);
-      newTurns[targetIndex] = updatedTurn;
-
-      const newWorldState = result.turn.worldStateAfter;
-
-      const updatedSave: GameSave = {
-        ...activeSave,
-        worldState: newWorldState,
-        turns: newTurns,
-        updatedAt: new Date().toISOString(),
-        activeAgentGroupId: activeGroupId,
-      };
-
-      // A save may have been deleted while the model was running.
-      if (!get().saves.some((save) => save.id === activeSave.id)) {
-        set({ isExecuting: false, pendingPlayerInput: null });
-        return false;
-      }
-
-      if (autosave) {
-        await storageService.saveGame(updatedSave);
-      }
-
-      const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
-      set({
-        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
-        saves,
-        isExecuting: false,
-        pendingPlayerInput: null,
-        currentTraceId: get().activeSave?.id === activeSave.id ? result.traceId : get().currentTraceId,
-        executionError: null,
-      });
-
-      return true;
-    } catch (err: any) {
-      const isAbort = err?.name === "AbortError" || abortController.signal.aborted;
-      if (activeAbortController === abortController) {
-        activeAbortController = null;
-      }
-      set({
-        isExecuting: false,
-        pendingPlayerInput: null,
-        executionError: isAbort ? null : (get().activeSave?.id === activeSave.id ? safePipelineError(err) : get().executionError),
-        currentTraceId: isAbort ? (get().activeSave?.id === activeSave.id ? previousTraceId : get().currentTraceId) : get().currentTraceId,
-      });
-      return false;
-    } finally {
-      if (activeAbortController === abortController) {
-        activeAbortController = null;
-      }
-    }
-  },
+  retryTurn: async () => { set({executionError:'已提交回合保留在历史中；请继续输入，或在独立存档中比较其他回应。'}); return false; },
 
   cancelGeneration: () => {
     const { pendingPlayerInput, activeSave } = get();
@@ -429,58 +199,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     return savedInput;
   },
 
-  switchTurnVariation: async (turnIndex: number, variationIndex: number) => {
-    const { activeSave, isExecuting } = get();
-    if (activeSave?.textWorld) return;
-    if (isExecuting || !Number.isInteger(turnIndex) || !activeSave || turnIndex < 0 || turnIndex >= activeSave.turns.length) return;
-
-    const targetTurn = activeSave.turns[turnIndex];
-    if (
-      !Number.isInteger(variationIndex) ||
-      !targetTurn.variations ||
-      variationIndex === (targetTurn.activeVariationIndex ?? 0) ||
-      variationIndex < 0 ||
-      variationIndex >= targetTurn.variations.length
-    ) {
-      return;
-    }
-
-    const selectedVariation = targetTurn.variations[variationIndex];
-
-    const updatedTurn: GameTurn = {
-      ...selectedVariation,
-      variations: targetTurn.variations,
-      activeVariationIndex: variationIndex,
-    };
-
-    // Causal consistency: Truncate any turns after turnIndex, establishing chosen variation as head of timeline!
-    const newTurns = activeSave.turns.slice(0, turnIndex + 1);
-    newTurns[turnIndex] = updatedTurn;
-
-    const newWorldState = selectedVariation.worldStateAfter;
-
-    const updatedSave: GameSave = {
-      ...activeSave,
-      worldState: newWorldState,
-      turns: newTurns,
-      updatedAt: new Date().toISOString(),
-    };
-
-    set({ isExecuting: true });
-    try {
-      const autosave = useSettingsStore.getState().settings.autosave;
-      if (autosave) {
-        await storageService.saveGame(updatedSave);
-      }
-
-      const saves = get().saves.map((s) => (s.id === updatedSave.id ? updatedSave : s));
-      set({
-        activeSave: get().activeSave?.id === updatedSave.id ? updatedSave : get().activeSave,
-        saves,
-        currentTraceId: get().activeSave?.id === updatedSave.id ? selectedVariation.traceId : get().currentTraceId,
-      });
-    } finally {
-      set({ isExecuting: false });
-    }
-  },
+  // Historical variations remain readable; the retired state pipeline cannot replay them.
+  switchTurnVariation: async () => {},
 }));

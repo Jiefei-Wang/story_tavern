@@ -1,5 +1,12 @@
 import type { AgentDefinition, AgentGroup, Backend, TraceSpan, WorldState, WorldDefinition } from "../../types";
-import type { PipelineTurnResult } from "../pipeline/GamePipeline";
+/** Read-only shape for reviewing archived state-pipeline evidence. No executor remains. */
+export interface PipelineTurnResult {
+  turn: import('../../types').GameTurn;
+  traceId: string;
+  success: boolean;
+  cancelled?: boolean;
+  error?: string;
+}
 import { validateCharacterAgainstSchema } from "../character-schema/CharacterSchema";
 import { summarizeBehaviorRecovery } from "./BehaviorRecovery";
 

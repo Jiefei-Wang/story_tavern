@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getAgentPrompt, renderAgentPrompt, validateAgentPrompt, samplePromptContext } from '../src/engine/template/AgentPrompt';
 import { ROUTED_AGENTS } from '../src/engine/text/Agents';
 import { AgentRuntime } from '../src/engine/runtime/AgentRuntime';
-import { TextProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow } from '../src/engine/workflows/StoryTurn';
 import { defaultLibrary, createStorySave } from '../src/engine/library/Library';
 
 const router = ROUTED_AGENTS.find(a => a.id === 'text_router')!;
@@ -41,7 +41,7 @@ test('story requests send exactly the same rendered Prompt as preview; retry fee
     const data = expected.startsWith('ROLE=text_router') ? ++routerCalls === 1 ? '{}' : JSON.stringify({ characters: [], new_characters: [], instructions: '保持原样。' }) : '你走进酒馆。';
     return new Response(JSON.stringify({ choices: [{ message: { content: data } }] }), { headers: { 'content-type': 'application/json' } });
   });
-  await new TextProcessor(options => {
+  await new StoryWorkflow(options => {
     const agent = agents.find(a => a.id === options.agentId)!;
     expected = renderAgentPrompt(agent, options.context);
     if (routerCalls === 1 && options.agentId === 'text_router') assert(options.context.retry.length > 0);

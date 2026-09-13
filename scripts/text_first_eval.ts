@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { TextProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow } from '../src/engine/workflows/StoryTurn';
 import { TEXT_AGENTS, ROUTED_AGENTS, addTextBindings } from '../src/engine/text/Agents';
 import { createTextWorld } from '../src/engine/text/Migration';
 import { INITIAL_DEMO_SAVE } from '../tests/fixtures/legacyInitialData';
@@ -54,7 +54,7 @@ try {
     }
     const groupId = flag('group') || resumedSave?.activeAgentGroupId || config.activeGroupId || config.groups[0]?.id;
     report.groupId = groupId;
-    report.runtimeSources = Object.fromEntries(['src/engine/text/Processor.ts', 'src/engine/text/Agents.ts', 'src/engine/text/History.ts', 'src/engine/text/RoutedProtocol.ts', 'src/engine/runtime/AgentRuntime.ts'].map(file => [file, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+    report.runtimeSources = Object.fromEntries(['src/engine/workflows/StoryTurn.ts', 'src/engine/text/Agents.ts', 'src/engine/text/History.ts', 'src/engine/text/RoutedProtocol.ts', 'src/engine/runtime/AgentRuntime.ts'].map(file => [file, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
     if (flag('timeout')) {
         const timeout = Number(flag('timeout'));
         if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 300000)
@@ -126,7 +126,7 @@ try {
     persist();
     const { agentRuntime } = await import('../src/engine/runtime/AgentRuntime');
     let calls = 0;
-    const processor = new TextProcessor(async (options) => { if (++calls > maximumCalls)
+    const processor = new StoryWorkflow(async (options) => { if (++calls > maximumCalls)
         throw new Error('评估总调用预算耗尽'); return agentRuntime.runAgent(options); });
     for (const [offset, input] of scenarios.slice(start, requested).entries()) {
         const index = start + offset;

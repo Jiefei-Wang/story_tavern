@@ -6,7 +6,6 @@ import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";
 import { applyPatches } from "../src/engine/world/PatchEngine";
 import { buildNpcView, buildPerceptionView, filterPublicPatches } from "../src/engine/world/WorldViews";
 import { StorageService } from "../src/db/storage";
-import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
 
 const options = { groupId: "test", agents: [], groups: [], backends: [] };
 const profile = (ordinal: number) => ({ name: ordinal === 1 ? "莉娅" : "苏珊", attributes: { appearance: "漂亮的成年女子，穿着蓝色斗篷", occupation: "花商", background: "在小镇种花长大", personality: "热情", goal: "卖完鲜花", mood: "curious" } });
@@ -51,42 +50,6 @@ test("updates to existing characters do not regenerate identities", async (t) =>
   t.mock.method(agentRuntime, "runAgent", async () => { throw Error("unexpected generation"); });
   const patches = [{ op: "replace" as const, path: "/entities/guard/attributes/mood", value: "unconscious" }];
   assert.deepEqual(await generateNewCharacters(INITIAL_HARBOR_TAVERN_WORLD, patches, "卫兵晕倒", options), patches);
-});
-
-test("ordinary encounter actions automatically generate new NPCs before narration", async (t) => {
-  const calls: string[] = [];
-  t.mock.method(agentRuntime, "runAgent", async (opts: any) => {
-    calls.push(opts.agentId);
-    switch (opts.agentId) {
-      case "input_compiler": return { success: true, data: { blocks: [{ id: "b1", kind: "normal", events: [{ id: "e1", type: "action", actor: "player", op: "meet_a_traveler", duration: 5 }] }] } };
-      case "action_adjudicator": return { success: true, data: { resolutions: opts.context.events.map((event: any) => ({ eventId: event.id, status: "success", summary: "玩家观察门外的旅人", reason: "现场可以观察", effects: [] })), speechConstraints: [] } };
-      case "perception": return { success: true, data: { npcObservations: {} } };
-      case "world_resolver": return { success: true, data: {
-        patches: [{ op: "add", path: "/entities/traveler", value: { type: "character", name: "漂亮女孩", memory: "SECRET_DRAFT" } }],
-        publicEvents: [{ actor: "traveler", type: "action", op: "arrive" }],
-      } };
-      case "character_generator": return { success: true, data: profile(1) };
-      case "narrator":
-        assert.equal(opts.context.entities.traveler.name, "莉娅");
-        assert(!JSON.stringify(opts.context).includes("SECRET_DRAFT"));
-        assert(!JSON.stringify(opts.context).includes("在小镇种花长大"));
-        return { success: true, data: { segments: [{ type: "prose", text: "莉娅来到门口。" }] } };
-      case "narration_auditor":
-        assert.equal(opts.context.entities.traveler.name, "莉娅");
-        assert(!JSON.stringify(opts.context).includes("SECRET_DRAFT"));
-        assert(!JSON.stringify(opts.context).includes("在小镇种花长大"));
-        assert.equal(opts.context.narration.segments[0].text, "莉娅来到门口。");
-        return { success: true, data: { grounded: true, issues: [] } };
-      default: throw Error(`Unexpected agent: ${opts.agentId}`);
-    }
-  });
-  const result = await new GamePipeline().executeTurn("我在门外偶遇一位旅行者", INITIAL_HARBOR_TAVERN_WORLD, 1,
-    { agents: [], groups: [], backends: [], activeGroupId: "test", mockMode: false });
-  assert.equal(result.success, true, result.error);
-  assert.equal(result.turn.narrationError, undefined);
-  assert.equal(result.turn.narratorOutput, "莉娅来到门口。");
-  assert.equal(result.turn.worldStateAfter.entities.traveler.name, "莉娅");
-  assert.deepEqual(calls, ["input_compiler", "action_adjudicator", "perception", "world_resolver", "character_generator", "narrator", "narration_auditor"]);
 });
 
 test("failed parallel generation waits for siblings and never mutates the original world", async (t) => {

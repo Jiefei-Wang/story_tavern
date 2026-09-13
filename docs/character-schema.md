@@ -1,3 +1,5 @@
+> 历史状态管线设计记录：原 GamePipeline 已退役，本文旧调用链与评测命令不再适用于运行入口。当前实现见 [ARCHITECTURE.md](../ARCHITECTURE.md)。保留领域校验与历史数据兼容。
+
 # 世界级自定义人物属性 Schema
 
 实现与验收日期：2026-09-12。功能入口：**角色 → 编辑世界人物 Schema**。Visual 面向普通用户；Source 编辑同一份 human-friendly definition JSON。

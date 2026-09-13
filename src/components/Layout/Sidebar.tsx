@@ -82,6 +82,9 @@ export const Sidebar: React.FC = () => {
               <Layers className="w-4 h-4 text-slate-500" />
               <span>Agent 组</span>
             </NavLink>
+            <NavLink to="/workflows" className={navItemClass}>
+              <Layers className="w-4 h-4 text-slate-500" /><span>文本组合</span>
+            </NavLink>
 
           </nav>
         </div>

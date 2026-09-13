@@ -27,7 +27,7 @@ import {
   sanitizeExtraBody,
   sanitizeCustomHeaders,
 } from "../src/engine/runtime/AgentRuntime";
-import { GamePipeline, getSafeIntentDuration } from "../src/engine/pipeline/GamePipeline";
+import { getSafeIntentDuration } from "../src/engine/world/TimingEngine";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { storageService, DEFAULT_SETTINGS } from "../src/db/storage";
@@ -86,28 +86,6 @@ const mockExecContext = {
   mockMode: true,
 };
 
-test("Test 1: wait block execution semantics with response window", async () => {
-  const pipeline = new GamePipeline();
-  const input = "我对艾琳说：“你好。” 然后等她回答。";
-  const result = await pipeline.executeTurn(
-    input,
-    INITIAL_HARBOR_TAVERN_WORLD,
-    1,
-    mockExecContext
-  );
-
-  assert.equal(result.success, true, "Turn with wait block should succeed");
-  assert.equal(result.turn.status, "success");
-
-  // Verify wait block execution in trace
-  const trace = globalTraceManager.getTrace(result.traceId);
-  assert.ok(trace, "Turn trace must exist");
-  const waitBlockSpan = trace.spans.find(
-    (s) => s.type === "temporal_block" && s.name.includes("wait")
-  );
-  assert.ok(waitBlockSpan, "Trace must contain execution of wait block");
-});
-
 test("Test 2: invisible NPC with saw=false, heard=false must not react", async () => {
   const runtime = new AgentRuntime();
   // Simulate NPC reaction with empty perception
@@ -123,49 +101,6 @@ test("Test 2: invisible NPC with saw=false, heard=false must not react", async (
 
   assert.equal(reaction.thought, null, "Invisible NPC should have null thought");
   assert.equal(reaction.intents.length, 0, "Invisible NPC should produce 0 intents");
-});
-
-test("Test 3: empty perception yields zero NPC reactions without random fallback", async () => {
-  const pipeline = new GamePipeline();
-  // Provide input with no player action or speech (e.g. ambient observation)
-  const emptyObsResult = MockSimulator.simulate("perception", {
-    events: [],
-    scene: INITIAL_HARBOR_TAVERN_WORLD.scene,
-    entities: INITIAL_HARBOR_TAVERN_WORLD.entities,
-  });
-
-  assert.deepEqual(
-    emptyObsResult.npcObservations,
-    {},
-    "Empty events should produce empty npcObservations"
-  );
-});
-
-test("Test 4: perception failure causes fail-fast and keeps world unchanged", async () => {
-  const pipeline = new GamePipeline();
-  // Create an execution context where perception agent is missing/broken
-  const badAgents = BUILTIN_AGENTS.filter((a) => a.id !== "perception");
-  const badContext = {
-    ...mockExecContext,
-    agents: badAgents,
-  };
-
-  const initialWorld = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
-  const result = await pipeline.executeTurn(
-    "我走向艾琳并说话",
-    initialWorld,
-    2,
-    badContext
-  );
-
-  assert.equal(result.success, false, "Pipeline must fail when perception fails");
-  assert.equal(result.turn.status, "error");
-  assert.deepEqual(
-    result.turn.worldStateAfter,
-    initialWorld,
-    "World state after failed turn must equal initial world"
-  );
-  assert.equal(result.turn.patches.length, 0, "Error turn must commit 0 patches");
 });
 
 test("Test 5: NPC outside scene is not included in scene characters", () => {
@@ -240,32 +175,6 @@ test("Test 8: partially invalid patch set is rejected completely without partial
   assert.equal(result.success, false, "Atomic patch apply must fail if 1 patch is invalid");
   assert.equal(result.appliedPatches.length, 0, "No patches should be applied");
   assert.equal(world.scene.weather, "clear", "Original world weather must remain unchanged");
-});
-
-test("Test 9: multi-block rollback restores initial world state", async () => {
-  const pipeline = new GamePipeline();
-  const initialWorld = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
-
-  // A normal block succeeds before a missing time_skip agent fails.
-  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "time_skip");
-
-  // This exercises rollback without implicitly granting administrator authority.
-  const input = "我走到窗边，然后快进到第二天";
-  // Execute turn
-  const result = await pipeline.executeTurn(input, initialWorld, 3, {
-    ...mockExecContext,
-    agents: brokenAgents,
-    activeGroupId: "group_test",
-  });
-
-  assert.equal(result.success, false, "Multi-block turn must fail when subsequent block fails");
-  assert.equal(result.turn.status, "error");
-  assert.deepEqual(
-    result.turn.worldStateAfter,
-    initialWorld,
-    "Rolled back turn worldStateAfter must match initialWorld"
-  );
-  assert.equal(result.turn.patches.length, 0, "Error turn must commit 0 patches");
 });
 
 test("Test 10: invalid group throws error without silent fallback to groups[0]", async () => {
@@ -554,28 +463,6 @@ test("Test 22: NPC intent duration exceeding reaction budget is rejected", async
   );
 });
 
-test("Test 23: multiple temporal blocks trace contains all block spans in order", async () => {
-  const pipeline = new GamePipeline();
-  // Input producing normal and wait blocks
-  const result = await pipeline.executeTurn(
-    "我对艾琳说：“快走。” 然后等她回答。",
-    INITIAL_HARBOR_TAVERN_WORLD,
-    4,
-    mockExecContext
-  );
-
-  const trace = globalTraceManager.getTrace(result.traceId);
-  assert.ok(trace);
-
-  const blockSpans = trace.spans.filter((s) => s.type === "temporal_block");
-  assert.ok(blockSpans.length >= 2, "Trace must have at least 2 distinct temporal block spans");
-
-  // Check sequential ordering
-  for (let i = 1; i < blockSpans.length; i++) {
-    assert.ok(blockSpans[i].startedAt >= blockSpans[i - 1].startedAt);
-  }
-});
-
 test("Test 24: patch prototype pollution attempt is strictly rejected", () => {
   const world = cloneWorldState(INITIAL_HARBOR_TAVERN_WORLD);
   const maliciousPatch = {
@@ -614,26 +501,6 @@ test("Test 25: core root removal is strictly rejected", () => {
   const result = applyPatches(world, [coreRemovalPatch]);
   assert.equal(result.success, false, "Removing core root branch must be rejected atomically");
   assert.ok(result.newWorld.entities, "Entities root must still exist");
-});
-
-test("Test 26: mock mode without backend can execute full turn", async () => {
-  const pipeline = new GamePipeline();
-  const result = await pipeline.executeTurn(
-    "我对艾琳说：“你好，今天天气不错。”",
-    INITIAL_HARBOR_TAVERN_WORLD,
-    1,
-    {
-      agents: BUILTIN_AGENTS,
-      groups: [],
-      backends: [],
-      activeGroupId: "",
-      mockMode: true,
-    }
-  );
-
-  assert.equal(result.success, true, "Mock mode turn without backends must succeed");
-  assert.equal(result.turn.status, "success");
-  assert.ok(result.turn.narratorOutput.length > 0, "Narrator should produce story output in mock mode");
 });
 
 test("Test 27: negative, NaN, Infinity, and zero duration cannot gain extra budget", () => {
@@ -689,27 +556,6 @@ test("Test 30: standalone runAgent trace closes and does not remain active", asy
   const trace = globalTraceManager.getTrace(traceId);
   assert.ok(trace);
   assert.equal(trace.status, "success", "Standalone trace must be closed with status success");
-});
-
-test("Test 31: failed block parent span status becomes error", async () => {
-  const pipeline = new GamePipeline();
-  const brokenAgents = BUILTIN_AGENTS.filter((a) => a.id !== "perception");
-  const result = await pipeline.executeTurn(
-    "我走向艾琳",
-    INITIAL_HARBOR_TAVERN_WORLD,
-    1,
-    {
-      ...mockExecContext,
-      agents: brokenAgents,
-    }
-  );
-
-  assert.equal(result.success, false);
-  const trace = globalTraceManager.getTrace(result.traceId);
-  assert.ok(trace);
-  const blockSpan = trace.spans.find((s) => s.type === "temporal_block");
-  assert.ok(blockSpan);
-  assert.equal(blockSpan.status, "error", "Parent block span must be closed as error on failure");
 });
 
 test("Test 32: malformed nested agent output is rejected by semantic validator", () => {
@@ -779,98 +625,6 @@ test("Test 34: scene weather, lighting, and location must be non-empty strings",
   const res3 = applyPatches(world, [validWeatherPatch]);
   assert.equal(res3.success, true, "Valid weather change must succeed");
   assert.equal(res3.newWorld.scene.weather, "snowy");
-});
-
-test("Test 35: retry historical turn removes subsequent turns and sets current world (Test A)", async () => {
-  useSettingsStore.setState({
-    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
-  });
-
-  await createLegacyFixture("Branch Test A");
-  // Legacy variation compatibility: new saves now use the separate text transaction path.
-  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
-  await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
-  await useGameStore.getState().sendPlayerInput("动作 2"); // Turn 2
-  await useGameStore.getState().sendPlayerInput("动作 3"); // Turn 3
-
-  const turnsBefore = useGameStore.getState().activeSave!.turns;
-  assert.equal(turnsBefore.length, 4); // [0: init, 1: 动作1, 2: 动作2, 3: 动作3]
-
-  // Retry Turn 1 (historical turn)
-  const retrySuccess = await useGameStore.getState().retryTurn(1);
-  assert.equal(retrySuccess, true);
-
-  const turnsAfter = useGameStore.getState().activeSave!.turns;
-  assert.equal(turnsAfter.length, 2, "Turns after Turn 1 must be removed on historical retry");
-  assert.equal(turnsAfter[1].turnIndex, 1);
-  assert.equal(turnsAfter[1].variations?.length, 2, "Turn 1 should now have 2 variations");
-  assert.deepEqual(
-    useGameStore.getState().activeSave!.worldState,
-    turnsAfter[1].worldStateAfter,
-    "Current world must equal retried Turn 1 worldStateAfter"
-  );
-});
-
-test("Test 36: switch historical variation removes subsequent turns (Test B)", async () => {
-  useSettingsStore.setState({
-    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
-  });
-
-  await createLegacyFixture("Branch Test B");
-  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
-  await useGameStore.getState().sendPlayerInput("动作 1"); // Turn 1
-  // Retry Turn 1 to create 2 variations while it's head
-  await useGameStore.getState().retryTurn(1);
-  // Now add Turn 2 on top of variation 2
-  await useGameStore.getState().sendPlayerInput("动作 2");
-  assert.equal(useGameStore.getState().activeSave!.turns.length, 3); // [0, 1, 2]
-
-  // Switch Turn 1 back to variation 0
-  await useGameStore.getState().switchTurnVariation(1, 0);
-
-  const turnsAfter = useGameStore.getState().activeSave!.turns;
-  assert.equal(turnsAfter.length, 2, "Switching historical Turn 1 variation must truncate Turn 2");
-  assert.equal(turnsAfter[1].activeVariationIndex, 0);
-  assert.deepEqual(
-    useGameStore.getState().activeSave!.worldState,
-    turnsAfter[1].variations![0].worldStateAfter,
-    "Current world must equal variation 0 worldStateAfter"
-  );
-});
-
-test("Test 37: Narrator data contract contains NPC public events and excludes private states", async () => {
-  const pipeline = new GamePipeline();
-  const result = await pipeline.executeTurn(
-    `我对艾琳说：“${"今晚跟我走。".repeat(16)}”`,
-    INITIAL_HARBOR_TAVERN_WORLD,
-    1,
-    mockExecContext
-  );
-
-  assert.equal(result.success, true);
-  const trace = globalTraceManager.getTrace(result.traceId);
-  assert.ok(trace);
-
-  const narratorSpan = trace.spans.find((s) => s.agentId === "narrator");
-  assert.ok(narratorSpan, "Narrator span must exist");
-
-  const resolvedMessagesStr = JSON.stringify(narratorSpan.resolvedMessages);
-
-  // Must contain Erin's speech and Guard's action from World Resolver publicEvents
-  assert.ok(
-    resolvedMessagesStr.includes("小声点……") || resolvedMessagesStr.includes("艾琳"),
-    "Narrator must receive Erin's speech from publicEvents"
-  );
-
-  // Must NOT contain Erin's internal thought, private memory, relationships, or mentalState patch
-  assert.ok(
-    !resolvedMessagesStr.includes("他让我今晚离开……难道码头"),
-    "Narrator must NOT receive Erin's private thought"
-  );
-  assert.ok(
-    !resolvedMessagesStr.includes("/mentalState"),
-    "Narrator must NOT receive private mentalState patches"
-  );
 });
 
 test("Test 38: observation sanitization filters unperceived events and deletes speech content when heard=false", () => {
@@ -962,37 +716,6 @@ test("Test 40: Narrator View and Patch Filter prevent leakage of private fields"
   assert.equal(publicPatches[1].path, "/scene/weather");
 });
 
-test("Test 41: Retry failure leaves turns, variations, and worldState completely unchanged", async () => {
-  useSettingsStore.setState({
-    settings: { ...DEFAULT_SETTINGS, mockLlmMode: true },
-  });
-
-  await createLegacyFixture("Retry Fail Test");
-  useGameStore.setState(s=>({activeSave:{...s.activeSave!,textWorld:undefined}}));
-  await useGameStore.getState().sendPlayerInput("动作 1");
-  await useGameStore.getState().sendPlayerInput("动作 2");
-  await useGameStore.getState().sendPlayerInput("动作 3");
-
-  const turnsBefore = structuredClone(useGameStore.getState().activeSave!.turns);
-  const worldBefore = structuredClone(useGameStore.getState().activeSave!.worldState);
-
-  // Force failure by temporarily clearing groups
-  useAgentGroupStore.setState({ groups: [] });
-
-  const retrySuccess = await useGameStore.getState().retryTurn(1);
-  assert.equal(retrySuccess, false, "Retry with missing groups must fail");
-
-  // Restore groups
-  useAgentGroupStore.setState({ groups: DEFAULT_AGENT_GROUPS, activeGroupId: "group_quality" });
-
-  const turnsAfter = structuredClone(useGameStore.getState().activeSave!.turns);
-  const worldAfter = structuredClone(useGameStore.getState().activeSave!.worldState);
-
-  assert.equal(turnsAfter.length, 4, "Turn count must not change on failed retry");
-  assert.deepEqual(turnsAfter, turnsBefore, "Turns array must be deeply identical after failed retry");
-  assert.deepEqual(worldAfter, worldBefore, "WorldState must be deeply identical after failed retry");
-});
-
 test("Test 42: Duration cannot be cheated with small numbers or oversized numbers", () => {
   // Speech duration estimator overrides small LLM duration (e.g. 0.01)
   const longSpeechDuration = getSpeechDuration("这是一段很长的讲话内容，包含了很多字符，不能以零点零一秒草草敷衍过去。");
@@ -1017,26 +740,6 @@ test("Test 42: Duration cannot be cheated with small numbers or oversized number
   // Thought character limits
   assert.equal(maxThoughtChars(0.5), 20);
   assert.equal(maxThoughtChars(2.0), 80);
-});
-
-test("Test 43: Wait observation cache is cleared across time_skip and admin blocks", async () => {
-  const pipeline = new GamePipeline();
-
-  // Sequence: Normal speech -> Time Skip -> Wait
-  const result = await pipeline.executeTurn(
-    "我对艾琳说：“快走。” 然后快进到第二天。然后等待她的回答。",
-    INITIAL_HARBOR_TAVERN_WORLD,
-    1,
-    mockExecContext
-  );
-
-  assert.equal(result.success, true);
-  const trace = globalTraceManager.getTrace(result.traceId);
-  assert.ok(trace);
-
-  // The wait block should not inherit observations from the normal block across time_skip
-  const waitSpan = trace.spans.find((s) => s.name.includes("wait"));
-  assert.ok(waitSpan);
 });
 
 test("Test 44: Backend draft testing does not persist draft to database", async () => {

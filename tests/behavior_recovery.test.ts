@@ -4,7 +4,7 @@ import type { TraceSpan } from "../src/types";
 import { summarizeBehaviorRecovery } from "../src/engine/evaluation/BehaviorRecovery";
 import { evaluateStructure, extractTurnEvidence, renderBehaviorReview } from "../src/engine/evaluation/BehaviorEvaluation";
 import { INITIAL_DEMO_SAVE } from "./fixtures/legacyInitialData";
-import type { PipelineTurnResult } from "../src/engine/pipeline/GamePipeline";
+import type { PipelineTurnResult } from "../src/engine/evaluation/BehaviorEvaluation";
 
 function span(id: string, type: string, parsedOutput: unknown, extras: Partial<TraceSpan> = {}): TraceSpan {
   return { id, traceId: "t", name: id, type, startedAt: 0, status: "success", parsedOutput, ...extras };

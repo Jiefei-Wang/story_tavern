@@ -1,4 +1,5 @@
 import { LibraryPage } from '../pages/Library/LibraryPage';
+import { WorkflowsPage } from '../pages/Workflows/WorkflowsPage';
 import { SaveConfigurationPage } from '../pages/Library/SaveConfigurationPage';
 import React from "react";
 import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "agents", element: <AgentsPage /> },
       { path: "agents/:id", element: <AgentEditorPage /> },
       { path: "agent-groups", element: <AgentGroupsPage /> },
+      { path: "workflows", element: <WorkflowsPage /> },
       { path: "debug", element: <DebugPage /> },
       { path: "inspector", element: <StoryRoute kind="inspector" /> },
       { path: "settings", element: <SettingsPage /> },

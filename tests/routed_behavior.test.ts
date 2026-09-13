@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { routedBehaviorScenarios, routedSafetyScenarios } from './fixtures/routedBehaviorScenarios';
 import { behaviorScenarios } from './fixtures/behaviorScenarios';
 import { validateTextWorld } from '../src/engine/text/Documents';
-import { TextProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow } from '../src/engine/workflows/StoryTurn';
 import { DEFAULT_AGENT_GROUPS, DEFAULT_BACKENDS } from './fixtures/legacyInitialData';
 import { ROUTED_AGENTS } from '../src/engine/text/Agents';
 import { globalTraceManager } from '../src/engine/tracing/TraceManager';
@@ -46,7 +46,7 @@ for (const stage of ['text_router', 'text_outline_designer']) test(`plain-text m
   const source = structuredClone(routedBehaviorScenarios[0].save), before = structuredClone(source);
   const calls: string[] = [];
   let traceId = '';
-  const processor = new TextProcessor(async o => {
+  const processor = new StoryWorkflow(async o => {
     calls.push(o.agentId);
     return { success: true, data: o.agentId === stage ? refusal : normal(o), spanId: 'controlled' };
   });
@@ -57,13 +57,13 @@ for (const stage of ['text_router', 'text_outline_designer']) test(`plain-text m
   const trace = globalTraceManager.getTrace(traceId)!;
   assert.equal(trace.spans.filter(s => s.type === 'text_validation' && s.rawResponse === refusal && s.status === 'error').length, 2);
   assert(trace.spans.some(s => s.type === 'text_failure'));
-  const next = await new TextProcessor(async o => ({ success: true, data: normal(o), spanId: 'controlled' })).execute(source, '请查验路引。', context);
+  const next = await new StoryWorkflow(async o => ({ success: true, data: normal(o), spanId: 'controlled' })).execute(source, '请查验路引。', context);
   assert.equal(next.turns.at(-1)!.narration!.anchor, 1);
 });
 
 test('narrator free-text refusal is currently accepted as story and paired with Designer state (documented limitation, not a classifier)', async () => {
   const source = structuredClone(routedBehaviorScenarios[0].save);
-  const result = await new TextProcessor(async o => ({ success: true, data: o.agentId === 'text_storyteller' ? refusal : normal(o), spanId: 'controlled' })).execute(source, '边界测试', context);
+  const result = await new StoryWorkflow(async o => ({ success: true, data: o.agentId === 'text_storyteller' ? refusal : normal(o), spanId: 'controlled' })).execute(source, '边界测试', context);
   assert.equal(result.turns.at(-1)!.narratorOutput, refusal);
   assert.equal(result.turns.at(-1)!.textTurn!.designs![0].expression_outline, '请出示路引。');
   assert.equal(result.turns.at(-1)!.narration!.anchor, 1);
@@ -71,7 +71,7 @@ test('narrator free-text refusal is currently accepted as story and paired with 
 
 test('valid router instructions can deliver a refusal with no NPC state changes and no extra classification call', async () => {
   const source = structuredClone(routedBehaviorScenarios[0].save), calls: string[] = [];
-  const result = await new TextProcessor(async o => {
+  const result = await new StoryWorkflow(async o => {
     calls.push(o.agentId);
     return { success: true, data: o.agentId === 'text_router'
       ? JSON.stringify({ characters: [], new_characters: [], instructions: '这是现实协助边界问题，仅说明不能协助与理由，不生成剧情事件。' })
@@ -85,9 +85,9 @@ test('valid router instructions can deliver a refusal with no NPC state changes 
 
 for (const stage of ['text_router', 'text_outline_designer', 'text_storyteller']) test(`provider failure at ${stage} aborts without consuming an anchor`, async () => {
   const source = structuredClone(routedBehaviorScenarios[0].save), before = structuredClone(source);
-  await assert.rejects(() => new TextProcessor(async o => o.agentId === stage
+  await assert.rejects(() => new StoryWorkflow(async o => o.agentId === stage
     ? { success: false, data: null, error: 'Provider content filter rejected request', spanId: 'controlled' }
-    : { success: true, data: normal(o), spanId: 'controlled' }).execute(source, '边界测试', context), /content filter/);
+    : { success: true, data: normal(o), spanId: 'controlled' }).execute(source, '边界测试', context), /步骤 .* 失败/);
   assert.deepEqual(source, before);
 });
 

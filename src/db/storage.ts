@@ -109,14 +109,7 @@ export class StorageService {
       }
     }
 
-    // New library-based games replace pre-library saves. Inspect metadata before hydration.
-    if (this.usesLocalService()) {
-      const items = await invoke<Array<{key:string;value:string}>>('db_kv_list', {table:'saves'});
-      for (const item of items) if (safeJsonParse<GameSave>(item.value, 'save').textWorld?.setupVersion !== 2) await this.deleteGame(item.key);
-    } else {
-      const saves = this.readBrowserList<GameSave>('story_tavern_saves');
-      this.getStorage().setItem('story_tavern_saves', JSON.stringify(saves.filter(s => s.textWorld?.setupVersion === 2)));
-    }
+    // Retired pipelines do not justify deleting their saves. Keep history for explicit migration/read-only viewing.
     await reconcileAgentCatalog(this);
     if (!(await this.getLibrary())) await this.commitLibrary({revision:0,data:defaultLibrary()}, -1);
   }

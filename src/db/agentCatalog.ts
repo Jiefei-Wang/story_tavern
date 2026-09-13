@@ -30,6 +30,10 @@ export async function reconcileAgentCatalog(storage: CatalogStorage) {
   for (const defaults of DEFAULT_AGENT_GROUPS) {
     const existing = groups.find(g => g.id === defaults.id);
     const bindings = defaults.bindings.map(b => structuredClone(existing?.bindings.find(e => e.agentId === b.agentId) ?? b));
+    // Custom workflow agents keep their model bindings across initialization.
+    for (const binding of existing?.bindings || []) {
+      if (!bindings.some(b => b.agentId === binding.agentId) && !RETIRED_AGENT_IDS.has(binding.agentId) && agents.some(a => a.id === binding.agentId)) bindings.push(structuredClone(binding));
+    }
     const next = existing ? { ...existing, bindings } : structuredClone(defaults);
     if (JSON.stringify(next) !== JSON.stringify(existing)) await storage.saveAgentGroup(next);
   }

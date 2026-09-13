@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStorySave, defaultLibrary, validateLibrary } from '../src/engine/library/Library';
 import { validateTextWorld } from '../src/engine/text/Documents';
-import { TextProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow } from '../src/engine/workflows/StoryTurn';
 import { ROUTED_AGENTS } from '../src/engine/text/Agents';
 import { AgentRuntime } from '../src/engine/runtime/AgentRuntime';
 import { storageService } from '../src/db/storage';
@@ -13,6 +13,7 @@ import { useAgentGroupStore } from '../src/stores/useAgentGroupStore';
 import { useBackendStore } from '../src/stores/useBackendStore';
 import { readAssistantConfiguration, executeAssistantChanges, planAssistantChanges, type Resources } from '../src/engine/assistantConfiguration';
 import { assistantReplySchema } from '../src/engine/modelAssistant';
+import { INITIAL_DEMO_SAVE } from './fixtures/legacyInitialData';
 
 test('library rejects invalid references, duplicate casts, blank world text and mismatched IDs', () => {
   for (const mutate of [
@@ -55,7 +56,7 @@ test('actual HTTP prompt includes configured definitions, opening and input, exc
   });
   const agents = ROUTED_AGENTS.map(a => ({ ...a, messages: [...a.messages, { id: 'stale_task', role: 'user' as const, content: 'OLD_TEMPLATE_NOT_SENT' }] }));
   const runtime = new AgentRuntime();
-  await new TextProcessor(o => runtime.runAgent(o)).execute(save, '你好', { agents, activeGroupId: 'test', groups: [{ id: 'test', name: 'test', bindings: agents.map(a => ({ agentId: a.id, backendId: 'test', model: 'model' })) }], backends: [{ id: 'test', name: 'test', baseUrl: 'http://localhost:1234/v1', authType: 'none', customHeaders: {}, enabled: true, timeoutMs: 1000, maxConcurrency: 1 }], mockMode: false, recentTurns: save.turns });
+  await new StoryWorkflow(o => runtime.runAgent(o)).execute(save, '你好', { agents, activeGroupId: 'test', groups: [{ id: 'test', name: 'test', bindings: agents.map(a => ({ agentId: a.id, backendId: 'test', model: 'model' })) }], backends: [{ id: 'test', name: 'test', baseUrl: 'http://localhost:1234/v1', authType: 'none', customHeaders: {}, enabled: true, timeoutMs: 1000, maxConcurrency: 1 }], mockMode: false, recentTurns: save.turns });
   assert.equal(sent.length, 3);
   for (const body of sent) {
     assert.deepEqual(body.messages.map((m: any) => m.role), ['user']);
@@ -118,15 +119,15 @@ test('assistant library patches are durable, atomic across references, preserve 
   } finally { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); }
 });
 
-test('initialization removes pre-library saves but retains new saves, library edits and backend preferences', async () => {
+test('initialization preserves archived and current saves, library edits and backend preferences', async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage'), values = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v), removeItem: (k: string) => values.delete(k) } });
   try {
     const save = createStorySave(defaultLibrary(), 'harbor_story', 'group_quality');
-    values.set('story_tavern_saves', JSON.stringify([{ ...save, id: 'old', textWorld: undefined }, save]));
+    values.set('story_tavern_saves', JSON.stringify([{ ...structuredClone(INITIAL_DEMO_SAVE), id: 'old' }, save]));
     values.set('model_assistant_model', 'preserve');
     await storageService.initDatabase();
-    assert.deepEqual((await storageService.getSaves()).map(s => s.id), [save.id]);
+    assert.deepEqual((await storageService.getSaves()).map(s => s.id), ['old', save.id]);
     const record = (await storageService.getLibrary())!; record.data.stories = {}; record.data.selectedStoryId = null;
     await storageService.commitLibrary({ ...record, revision: record.revision + 1 }, record.revision);
     await storageService.initDatabase();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TextProcessor, textProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow, storyWorkflow } from '../src/engine/workflows/StoryTurn';
 import { createTextWorld, migrateToText, restoreLegacyCopy } from '../src/engine/text/Migration';
 import { DocumentWorkspace, validateTextWorld } from '../src/engine/text/Documents';
 import { prepareHistory, historyMessages, characterHistory, anchoredNarration, visibleNarration } from '../src/engine/text/History';
@@ -43,7 +43,7 @@ test('one routing + one batched Designer + one narrator, atomically saved with e
     const source = fixture(), a = adapter({ selected: ['erin', 'guard'] });
     const storage = new StorageService();
     await storage.commitTextGame(source, null);
-    const result = await new TextProcessor(a.run).execute(source, '我向两人打招呼。', context);
+    const result = await new StoryWorkflow(a.run).execute(source, '我向两人打招呼。', context);
     assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_outline_designer', 'text_storyteller']);
     assert(a.calls.every(c => !c.toolSchema));
     assert(a.calls.slice(0, 2).every(c => c.jsonObject));
@@ -63,7 +63,7 @@ test('one routing + one batched Designer + one narrator, atomically saved with e
 
 test('new character cards are created before the one joint design call and use program-generated IDs', async () => {
     const a = adapter({ create: true }), source = fixture();
-    const result = await new TextProcessor(a.run).execute(source, '我向路上另一位女孩打招呼。', context);
+    const result = await new StoryWorkflow(a.run).execute(source, '我向路上另一位女孩打招呼。', context);
     assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_character_designer', 'text_outline_designer', 'text_storyteller']);
     const id = result.turns.at(-1)!.textTurn!.createdCharacters![0];
     assert(id.startsWith('person_'));
@@ -77,7 +77,7 @@ test('new character cards are created before the one joint design call and use p
 
 test('null performance skips narrator integration but still persists changed end state', async () => {
     const a = adapter({ silent: true });
-    const result = await new TextProcessor(a.run).execute(fixture(), '我默默看着艾琳。', context);
+    const result = await new StoryWorkflow(a.run).execute(fixture(), '我默默看着艾琳。', context);
     assert.deepEqual(a.calls[2].context.material.performances, []);
     assert.equal(result.turns.at(-1)!.textTurn!.designs![0].end_state.summary, '留意来人的招呼。');
     assert.deepEqual(result.turns.at(-1)!.textTurn!.events, []);
@@ -85,7 +85,7 @@ test('null performance skips narrator integration but still persists changed end
 
 test('no selected NPC means no Designer call, while narrator still receives input and route instructions', async () => {
     const a = adapter({ selected: [] });
-    await new TextProcessor(a.run).execute(fixture(), '不是一个扫帚', context);
+    await new StoryWorkflow(a.run).execute(fixture(), '不是一个扫帚', context);
     assert.deepEqual(a.calls.map(c => c.agentId), ['text_router', 'text_storyteller']);
     assert.equal(a.calls[1].context.input, '不是一个扫帚');
     assert(a.calls[1].context.routingInstructions.includes('不把纠正当成发言'));
@@ -93,11 +93,11 @@ test('no selected NPC means no Designer call, while narrator still receives inpu
 
 test('correction remains one linear turn; every stage gets original feedback and full preceding story', async () => {
     const a = adapter(), source = fixture();
-    const first = await new TextProcessor(a.run).execute(source, '我走进房间。', context);
+    const first = await new StoryWorkflow(a.run).execute(source, '我走进房间。', context);
     first.turns.at(-1)!.narratorOutput = '房间角落有一个扫帚。';
     first.turns.at(-1)!.narration!.requestText = anchoredNarration(first.turns.at(-1)!.narratorOutput, 2);
     const b = adapter();
-    const second = await new TextProcessor(b.run).execute(first, '不是一个扫帚', context);
+    const second = await new StoryWorkflow(b.run).execute(first, '不是一个扫帚', context);
     for (const call of b.calls) {
         const sent = JSON.stringify(call.context);
         assert(sent.includes('房间角落有一个扫帚'));
@@ -111,9 +111,9 @@ test('correction remains one linear turn; every stage gets original feedback and
 });
 
 test('history variable preserves prior messages across selection changes, skipped NPC turns and reload', async () => {
-    const source = fixture(), a = adapter(), first = await new TextProcessor(a.run).execute(source, '我打招呼。', context);
-    const b = adapter({ selected: [] }), second = await new TextProcessor(b.run).execute(JSON.parse(JSON.stringify(first)), '看看天气。', context);
-    const c = adapter(), third = await new TextProcessor(c.run).execute(second, '我再次问艾琳。', context);
+    const source = fixture(), a = adapter(), first = await new StoryWorkflow(a.run).execute(source, '我打招呼。', context);
+    const b = adapter({ selected: [] }), second = await new StoryWorkflow(b.run).execute(JSON.parse(JSON.stringify(first)), '看看天气。', context);
+    const c = adapter(), third = await new StoryWorkflow(c.run).execute(second, '我再次问艾琳。', context);
     for (const id of ['text_router', 'text_storyteller']) {
         const oldPrefix = a.calls.find(o => o.agentId === id)!.context.history;
         const next = c.calls.find(o => o.agentId === id)!.context.history;
@@ -129,7 +129,7 @@ test('history variable preserves prior messages across selection changes, skippe
 
 test('narrator receives no private end states or world secrets', async () => {
     const source = fixture(); source.textWorld!.documents['world/private.md'].text = 'PRIVATE_WORLD_SENTINEL';
-    const a = adapter(); await new TextProcessor(a.run).execute(source, '我打招呼。', context);
+    const a = adapter(); await new StoryWorkflow(a.run).execute(source, '我打招呼。', context);
     assert(JSON.stringify(a.calls[1].context).includes('PRIVATE_WORLD_SENTINEL'));
     const narrator = JSON.stringify(a.calls[2].context);
     assert(!narrator.includes('PRIVATE_WORLD_SENTINEL'));
@@ -140,7 +140,7 @@ test('narrator receives no private end states or world secrets', async () => {
 test('invalid Designer shape gets one detailed retry and failed trace; no history/state mutations', async () => {
     const a = adapter({ invalidDesign: true }), source = fixture(), snapshot = structuredClone(source);
     let traceId = '';
-    await assert.rejects(() => new TextProcessor(a.run).execute(source, '我打招呼。', { ...context, onTraceStarted: id => { traceId = id; } }), /erin.expression/);
+    await assert.rejects(() => new StoryWorkflow(a.run).execute(source, '我打招呼。', { ...context, onTraceStarted: id => { traceId = id; } }), /erin.expression/);
     assert.equal(a.calls.filter(o => o.agentId === 'text_outline_designer').length, 2);
     assert(!a.calls.some(o => o.agentId === 'text_storyteller'));
     const trace = globalTraceManager.getTrace(traceId)!;
@@ -153,9 +153,9 @@ test('cancellation or narrator failure cannot leave new character cards, states 
     for (const cancel of [false, true]) {
         const controller = new AbortController(), source = fixture(), snapshot = structuredClone(source);
         const a = adapter({ create: true, fail: cancel ? undefined : 'text_storyteller', inspect: o => { if (cancel && o.agentId === 'text_storyteller') controller.abort(); } });
-        await assert.rejects(() => new TextProcessor(a.run).execute(source, '另一位女孩。', { ...context, signal: controller.signal }));
+        await assert.rejects(() => new StoryWorkflow(a.run).execute(source, '另一位女孩。', { ...context, signal: controller.signal }));
         assert.deepEqual(source, snapshot);
-        const next = await new TextProcessor(adapter().run).execute(source, '我打招呼。', context);
+        const next = await new StoryWorkflow(adapter().run).execute(source, '我打招呼。', context);
         assert.equal(next.turns.at(-1)!.narration!.anchor, 2);
     }
 });
@@ -186,7 +186,7 @@ test('program markers stay out of narration display/copy; malformed stored ancho
 
 test('model-echoed anchor is stripped and only the committed program anchor is stored', async () => {
     const a = adapter();
-    const result = await new TextProcessor(async o => o.agentId === 'text_storyteller' ? { success: true, data: '正文\n\n【时间点 999】', spanId: 'test' } : a.run(o)).execute(fixture(), '你好', context);
+    const result = await new StoryWorkflow(async o => o.agentId === 'text_storyteller' ? { success: true, data: '正文\n\n【时间点 999】', spanId: 'test' } : a.run(o)).execute(fixture(), '你好', context);
     assert.equal(result.turns.at(-1)!.narratorOutput, '正文');
     assert.equal(result.turns.at(-1)!.narration!.requestText, '正文\n\n【时间点 2】');
 });
@@ -219,7 +219,7 @@ test('actual HTTP prompt contains history anchors and current input without a hi
     try {
         const runtime = new AgentRuntime();
         const realContext = { ...context, agents: ROUTED_AGENTS, activeGroupId: 'test', groups: [{ id: 'test', name: 'test', bindings: ROUTED_AGENTS.map(a => ({ agentId: a.id, backendId: 'local', model: 'test' })) }], backends: [{ id: 'local', name: 'local', baseUrl: 'http://localhost:1234/v1', authType: 'none' as const, customHeaders: {}, enabled: true, maxConcurrency: 1, timeoutMs: 1000 }] };
-        await new TextProcessor(o => runtime.runAgent(o)).execute(fixture(), '你好', realContext);
+        await new StoryWorkflow(o => runtime.runAgent(o)).execute(fixture(), '你好', realContext);
         assert.equal(sent.length, 3);
         for (const request of sent) {
             assert.deepEqual(request.messages.map((m: any) => m.role), ['user']);
@@ -235,7 +235,7 @@ test('atomic CAS rejects competing candidates, preserves unknown fields and stab
     const storage = new StorageService(); await storage.commitTextGame(source, null);
     let save = source;
     for (let n = 0; n < 12; n++) {
-        const candidate = await new TextProcessor(adapter().run).execute(save, `问候 ${n}`, context);
+        const candidate = await new StoryWorkflow(adapter().run).execute(save, `问候 ${n}`, context);
         await storage.commitTextGame(candidate, save.textWorld!.revision);
         if (n === 0) await assert.rejects(() => storage.commitTextGame(candidate, 0), /冲突/);
         save = (await storage.getSaves()).find(s => s.id === source.id)!;
@@ -251,7 +251,7 @@ test('atomic CAS rejects competing candidates, preserves unknown fields and stab
 test('assistant edits new cards and role prompts, rejects writable runtime state, preserves history/cancel/conflict', async () => {
     for (const agent of BUILTIN_AGENTS) await storageService.saveAgent(agent);
     const source = fixture(), storage = new StorageService(); await storage.commitTextGame(source, null);
-    const generated = await new TextProcessor(adapter({ create: true }).run).execute(source, '我打招呼。', context); await storage.commitTextGame(generated, 0);
+    const generated = await new StoryWorkflow(adapter({ create: true }).run).execute(source, '我打招呼。', context); await storage.commitTextGame(generated, 0);
     useGameStore.setState({ saves: [generated], activeSave: generated, isExecuting: false });
     useAgentStore.setState({ agents: BUILTIN_AGENTS }); useAgentGroupStore.setState({ groups: DEFAULT_AGENT_GROUPS, activeGroupId: context.activeGroupId }); useBackendStore.setState({ backends: DEFAULT_BACKENDS });
     const snapshot = readAssistantConfiguration();
@@ -281,16 +281,16 @@ test('store commit failure persists diagnostics and leaves successful story/stat
     const source = fixture(); await storageService.commitTextGame(source, null);
     useGameStore.setState({ saves: [source], activeSave: source, isExecuting: false }); useAgentStore.setState({ agents: BUILTIN_AGENTS }); useAgentGroupStore.setState({ groups: DEFAULT_AGENT_GROUPS, activeGroupId: context.activeGroupId }); useBackendStore.setState({ backends: DEFAULT_BACKENDS });
     useSettingsStore.setState(s => ({ settings: { ...s.settings, mockLlmMode: false } }));
-    const oldRunner = (textProcessor as any).runner, oldCommit = storageService.commitTextGame;
+    const oldRunner = (storyWorkflow as any).runner, oldCommit = storageService.commitTextGame;
     try {
-        (textProcessor as any).runner = adapter().run;
+        (storyWorkflow as any).runner = adapter().run;
         storageService.commitTextGame = async () => { throw new Error('controlled disk failure'); };
         const ok = await useGameStore.getState().sendPlayerInput('你好');
         assert.equal(ok, false);
         assert.deepEqual(useGameStore.getState().activeSave, source);
         const trace = (await storageService.getTraces()).find(t => t.id === useGameStore.getState().currentTraceId)!;
         assert(trace.spans.some(s => s.type === 'text_failure' && s.error?.includes('controlled disk failure')));
-    } finally { (textProcessor as any).runner = oldRunner; storageService.commitTextGame = oldCommit; }
+    } finally { (storyWorkflow as any).runner = oldRunner; storageService.commitTextGame = oldCommit; }
 });
 
 test('legacy migration and document authoring preserve unknown metadata and player invariants', () => {
@@ -322,7 +322,7 @@ test('regenerate one or multiple cards keeps IDs, unrelated documents, metadata 
             return { success: true, data: typeof data === 'string' ? data : JSON.stringify(data), spanId: 'test' };
         };
         const storage = new StorageService(); await storage.commitTextGame(source, null);
-        const result = await new TextProcessor(runner).execute(source, `重新生成${targets.join('和')}的人物卡`, context);
+        const result = await new StoryWorkflow(runner).execute(source, `重新生成${targets.join('和')}的人物卡`, context);
         assert.deepEqual(calls.map(o => o.agentId), ['text_router', 'text_character_designer', 'text_storyteller']);
         assert.deepEqual(source, before);
         assert.deepEqual(result.textWorld!.characters, source.textWorld!.characters);
@@ -351,7 +351,7 @@ test('regeneration rejects unauthorized, duplicate or missing targets and cancel
     assert.throws(() => validateRoute({ ...route, regenerate_characters: [{ character_id: 'erin', description: '' }] }, ['erin']), /非空/);
     for (const failure of ['missing', 'cancel', 'narrator']) {
         const source = fixture(), before = structuredClone(source), controller = new AbortController();
-        await assert.rejects(new TextProcessor(async o => {
+        await assert.rejects(new StoryWorkflow(async o => {
             if (o.agentId === 'text_router') return { success: true, spanId: 'test', data: JSON.stringify({ ...route, regenerate_characters: [{ character_id: 'erin', description: '重做' }] }) };
             if (o.agentId === 'text_character_designer') {
                 if (failure === 'cancel') controller.abort();
@@ -366,7 +366,7 @@ test('regeneration rejects unauthorized, duplicate or missing targets and cancel
 test('outline requires thought and expression outline; narrator only receives public outline and action', async () => {
     assert.throws(() => validateOutlines({ characters: [{ character_id: 'erin', expression: 'full dialogue', action: null, end_state: {} }] }, ['erin']), /thought/);
     const a = adapter();
-    const result = await new TextProcessor(async o => {
+    const result = await new StoryWorkflow(async o => {
         if (o.agentId !== 'text_outline_designer') return a.run(o);
         return { success: true, spanId: 'test', data: JSON.stringify({ characters: [{ character_id: 'erin', thought: 'PRIVATE_THOUGHT', expression_outline: '礼貌询问来意', action: '停步', end_state: { summary: '已询问' } }] }) };
     }).execute(fixture(), '打招呼', context);

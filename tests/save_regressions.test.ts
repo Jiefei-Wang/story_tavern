@@ -7,7 +7,6 @@ import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS } from "./fixtures/legacyInitialData"
 import { useGameStore } from "../src/stores/useGameStore";
 import { useSettingsStore } from "../src/stores/useSettingsStore";
 import { useAgentStore } from "../src/stores/useAgentStore";
-import { gamePipeline } from "../src/engine/pipeline/GamePipeline";
 
 test("reload resumes the most recently saved game instead of the first seeded save", async () => {
   const storage = new StorageService();
@@ -64,30 +63,3 @@ test("selecting current variation or invalid indexes does not truncate history",
   assert.equal(useGameStore.getState().activeSave, save);
   useGameStore.setState({ isExecuting: false });
 });
-
-for (const operation of ["send", "retry"] as const) {
-  test(`${operation} completing after save selection preserves the selected save`, async (t) => {
-    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, autosave: false, mockLlmMode: true } });
-    useAgentStore.setState({ agents: BUILTIN_AGENTS });
-    const a = structuredClone(INITIAL_DEMO_SAVE);
-    a.id = "running";
-    a.turns[0].playerInput = "hello";
-    const b = { ...structuredClone(a), id: "selected" };
-    useGameStore.setState({ activeSave: a, saves: [a, b], isExecuting: false });
-    let finish!: () => void;
-    const gate = new Promise<void>(resolve => { finish = resolve; });
-    t.mock.method(gamePipeline, "executeTurn", async () => {
-      await gate;
-      return { success: true, traceId: "completed", turn: { ...a.turns[0], id: "new", traceId: "completed" } };
-    });
-    const pending = operation === "send"
-      ? useGameStore.getState().sendPlayerInput("hello")
-      : useGameStore.getState().retryTurn(0);
-    useGameStore.getState().selectSave(b.id);
-    finish();
-    assert.equal(await pending, true);
-    assert.equal(useGameStore.getState().activeSave, b);
-    assert.equal(useGameStore.getState().currentTraceId, b.turns[0].traceId);
-    assert.equal(useGameStore.getState().saves.find(s => s.id === a.id)?.turns.at(-1)?.traceId, "completed");
-  });
-}

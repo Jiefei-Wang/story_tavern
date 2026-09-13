@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { GameSave, WorldState } from '../../types';
 import type { TextWorld } from '../text/types';
 import { validateTextWorld } from '../text/Documents';
+import { workflowsSchema, validateWorkflows, DEFAULT_STORY_WORKFLOW } from '../workflows/Workflow';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]+$/).refine(s => !['__proto__', 'prototype', 'constructor'].includes(s), 'ID 不可使用保留名称');
 const required = z.string().refine(s => !!s.trim(), '内容不能为空');
@@ -9,7 +10,7 @@ export const imageSchema = z.string().max(1_500_000).refine(s => !s || /^https?:
 export const characterSchema = z.object({ id, name: required, setting: required, details: z.string(), initialMemory: z.string(), image: imageSchema.optional() }).passthrough();
 export const worldSchema = z.object({ id, name: required, summary: z.string(), description: required, image: imageSchema.optional() }).passthrough();
 export const storySchema = z.object({ id, name: required, summary: z.string(), worldId: id, playerId: id, supportingIds: z.array(id), opening: required }).passthrough();
-export const librarySchema = z.object({ characters: z.record(id, characterSchema), worlds: z.record(id, worldSchema), stories: z.record(id, storySchema), selectedStoryId: id.nullable() }).passthrough();
+export const librarySchema = z.object({ characters: z.record(id, characterSchema), worlds: z.record(id, worldSchema), stories: z.record(id, storySchema), selectedStoryId: id.nullable(), workflows: workflowsSchema.optional(), storyWorkflowId: id.nullable().optional() }).passthrough();
 export type Character = z.infer<typeof characterSchema>;
 export type World = z.infer<typeof worldSchema>;
 export type Story = z.infer<typeof storySchema>;
@@ -20,6 +21,8 @@ export const emptyLibrary = (): Library => ({ characters: {}, worlds: {}, storie
 export function validateLibrary(value: unknown): asserts value is Library {
   librarySchema.parse(value); // Use the original object: retain unknown fields.
   const library = value as Library;
+  validateWorkflows(library.workflows || {});
+  if (library.storyWorkflowId && !library.workflows?.[library.storyWorkflowId]) throw new Error('故事引用的组合不存在，请先更换故事组合');
   for (const kind of ['characters', 'worlds', 'stories'] as const) for (const [key, item] of Object.entries(library[kind])) {
     if (key !== item.id) throw new Error('配置 ID 与集合键必须一致');
   }
@@ -30,6 +33,10 @@ export function validateLibrary(value: unknown): asserts value is Library {
     if (story.supportingIds.some(key => !library.characters[key])) throw new Error(`故事「${story.name}」引用的配角不存在，请先解除引用`);
   }
   if (library.selectedStoryId && !library.stories[library.selectedStoryId]) throw new Error('首页选中的故事不存在');
+}
+export function getStoryWorkflow(library: Library) {
+  validateLibrary(library);
+  return library.storyWorkflowId ? library.workflows![library.storyWorkflowId] : DEFAULT_STORY_WORKFLOW;
 }
 export function defaultLibrary(): Library {
   const characters: Record<string, Character> = {

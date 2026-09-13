@@ -3,14 +3,14 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { routedBehaviorScenarios, routedSafetyScenarios } from '../tests/fixtures/routedBehaviorScenarios';
-import { TextProcessor } from '../src/engine/text/Processor';
+import { StoryWorkflow } from '../src/engine/workflows/StoryTurn';
 import { ROUTED_AGENTS, addTextBindings } from '../src/engine/text/Agents';
 import { StorageService } from '../src/db/storage';
 import { globalTraceManager } from '../src/engine/tracing/TraceManager';
 import type { AgentDefinition, AgentGroup, Backend } from '../src/types';
 
 const flag = (key: string) => process.argv.find(a => a.startsWith(`--${key}=`))?.slice(key.length + 3);
-const output = path.resolve(flag('output') || 'artifacts/routed-behavior/first-run');
+const output = path.resolve(flag('output') || '.tmp/workflow-eval/first-run');
 if (fs.existsSync(path.join(output, 'report.json'))) throw new Error('报告已存在；请使用新的 --output，避免覆盖首次失败证据');
 fs.mkdirSync(output, { recursive: true });
 try {
@@ -25,7 +25,7 @@ const clean = (value: unknown) => {
   for (const secret of secrets) text = text.split(secret).join('[REDACTED]');
   return text;
 };
-const report: any = { status: 'starting', pipeline: 'routed-v2', startedAt: new Date().toISOString(),
+const report: any = { status: 'starting', pipeline: 'workflow-v1', startedAt: new Date().toISOString(),
   evaluation: 'Real configured models, unchanged production pipeline. Manual semantic/refusal review; no classifier or judge model.', scenarios: [] };
 const persist = () => fs.writeFileSync(path.join(output, 'report.json'), clean(report));
 const maximumCalls = Number(flag('calls') || 240);
@@ -55,13 +55,13 @@ try {
   report.groupId = group.id;
   report.bindings = group.bindings.filter(b => ROUTED_AGENTS.some(a => a.id === b.agentId));
   report.agents = agents.filter(a => ROUTED_AGENTS.some(r => r.id === a.id));
-  report.runtimeSources = Object.fromEntries(['src/engine/text/Processor.ts', 'src/engine/text/Agents.ts', 'src/engine/text/History.ts', 'src/engine/text/RoutedProtocol.ts', 'src/engine/runtime/AgentRuntime.ts', 'tests/fixtures/routedBehaviorScenarios.ts', 'scripts/routed_behavior_eval.ts'].map(file => [file, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+  report.runtimeSources = Object.fromEntries(['src/engine/workflows/StoryTurn.ts', 'src/engine/text/Agents.ts', 'src/engine/text/History.ts', 'src/engine/text/RoutedProtocol.ts', 'src/engine/runtime/AgentRuntime.ts', 'tests/fixtures/routedBehaviorScenarios.ts', 'scripts/routed_behavior_eval.ts'].map(file => [file, createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
   const values = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v), removeItem: (k: string) => values.delete(k) } });
   const storage = new StorageService();
   const { agentRuntime } = await import('../src/engine/runtime/AgentRuntime');
   let calls = 0;
-  const processor = new TextProcessor(async options => {
+  const processor = new StoryWorkflow(async options => {
     if (++calls > maximumCalls) throw new Error('测试调用预算耗尽');
     return agentRuntime.runAgent(options);
   });

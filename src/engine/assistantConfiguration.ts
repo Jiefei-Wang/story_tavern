@@ -19,6 +19,7 @@ import { Backend, GameSave, WorldDefinition, WorldState } from "../types";
 import {validateTextWorld} from './text/Documents';
 import { librarySchema, validateLibrary, emptyLibrary, type Library } from './library/Library';
 import { useLibraryStore } from '../stores/useLibraryStore';
+import { validateWorkflows, workflowsSchema } from './workflows/Workflow';
 
 type Document = Record<string, any>;
 export type Resources = Record<string, Document>;
@@ -51,6 +52,18 @@ async function saveCollection(next: Document, before: Document, save: (value: an
 
 /** The single runtime capability catalog. New domains register read/schema/validate/save here. */
 export const assistantResources: Record<string, ConfigurationResource> = {
+  workflows: {
+    description: '文本与游戏组合（ID → 流程），保存复用配置库原子提交，立即同步文本组合页面。字段 id/name/steps/output；steps 为最多32个顺序步骤，每步有唯一 id、agentId、inputs（输入名 → 来源）。来源为 {from:"input"} 或 {from:"step",stepId:"前面步骤ID",pointer:"JSON Pointer"}，空 pointer 读取完整结果。可重复调用同一 Agent，可汇合多个先前输出；禁止前向引用、循环和不安全路径。运行时选择模型组，要求所有 Agent 已绑定启用的 Backend 和模型。输入按 Agent inputs 校验，输出按 outputSchema 校验，最终 output 必须选出非空文本。只传显式输入，不自动提供存档或凭证；配置操作不运行模型，结果和运行状态不是配置。游戏通过 library.storyWorkflowId 选择组合，null 或缺失使用内置默认故事组合；从下一回合生效，历史不重写。storyStage 可为 route/cards/outlines/narration，必须依次各一次，程序提供材料、按需跳过和领域校验；这些阶段仅游戏可运行，Agent 可替换，普通步骤可穿插。from:context 配合 pointer 可显式读取游戏提供的 world/characters/player/history/input，独立运行没有游戏上下文。默认组合可在页面复制后编辑。旧配置缺少 workflows 视为空集合，未知字段保留。',
+    schema: workflowsSchema,
+    read: () => structuredClone(useLibraryStore.getState().record.data.workflows || {}),
+    validate: (value, all) => validateWorkflows(value, Object.values(all.agents)),
+    save: async (value, before, report, signal) => {
+      const state = useLibraryStore.getState();
+      if (!same(state.record.data.workflows || {}, before)) throw new Error('流程配置已变化，请重新读取');
+      await state.save({ ...state.record.data, workflows: value }, state.record.revision, signal);
+      report('已保存文本组合配置');
+    },
+  },
   repositoryDefaults: {
     description: '仓库默认 Agent 与 Agent 组，独立于本机 agents/groups。仅本地开发服务可写；available=false 时不可操作。data.agents 和 data.groups 按 ID 索引，支持局部 JSON Patch，revision/available 只读。保留五个核心 Agent 与 Fast/Quality/Local 组；绑定只允许 backend_openrouter/backend_local。不能保存凭证。保存写入仓库 JSON 并即时同步编辑页，不应用到本机；用户可在界面点击应用到本机，或明确要求修改本机 agents/groups。存在界面未保存仓库草稿时拒绝助手保存。',
     schema: z.object({ available: z.boolean(), revision: z.string().optional(), data: repositorySchema.optional() }).strict(),
@@ -68,14 +81,15 @@ export const assistantResources: Record<string, ConfigurationResource> = {
     },
   },
   library: {
-    description: '故事工坊独立配置库：characters（ID → 角色：name、setting、details、initialMemory、可选 image），worlds（ID → 世界：name、summary、description、可选 image），stories（ID → 故事：name、summary、worldId、playerId、supportingIds、opening），selectedStoryId（首页所选故事或 null）。三种配置共用一次原子提交，以保证引用始终有效。支持创建、编辑、删除与选择故事。主角必须存在且不得同时为配角，配角可为空且不能重复；删除角色或世界前须解除故事引用。世界只有 description 进入模型消息，名字、概要、图片只展示；故事 summary 只展示，opening 直接作为首条正文。新开局复制配置，公共库修改不改变已有存档；剧情新增人物留在本局。image 可为空、HTTP(S) 图片地址或不超过约 1 MB 的 PNG/JPEG/WebP data URL。角色设定、详细资料、初始记忆都参与定义。保存即时刷新 UI，不写历史、凭证或运行状态。',
-    schema: librarySchema,
-    read: () => structuredClone(useLibraryStore.getState().record.data),
-    validate: value => validateLibrary(value),
+    description: '故事工坊独立配置库：characters（ID → 角色：name、setting、details、initialMemory、可选 image），worlds（ID → 世界：name、summary、description、可选 image），stories（ID → 故事：name、summary、worldId、playerId、supportingIds、opening），selectedStoryId（首页所选故事或 null），storyWorkflowId（游戏所用 workflows ID；null 或缺失使用默认故事组合）。三种配置共用一次原子提交，以保证引用始终有效。支持创建、编辑、删除与选择故事。主角必须存在且不得同时为配角，配角可为空且不能重复；删除角色或世界前须解除故事引用。世界只有 description 进入模型消息，名字、概要、图片只展示；故事 summary 只展示，opening 直接作为首条正文。新开局复制配置，公共库修改不改变已有存档；剧情新增人物留在本局。image 可为空、HTTP(S) 图片地址或不超过约 1 MB 的 PNG/JPEG/WebP data URL。角色设定、详细资料、初始记忆都参与定义。保存即时刷新 UI，不写历史、凭证或运行状态。',
+    schema: librarySchema.omit({ workflows: true }),
+    read: () => { const { workflows, ...data } = useLibraryStore.getState().record.data; return structuredClone(data); },
+    validate: (value, all) => { if ('workflows' in value) throw new Error('请通过 workflows 资源修改文本组合'); validateLibrary({ ...value, workflows: all.workflows }); },
     save: async (value, before, report, signal) => {
       const state = useLibraryStore.getState();
-      if (!same(state.record.data, before)) throw new Error('配置库已变化，请重新读取');
-      await state.save(value as Library, state.record.revision, signal);
+      const { workflows, ...data } = state.record.data;
+      if (!same(data, before)) throw new Error('配置库已变化，请重新读取');
+      await state.save({ ...value, ...(workflows ? { workflows } : {}) } as Library, state.record.revision, signal);
       report('已保存角色、世界与故事配置');
     },
   },
@@ -90,7 +104,7 @@ export const assistantResources: Record<string, ConfigurationResource> = {
     }, useBackendStore.getState().deleteBackend, report, signal),
   },
   agents: {
-    description: "Agent 定义（ID → 对象）。仓库静态默认仅含 text_router、text_character_designer、text_outline_designer、text_storyteller、model_refusal_detector；旧流程定义已退役，初始化不再恢复。包括完整 prompt 与默认生成参数；messages/inputs 为旧配置兼容数据，不是当前编辑入口。Router 仅解释需求与安排角色；Character Designer 按需创建或重新生成人物卡，Outline Designer 设计交互思维、表达概要和动作，Narrator 扩写正文。两个新角色可通过 agents 与 agentGroups 局部 JSON Patch 独立配置；旧 text_designer 已显式迁移并删除：缺少的新绑定先继承旧连接，已有新绑定保留；旧 ID 的助手操作会报资源不存在，请改用两个新 ID。游戏输入可要求重新生成一个或多个人物（regenerate_characters），保留 ID 与历史；运行时 thought/expression_outline/end_state 不属于可写配置。文本默认流程使用 text_router、text_character_designer、text_outline_designer、text_storyteller，版本 routed-v2。prompt 是完整请求模板，支持 {{world}}、{{characters}}、{{player}}、{{history}}、{{input}}、{{task}}、{{material}}、{{routingInstructions}}、{{retry}}，支持点路径及 {{json material}}。只有模板引用的材料会进入请求，不再额外拼接世界、历史和本轮材料；输出协议仍由程序验证。检测器仅提供 {{responseText}} 与 {{retry}}。新增或修改 prompt 时校验变量；旧 messages 编辑会显式转换为 prompt，其他未知字段保留。",
+    description: "Agent 定义（ID → 对象）。仓库静态默认仅含 text_router、text_character_designer、text_outline_designer、text_storyteller、model_refusal_detector；旧流程定义已退役，初始化不再恢复。包括完整 prompt 与默认生成参数；messages/inputs 为旧配置兼容数据，不是当前编辑入口。Router 仅解释需求与安排角色；Character Designer 按需创建或重新生成人物卡，Outline Designer 设计交互思维、表达概要和动作，Narrator 扩写正文。两个新角色可通过 agents 与 agentGroups 局部 JSON Patch 独立配置；旧 text_designer 已显式迁移并删除：缺少的新绑定先继承旧连接，已有新绑定保留；旧 ID 的助手操作会报资源不存在，请改用两个新 ID。游戏输入可要求重新生成一个或多个人物（regenerate_characters），保留 ID 与历史；运行时 thought/expression_outline/end_state 不属于可写配置。文本默认流程使用 text_router、text_character_designer、text_outline_designer、text_storyteller，新回合版本 workflow-v1，旧 routed-v2 历史保留。prompt 是完整请求模板，支持 {{world}}、{{characters}}、{{player}}、{{history}}、{{input}}、{{task}}、{{material}}、{{routingInstructions}}、{{retry}}，支持点路径及 {{json material}}。只有模板引用的材料会进入请求，不再额外拼接世界、历史和本轮材料；输出协议仍由程序验证。检测器仅提供 {{responseText}} 与 {{retry}}。新增或修改 prompt 时校验变量；旧 messages 编辑会显式转换为 prompt，其他未知字段保留。",
     schema: z.record(id, assistantAgentSchema), read: () => keyed(useAgentStore.getState().agents.map(a => ({ ...a, prompt: getAgentPrompt(a) }))),
     validate: value => { for (const agent of Object.values(value)) if (agent.prompt !== undefined) validateAgentPrompt(agent); },
     save: (next, before, report, signal) => saveCollection(next, before, useAgentStore.getState().saveAgent, useAgentStore.getState().deleteAgent, report, signal),
@@ -253,6 +267,7 @@ export function planAssistantChanges(reply: z.infer<typeof assistantReplySchema>
   next.textSaves ??= {}; // Older assistant snapshots predate the text resource.
   next.library ??= emptyLibrary();
   next.repositoryDefaults ??= { available: false };
+  next.workflows ??= {};
   rejectUnsafeKeys(reply);
   const explicitPrompts = new Set<string>();
   for (const action of reply.actions) {
@@ -317,10 +332,21 @@ export async function executeAssistantChanges(reply: z.infer<typeof assistantRep
     migrateGameSave({ ...existing, ...value, turns: existing.turns, createdAt: existing.createdAt, updatedAt: existing.updatedAt });
   }
   let expected = before;
+  let librarySaved = false;
   for (const [key, resource] of Object.entries(assistantResources)) {
+    if (key === 'library' && librarySaved) continue;
     if (same(next[key], before[key])) continue;
     signal.throwIfAborted();
     if (useGameStore.getState().isExecuting || !same(readAssistantConfiguration().resources, expected)) throw new Error("执行期间配置发生变化，后续修改已停止");
+    if (key === 'workflows') {
+      // Selection and definitions share one revision: removing the selected flow cannot leave a dangling reference.
+      const state = useLibraryStore.getState();
+      await state.save({ ...next.library, workflows: next.workflows } as Library, state.record.revision, signal);
+      report('已保存文本组合与故事配置');
+      librarySaved = true;
+      expected = readAssistantConfiguration().resources as Resources;
+      continue;
+    }
     await resource.save(next[key], before[key], report, signal);
     expected = readAssistantConfiguration().resources as Resources;
   }

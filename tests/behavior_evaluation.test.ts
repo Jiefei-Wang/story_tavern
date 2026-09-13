@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { INITIAL_DEMO_SAVE, BUILTIN_AGENTS, DEFAULT_BACKENDS, DEFAULT_AGENT_GROUPS } from "./fixtures/legacyInitialData";
 import { advanceChain, evaluateHardExpectations, evaluateStructure, extractTurnEvidence, redactEvidence, renderBehaviorReview, requireUnitTestGroup } from "../src/engine/evaluation/BehaviorEvaluation";
 import type { TraceSpan } from "../src/types";
-import type { PipelineTurnResult } from "../src/engine/pipeline/GamePipeline";
+import type { PipelineTurnResult } from "../src/engine/evaluation/BehaviorEvaluation";
 
 function result(success = true): PipelineTurnResult {
   return { success, traceId: "test", turn: { id: "turn", turnIndex: 1, timestamp: "2026-09-12", playerInput: "你好", narratorOutput: "她点了点头。", traceId: "test", worldStateBefore: structuredClone(INITIAL_DEMO_SAVE.worldState), worldStateAfter: structuredClone(INITIAL_DEMO_SAVE.worldState), patches: [], activeAgentGroupId: "group_unit_test" } };

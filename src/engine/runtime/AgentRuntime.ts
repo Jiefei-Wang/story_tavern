@@ -20,6 +20,8 @@ import type {ParsedOpenAIResponse} from './OpenAIResponseParser';
 export interface RuntimeMessage {role:'system'|'user'|'assistant'|'tool';content:string;tool_calls?:ParsedOpenAIResponse['toolCalls'];tool_call_id?:string}
 
 export interface RunAgentOptions {
+  /** Definition-only calls bypass legacy game contracts and ID-based protocols. */
+  protocol?: 'definition';
   promptMode?: boolean;
   toolSchema?: Record<string,unknown>;
   /** Small routing and batched Designer JSON; narrator remains natural prose. */
@@ -143,7 +145,7 @@ export class AgentRuntime {
     }
 
     const savedDefinition = agents.find((a) => a.id === agentId);
-    const agentDef = savedDefinition ? agentId.startsWith('text_') ? {...savedDefinition,outputSchema:null} : withInputAuthorityContract(withCharacterContract(withConversationContract(savedDefinition), context.characterSchema), context.player?.input) : undefined;
+    const agentDef = options.protocol === 'definition' ? savedDefinition : savedDefinition ? agentId.startsWith('text_') ? {...savedDefinition,outputSchema:null} : withInputAuthorityContract(withCharacterContract(withConversationContract(savedDefinition), context.characterSchema), context.player?.input) : undefined;
     if (!agentDef) {
       const errMsg = `Agent definition not found: ${agentId}`;
       return {
@@ -251,7 +253,7 @@ export class AgentRuntime {
           SchemaValidator.validateOrThrow(
             agentDef.outputSchema,
             mockResult,
-            agentDef.id,
+            options.protocol === 'definition' ? undefined : agentDef.id,
             JSON.stringify(mockResult)
           );
         }
@@ -578,7 +580,10 @@ export class AgentRuntime {
           parsedData = extractJsonPayload(content);
           parsedJson = true;
           globalTraceManager.updateSpan(traceId, spanId, { parsedOutput: structuredClone(parsedData) });
-          SchemaValidator.validateOrThrow(agentDef.outputSchema, parsedData, agentDef.id, content);
+          if (options.protocol === 'definition') {
+            const validation = SchemaValidator.validate(agentDef.outputSchema, parsedData);
+            if (!validation.valid) throw new Error(validation.errors);
+          } else SchemaValidator.validateOrThrow(agentDef.outputSchema, parsedData, agentDef.id, content);
         } catch (jsonErr: any) {
           // A plain-text model refusal is evidence, not a formatting defect to repair.
           // Retry only syntactically JSON-shaped output; never alter bytes locally.

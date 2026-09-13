@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AgentRuntime, type RunAgentOptions } from '../src/engine/runtime/AgentRuntime';
 import { globalTraceManager } from '../src/engine/tracing/TraceManager';
-import { GamePipeline } from '../src/engine/pipeline/GamePipeline';
 import { INITIAL_HARBOR_TAVERN_WORLD } from '../src/engine/world/WorldState';
 
 function options(signal?: AbortSignal, timeoutMs = 20): RunAgentOptions {
@@ -73,17 +72,4 @@ test('explicit caller cancellation still throws AbortError and marks the real re
   const trace = globalTraceManager.getTrace(traceId)!;
   assert.equal(trace.status, 'cancelled');
   assert.equal(trace.spans[0].status, 'cancelled');
-});
-
-test('a runtime timeout fails the pipeline without displaying a paused generation or committing a world', async () => {
-  const config = options(new AbortController().signal);
-  const world = structuredClone(INITIAL_HARBOR_TAVERN_WORLD);
-  const result = await withFetch(pendingFetch, () => new GamePipeline().executeTurn('我等待。', world, 1, {
-    agents: config.agents, groups: config.groups, backends: config.backends, activeGroupId: config.groupId, mockMode: false, signal: config.signal,
-  }));
-  assert.equal(result.success, false);
-  assert.doesNotMatch(result.turn.narratorOutput, /暂停/);
-  assert.match(result.turn.narratorOutput, /未完成/);
-  assert.deepEqual(result.turn.worldStateAfter, world);
-  assert.match(result.error || '', /timed out/);
 });

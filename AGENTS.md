@@ -28,8 +28,8 @@
 | --- | --- | --- | --- |
 | L0 静态与构建检查 | 类型、模块引用、前端构建；涉及打包时检查打包产物 | `npm run typecheck`；需要时 `npm run build`，原生打包用 `npm run build:exe` | 否；构建成功不代表运行验收通过 |
 | L1 模块与规则测试 | schema、JSON Patch、世界不变量、迁移、配置与助手读写、非法引用、取消和冲突等 | `tests/**/*.test.ts` 中的相关用例；可用 `node --disallow-code-generation-from-strings --import tsx --test tests/<文件名>.test.ts` 定向运行，完整 CSP 回归用 `npm run check:csp`；普通全集为 `npm test` | 否 |
-| L2 无界面集成测试 | 完整回合管线、NPC 行为、状态结算、重试、历史分支、失败恢复及存储适配逻辑 | 直接调用 `GamePipeline.executeTurn()` 或相关 store/服务，以隔离数据及 mock/stub 传输验证；使用现有集成测试，回合冒烟可用 `npm run eval:narrator -- --mock`；Rust 侧用 `npm run check:rust` | 否；mock 存储不能证明原生落盘正确 |
-| L3 真实模型评测 | 实际提示词、模型响应、叙事与行为质量、多阶段模型协作 | 使用 `npm run eval:narrator` 或与任务相关的 `eval:*` 脚本，直接调用内部管线；使用已授权的模型连接和隔离测试数据，限制场景数、重试和并发 | 否；会发起真实模型请求，可能产生费用 |
+| L2 无界面集成测试 | 完整回合管线、NPC 行为、状态结算、重试、历史分支、失败恢复及存储适配逻辑 | 直接调用 `StoryWorkflow.execute()` / `runWorkflow()` 或相关 store/服务，以隔离数据及 mock/stub 传输验证；使用现有集成测试，回合冒烟可定向运行 `tests/story_workflow.test.ts` 与 `tests/text_first.test.ts`；Rust 侧用 `npm run check:rust` | 否；mock 存储不能证明原生落盘正确 |
+| L3 真实模型评测 | 实际提示词、模型响应、叙事与行为质量、多阶段模型协作 | 使用 `npm run eval:workflow` 或与任务相关的 `eval:*` 脚本，直接调用内部管线；使用已授权的模型连接和隔离测试数据，限制场景数、重试和并发 | 否；会发起真实模型请求，可能产生费用 |
 | L4 原生集成测试 | Tauri 通信、原生网络、SQLite/文件落盘、重启恢复、原生流式响应 | 仅在需要时构建启用 `test-control` feature 的测试程序；设置 `STORY_TAVERN_TEST_PORT`、至少 24 字符的 `STORY_TAVERN_TEST_TOKEN` 和独立的 `STORY_TAVERN_TEST_DIR`，通过本机 `POST /command` 控制接口及 `scripts/native-playtest.mjs` 等脚本验证 | 需要运行测试程序，但优先后台、隐藏或不激活窗口，通过 API 操作 |
 | L5 界面与发布验收 | 布局、点击交互、焦点、滚动、可见状态、窗口行为及正式包运行 | Web 界面优先独立无头浏览器；仅原生窗口或正式包特有问题才启动对应 exe 做最少量可见操作。UI 更新须检查“历史”下方的“AI 助手”入口及独立 Backend/模型选择 | 仅必要时显示；正式包不开放测试控制接口 |
 

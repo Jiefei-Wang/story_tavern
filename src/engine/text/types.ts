@@ -29,7 +29,8 @@ export interface TextEvent {
     public: boolean;
 }
 export interface TextTurnData {
-    pipeline?: 'routed-v2';
+    pipeline?: 'routed-v2' | 'workflow-v1';
+    workflowId?: string;
     designs?: CharacterDesign[];
     createdCharacters?: string[];
     /** Transaction before includes the old result; storyBefore is the replay base. */

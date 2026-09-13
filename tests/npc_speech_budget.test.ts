@@ -4,7 +4,6 @@ import { compressionContractError, filterNpcIntentBudget, fitNpcSpeechBudget } f
 import { getSafeIntentDuration } from "../src/engine/world/TimingEngine";
 import { globalTraceManager } from "../src/engine/tracing/TraceManager";
 import { agentRuntime } from "../src/engine/runtime/AgentRuntime";
-import { GamePipeline } from "../src/engine/pipeline/GamePipeline";
 import { MockSimulator } from "../src/engine/runtime/MockSimulator";
 import { BUILTIN_AGENTS } from "./fixtures/legacyInitialData";
 import { INITIAL_HARBOR_TAVERN_WORLD } from "../src/engine/world/WorldState";
@@ -71,40 +70,4 @@ test("compression cannot discard mandatory meaning, change boundaries/target/sta
     assert.ok(compressionContractError([first], [next]));
   }
   assert.match(compressionContractError([first], [speech(true), { id: "x", type: "action", op: "take_item" }]) || "", /新增/);
-});
-
-for (const waitWindow of [false, true]) test(`pipeline ${waitWindow ? "wait" : "normal"} integrates one speech retry and settles first state once`, async t => {
-  let erinCalls = 0;
-  const world = structuredClone(INITIAL_HARBOR_TAVERN_WORLD);
-  const blocks = [{ id: "b1", kind: "normal", events: [{ id: "e1", actor: "player", type: "speech", target: "erin", content: "请告诉我你是否愿意一起在这里等候下一班交通工具到达。" }] }, ...(waitWindow ? [{ id: "b2", kind: "wait", duration: 5 }] : [])];
-  t.mock.method(agentRuntime, "runAgent", async (options: any) => {
-    let data;
-    if (options.agentId === "input_compiler") data = { blocks };
-    else if (options.agentId === "perception") data = { npcObservations: { erin: options.context.events.map((event: any) => ({ eventId: event.id, saw: true, heard: true })) } };
-    else if (options.agentId === "npc_reaction") {
-      if (options.context.npc.id !== "erin") data = { thought: null, stateUpdates: [], intents: [] };
-      else { erinCalls++; data = { ...original(), stateUpdates: [{ path: "attributes.mood", op: "set", value: erinCalls === 1 ? "calm" : "angry" }], intents: [speech(erinCalls > 1)] }; }
-    } else {
-      if (options.agentId === "world_resolver") {
-        const reaction = options.context.npcReactions.find((item: any) => item.npcId === "erin").reaction;
-        assert.equal(reaction.stateUpdates.length, 1);
-        assert.equal(reaction.stateUpdates[0].value, "calm");
-        assert.equal(reaction.intents.filter((intent: any) => intent.type === "speech").length, 1);
-      }
-      data = MockSimulator.simulate(options.agentId, options.context);
-    }
-    return { success: true, data, spanId: "stub" };
-  });
-  const result = await new GamePipeline().executeTurn("我向艾琳询问是否愿意等候。", world, 1, { agents: BUILTIN_AGENTS, groups: [], backends: [], activeGroupId: "test", mockMode: true });
-  assert.equal(result.success, true, result.error);
-  assert.equal(result.turn.narrationError, undefined);
-  assert.equal(erinCalls, 2);
-  assert.equal(result.turn.worldStateAfter.entities.erin.attributes!.mood, "calm");
-  assert.equal(result.turn.committedEvents!.filter(event => event.type === "npc_speech" && event.actor === "erin").length, 1);
-  const trace = globalTraceManager.getTrace(result.traceId)!;
-  const budgetRetry = trace.spans.filter(span => span.type === "npc_speech_budget_retry");
-  assert.equal(budgetRetry.length, 1);
-  assert.equal(budgetRetry[0].status, "success");
-  const filter = trace.spans.find(span => span.type === "intent_filter" && span.id.includes("erin"))!;
-  assert.equal((filter.parsedOutput as any).rejections[0].reason, "time_budget");
 });

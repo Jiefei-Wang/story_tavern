@@ -1,41 +1,46 @@
-# 命令路由、Designer、Narrator
+# 组合执行器
 
-文本存档由 `useGameStore.sendPlayerInput` 调用 `TextProcessor.execute`。未迁移 RPG 存档仍使用旧 GamePipeline。
+src/engine/workflows/Workflow.ts 是唯一的模型步骤调度器。独立文本页面直接调用 runWorkflow；游戏由 useGameStore.sendPlayerInput 调用 StoryWorkflow.execute，后者只提供游戏材料、领域校验和待提交存档，同样使用 runWorkflow 调度。
 
-## 唯一回合流程
+旧状态 GamePipeline 和硬编码文本 TextProcessor 已删除。旧存档和历史证据的结构、验证器、显式迁移、只读分析仍保留，不再提供旧状态回合重试或分支重放。
 
-1. 命令路由输出 `characters`、`new_characters`、`instructions`。人物 ID 必须来自当前 NPC 名单，不能选择玩家或重复人物；新人物至多四位。
-2. 需要新人物时，Designer 按 request_id 批量创建卡片；程序分配人物 ID，建立 public/profile/memory 三份配置文档并复用世界验证器。
-3. 一次 Designer 调用共同处理全部选中及新建人物，输出 `expression`、`action`、`end_state`。每位选中人物必须返回结果；表达、动作可为 null，状态必须为 JSON 对象。
-4. Narrator 接收非空人物表达/动作、原始输入和路由指示，结合完整故事消息生成正文。人物完毕状态和后台世界设定不传给 Narrator。
-5. 程序附加时间锚点，暂存正文、新卡片、人物完毕状态，交给存储层一次提交。
+## 配置与执行
 
-无人物则跳过 Designer，新人物最多增加一次批量创建调用。路由、卡片、设计 JSON 校验各最多一次格式重试；Narrator 无编辑器或审查循环。取消信号检查每次调用前后和提交前。不会根据纠正自动回退世界、重演上一轮或改写既有历史。
+Workflow 包含 id/name/steps/output。每一步以独立 ID 引用 Agent，可以重复使用同一 Agent；模型由所选 Agent 组绑定。输入仅从声明来源读取：
 
-## 请求与缓存前缀
+- from:input：本次用户输入。
+- from:step：已完成步骤的结果，stepId 指调用实例，pointer 使用 JSON Pointer。
+- from:context：调用方明确提供的材料，pointer 选择字段。游戏提供 world、characters、player、history、input，独立文本运行默认没有上下文。
 
-新角色使用独立 ID：text_router、text_designer、text_storyteller，版本 routed-v2。默认模板只有固定 system 消息。请求顺序为：固定 system → 公共作者设定 → 原始 user/assistant 历史 → 本次原始输入、路由指示、任务和动态材料。人物筛选、状态和创建任务放在尾部，历史不动态压缩、重写或重编号。
+执行器校验引用、步骤 ID、模型绑定、输入基础 JSON 类型和输出 schema。最多 32 步，顺序执行，不支持循环或动态 JavaScript。最终结果必须选出非空文本。配置和绑定在开始时取快照；取消信号贯穿请求和校验，失败停止后续步骤。
 
-Designer 创建阶段与反应阶段共用角色与 system。路由收到人物卡片；Designer 收到选中人物卡片、初始记忆、历史完毕状态及锚点、后台世界设定；Narrator 仅接收非空公开表现。所有角色都收到用户原始输入和带锚点的正文历史。路由对用户需求的解释放在原始输入之后，不允许覆盖用户明确要求。
+配置库存储可选的 workflows 与 storyWorkflowId。没有故事选择时使用 DEFAULT_STORY_WORKFLOW；指定选择不存在则拒绝，不静默回退。页面可复制默认故事组合、更换 Agent，并选择从下回合起使用的组合。普通文本组合也可用于游戏，它只追加正文，不更新人物设计或创建人物。
 
-这提供稳定前缀，不保证服务端命中缓存。自定义模板若将动态占位符放在 system 或历史之前，会自行改变前缀。Designer 是批量角色，人物知识边界依赖提示词与语义判断，不再假设独立上下文的硬隔离。
+## 默认故事组合
 
-## 权威记录与锚点
+默认组合是四个有序步骤的数据定义。storyStage 明确指定领域协议，不根据 Agent ID 推断。
 
-`GameTurn.narratorOutput` 是去除程序标记的显示正文；`GameTurn.narration` 保存 `{anchor,requestText}`。requestText 是相同正文加固定末尾 `【时间点 i】`，三个角色真实请求都包含它。模型生成的独占行标记会被清除，再由程序分配索引。锚点只在成功提交后成为正式历史，不能由模型选择。
+| 阶段 | 默认 Agent | 适配器职责 |
+| --- | --- | --- |
+| route | text_router | 提供人物卡，校验人物 ID 与创建/重新生成需求 |
+| cards | text_character_designer | 按需生成卡片，验证 request_id，程序分配新 ID 并检查世界不变量 |
+| outlines | text_outline_designer | 按需批量设计人物回应，校验完整角色覆盖、表达、动作与 end_state |
+| narration | text_storyteller | 提供公开表现、路由指示与历史，要求自然正文 |
 
-旧回合在下一次成功事务中补齐锚点，已有锚点和请求文本严格校验并保持不变；旧失败记录不编号，已被替代的旧分支保留编号但不进入活动历史。初始正文也作为历史回复编号。本文锚点不是世界时间，不表示 NPC 自动知道该处故事。
+故事阶段必须按 route、cards、outlines、narration 顺序各出现一次；普通步骤可穿插，并显式读取此前结果。没有创建请求时 cards 跳过，没有选中人物时 outlines 跳过。阶段适配器不调用模型；JSON 校验最多一次重试也由共同执行器完成。新增/重新生成的人物使用现有文本世界校验器。草稿只在工作副本中改变。
 
-`textTurn.designs` 保存本轮选中人物的表达、动作、完毕状态。状态来源关联该回合 narration.anchor。未选中人物没有新状态记录；无外在表现但有内在变化的人物仍保留状态。人物页读取最近状态并隐藏索引。运行状态与锚点不是作者配置。
+默认提示词内容、请求材料和角色状态规则延续上一文本版本。完整 Prompt 通过一次模板渲染生成请求，不二次解释用户输入中的占位符。thought/end_state 不作为 narration 的表现材料；定义中明确引用的作者资料仍按现有规则提供。语义上的知识边界依赖模型，结构校验不是语义正确性的保证。
 
-`textWorld.documents` 继续保存作者卡片、初始场景、常识、私人世界设定以及只读正文归档。新流程不再每轮复制正文到场景或个人记忆文档：动态事实来自带锚点的正文，动态人物状态来自 Designer 历史。卡片编辑与状态更新不混用。
+## 保存与兼容
 
-## 配置、UI 与兼容
+游戏适配器返回候选存档，useGameStore 在提交前再次检查取消和存档存在性，再调用 commitTextGame 按 revision 原子保存。历史锚点只在成功提交后生效；失败或取消不产生半轮正文、人物卡或状态。其他存档的未保存进度不覆盖。通用独立运行不写存档。
 
-新增三个 Agent 和绑定通过既有 agents/groups 配置资源管理。AI 助手同一能力档案包含实际 schema、读写、校验与同步；textSaves 管理人物卡片、初始场景、背景。保存保留历史、未知字段、凭证和其他存档未保存进度。旧 characterMode 仅保留兼容，新界面移除多轮选择，加入只读当前状态；原对话页布局、风格、人物链接、复制、暂停、Trace 与独立 AI 助手入口保留。
+新回合记录 textTurn.pipeline=workflow-v1 和 workflowId。旧 routed-v2 回合、历史变体、未知字段保持可读，不重写过去的管线标记。无 textWorld 的存档保留为只读，用户可显式迁移后使用新组合；初始化不因管线退役而删除存档。
 
-旧 v1 模型模板和绑定不删除，新角色优先继承对应旧文本角色的 Backend/模型/参数，已有新绑定不覆盖。旧 v1 Processor、纠正重演和多阶段测试保存为 docs/archive 中的参考文件，不进入新运行流程。
+助手通过独立 workflows 资源编辑定义，通过 library.storyWorkflowId 选择游戏组合。两者同时修改时共用一次配置库 CAS 提交，避免删除当前组合产生悬空引用。旧助手动作和独立 Backend/模型偏好保留。凭证不进入组合输入或普通配置。
 
-## 提交与诊断
+Trace 记录每步调用、输出校验、重试与保存结果。BehaviorEvaluation 等遗留证据读取器仅用于历史报告，不含运行旧管线的入口。
 
-所有模型结果都先进入工作副本。桌面 Markdown generation 写入并刷新后由 SQLite head 一次提交，revision CAS 拒绝过期写入；浏览器在 Web Lock 内替换完整存档集合。失败/取消不发布新故事、新人物、状态或锚点。Trace 保存模型实际请求与输出、每次结构错误、回合失败及实际提交回执，开发者请求诊断保留锚点。
+## 验证
+
+tests/workflows.test.ts 覆盖通用组合；tests/story_workflow.test.ts 覆盖游戏接入、选择、历史、取消、CAS 和助手跨资源提交。原文本回归已改为测试新游戏适配器，保留人物创建、重新生成、无角色回合、失败恢复、提示词与存储验证。纯领域验证器测试保留，依赖已删除状态执行器的测试退役。

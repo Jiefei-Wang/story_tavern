@@ -6,7 +6,7 @@
 
 角色、世界和故事是独立的可复用配置；开始故事时复制一份本局设定，开头消息直接成为第一条正文。后续修改公共库不改变已有存档，剧情生成的新人物只属于当前存档。主角由故事选择，配角可为空，不可重复或包含主角。
 
-本版本不兼容旧存档。初始化时移除不含 `textWorld.setupVersion=2` 的旧存档记录，不清除 Backend、凭证、保留的当前 Agent 自定义配置、助手偏好或新存档。默认只预填配置库，不自动创建游戏存档；清空故事库后不会再次填充默认故事。
+旧存档和历史保留；无 textWorld 的状态存档仅可读或显式迁移，文本存档直接使用新的组合执行器继续。初始化不因管线退役删除存档，Backend、凭证、助手偏好和未知字段保留。
 
 Agent 编辑器直接编辑完整 Prompt 与有效生成参数，不再展示消息角色、兼容开关或手工输入变量声明；文本 Agent 不展示运行时忽略的输出 Schema。其他 Agent 的输出校验仍可配置。Agent 组常规修改自动保存，extraBody 单独保存。
 
@@ -17,6 +17,7 @@ Agent 编辑器直接编辑完整 Prompt 与有效生成参数，不再展示消
 | 资源 | 内容 |
 | --- | --- |
 | `library` | 角色、世界、故事和首页故事选择；关联数据一起原子保存 |
+| `workflows` | 独立文本组合：步骤、输入引用、最终输出；运行时选择模型组 |
 | `textSaves` | 已有存档的世界描述、人物文档、人物列表及玩家引用 |
 | `saves` | 已有存档名称、故事展示信息和 Agent 组；新游戏的旧数字世界占位数据不可修改 |
 | `agents` | Agent 定义、完整 `prompt` 模板、默认生成参数 |
@@ -127,3 +128,13 @@ AI 助手的 `agents`、`groups` 资源读取清理后的实际配置，仍支�
 这只保存仓库默认，不应用到本机。助手若被明确要求修改本机，继续使用原 `agents` / `groups` 资源；旧 `save_agent` / `save_group` 动作和助手 Backend/模型偏好键含义不变。
 
 定向回归：`node --disallow-code-generation-from-strings --import tsx --test tests/repository_configuration.test.ts`。测试使用 `.tmp/` 隔离文件及本机存储替身，覆盖实际开发 HTTP/文件落盘、局部 Patch、未知字段、非法引用/凭证、取消、冲突、失败回执与显式应用；不证明 Tauri 原生存储或真实模型行为。
+
+## 文本组合配置
+
+`workflows` 是已注册的独立助手资源，集合按流程 ID 索引。页面入口为“文本组合”。支持创建、局部修改、删除流程；配置操作不会运行模型。用户在页面选择模型组独立运行时，只展示最终文本；游戏选择通过 library.storyWorkflowId 配置，游戏回合保留原子存档提交。
+
+例如：`{"type":"patch_config","resource":"workflows","patches":[{"op":"add","path":"/writing","value":{"id":"writing","name":"写作","steps":[{"id":"draft","agentId":"my_writer","inputs":{"input":{"from":"input"}}},{"id":"polish","agentId":"my_writer","inputs":{"input":{"from":"step","stepId":"draft","pointer":""}}}],"output":{"from":"step","stepId":"polish","pointer":""}}}]}`。`my_writer` 必须已在 agents 注册，并在运行时所选模型组配置绑定；可先创建 prompt 为 `{{input}}` 的自定义 Agent。
+
+步骤按列表顺序执行，最多 32 步，允许同一个 Agent 多次出现，也允许一步读取多个先前结果。引用只允许原始输入或先前步骤；JSON Pointer 空字符串指完整结果，`/text` 指 text 字段。禁止前向引用、循环、重复步骤 ID、原型路径和动态代码。输入遵守 Agent inputs 的基础 JSON 类型，输出遵守 outputSchema，最终结果必须是非空字符串。运行中遇到失败或取消立即停止，不展示中间结果。定义和模型绑定在运行开始时取快照；模型凭证仅由既有安全接口读取，不作为输入。
+
+流程以配置库中的可选 workflows 字段原子保存，但助手须使用独立 workflows 资源，不得经 library 重复编辑。缺失字段视为空集合，保留未来未知字段和旧 Agent/模型偏好。保存带 revision 冲突检查，页面未保存草稿遇到外部更新不会被覆盖，需重新载入再保存。助手执行仍使用统一取消、冲突与失败回执。游戏与独立文本运行现在统一使用 runWorkflow。默认故事组合通过 storyStage 提供 route/cards/outlines/narration 四个有序领域阶段，保留按需人物创建、角色校验和原子提交。普通步骤可穿插；context 来源可读取游戏提供的 world、characters、player、history、input，独立运行没有这些材料。library.storyWorkflowId 选择游戏组合，null/缺失使用默认组合。与 workflows 同批修改时一次原子保存，非法选择拒绝。旧 GamePipeline 与 TextProcessor 已移除，旧回合标记保留，新回合记录 workflow-v1。没有并行、循环或动态代码。
